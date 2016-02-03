@@ -56,6 +56,7 @@ impl Handler for WebsocketHandler {
         match guard.get_service(&service) {
             None => Err(Error::new(ErrorKind::Internal, "No such service")),
             Some(_) => {
+                // We have a service!
                 let res = try!(Response::from_request(req));
                 {
                     self.kind = HandlerKind::Service;
@@ -122,12 +123,15 @@ impl Factory for WebsocketFactory {
 
     fn connection_made(&mut self, sender: Sender) -> Self::Handler {
         let ctx = self.context.clone();
-        WebsocketHandler {
+        let hbox = Box::new(WebsocketHandler {
             out: sender,
             context: ctx,
             kind: HandlerKind::Unknown,
             service_id: None
-        }
+        });
+        let guard = self.context.clone();
+        guard.lock().unwrap().add_websocket(hbox);
+        &Box::into_raw(hbox) as Self::Handler
     }
 }
 
