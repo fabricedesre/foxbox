@@ -32,7 +32,6 @@ mod websocket_server;
 
 use context::Context;
 use controler::Controler;
-use core::borrow::BorrowMut;
 use getopts::Options;
 use std::env;
 
@@ -69,7 +68,7 @@ fn main() {
         let mut controler = Controler::new(sender, context);
         controler.start();
 
-        event_loop.run(controler.borrow_mut())
+        event_loop.run(&mut controler)
                   .unwrap_or_else(|_| {  panic!("Starting the event loop failed!"); });
     } else {
         panic!("Creating the event loop failed!");

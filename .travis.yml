@@ -3,3 +3,4 @@ rust:
     - nightly
 script:
     - cargo build
+    - RUST_BACKTRACE=1 cargo test

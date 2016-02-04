@@ -92,3 +92,36 @@ impl Context {
         self.websockets.push(ws);
     }
 }
+
+#[test]
+#[allow(unused_variables)]
+fn test_should_add_a_service() {
+    use service::{ Service, ServiceProperties };
+    use iron::{Request, Response, IronResult};
+
+    struct ServiceStub;
+
+    impl Service for ServiceStub {
+        fn get_properties(&self) -> ServiceProperties {
+            ServiceProperties {
+                id: '1'.to_string(),
+                name: "dummy service".to_string(),
+                description: "really nothing to see".to_string(),
+                http_url: '2'.to_string(),
+                ws_url: '3'.to_string()
+            }
+        }
+        fn start(&self)  {}
+        fn stop(&self) {}
+        fn process_request(&self, req: &Request) -> IronResult<Response> {
+            return Ok(Response::new());
+        }
+    }
+
+    let service = ServiceStub;
+    let mut foo = Context::new(false, Some("localhost".to_owned()));
+
+    assert_eq!(foo.services.is_empty(), true);
+    foo.add_service(Box::new(service));
+    assert_eq!(foo.services.is_empty(), false);
+}
