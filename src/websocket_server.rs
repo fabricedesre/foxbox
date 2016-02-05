@@ -35,6 +35,14 @@ impl Drop for WebsocketHandler {
     }
 }
 
+impl WebsocketHandler {
+    fn maybe_enqueue(s: &Arc<Self>, pred: bool) {
+        if pred {
+            s.context.lock().unwrap().add_websocket(s.clone());
+        }
+    }
+}
+
 impl Handler for WebsocketHandler {
     // Check if the path matches a service id, and close the connection
     // if this is not the case.
@@ -68,6 +76,8 @@ impl Handler for WebsocketHandler {
                 //
                 // This fails with "cannot move out of borrowed content [E0507]" :
 
+                //let ws = Arc::new(*self);
+                //WebsocketHandler::maybe_enqueue(&Arc::new(*self), true);
                 // guard.add_ws(Arc::new(*self));
                 Ok(res)
             }
@@ -122,16 +132,12 @@ impl Factory for WebsocketFactory {
     type Handler = WebsocketHandler;
 
     fn connection_made(&mut self, sender: Sender) -> Self::Handler {
-        let ctx = self.context.clone();
-        let hbox = Box::new(WebsocketHandler {
+        WebsocketHandler {
             out: sender,
-            context: ctx,
+            context: self.context.clone(),
             kind: HandlerKind::Unknown,
             service_id: None
-        });
-        let guard = self.context.clone();
-        guard.lock().unwrap().add_websocket(hbox);
-        &Box::into_raw(hbox) as Self::Handler
+        }
     }
 }
 

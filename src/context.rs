@@ -24,7 +24,7 @@ pub struct Context {
     ws_port: u16,
     services: HashMap<String, Box<Service>>,
 
-    websockets: Vec<Box<WebsocketHandler>>
+    websockets: Vec<Arc<WebsocketHandler>>
 }
 
 const DEFAULT_HTTP_PORT: u16 = 3000;
@@ -88,7 +88,7 @@ impl Context {
         (self.hostname.as_str(), self.ws_port).to_socket_addrs()
     }
 
-    pub fn add_websocket(&mut self, ws: Box<WebsocketHandler>) {
+    pub fn add_websocket(&mut self, ws: Arc<WebsocketHandler>) {
         self.websockets.push(ws);
     }
 }
