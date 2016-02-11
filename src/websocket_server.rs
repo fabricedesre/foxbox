@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use context::SharedContext;
+/*use context::SharedContext;
 use std::sync::Arc;
 use std::thread;
 use ws::{Builder, Error, ErrorKind, Factory, Handler, Handshake, Sender, Request, Response, Result, Message, CloseCode};
@@ -53,14 +53,14 @@ impl Handler for WebsocketHandler {
 
         // Hardcoded endpoint where clients can listen to general notifications,
         // like services starting and stoping.
-        if service == "services".to_owned() {
+        if service == "services" {
             let res = try!(Response::from_request(req));
             self.kind = HandlerKind::Global;
             return Ok(res);
         }
 
         // Look for a service.
-        let mut guard = self.context.lock().unwrap();
+        let guard = self.context.lock().unwrap();
         match guard.get_service(&service) {
             None => Err(Error::new(ErrorKind::Internal, "No such service")),
             Some(_) => {
@@ -76,8 +76,8 @@ impl Handler for WebsocketHandler {
                 //
                 // This fails with "cannot move out of borrowed content [E0507]" :
 
-                //let ws = Arc::new(*self);
-                //WebsocketHandler::maybe_enqueue(&Arc::new(*self), true);
+                let ws = Arc::new(*self);
+                WebsocketHandler::maybe_enqueue(&Arc::new(*self), true);
                 // guard.add_ws(Arc::new(*self));
                 Ok(res)
             }
@@ -155,6 +155,55 @@ impl WebsocketServer {
                               .spawn(move || {
             Builder::new().build(WebsocketFactory::new(context)).unwrap()
                           .listen(addrs[0]).unwrap();
+        }).unwrap();
+    }
+}
+*/
+
+use context::SharedContext;
+use std::thread;
+use std::io::{ Read, Write };
+use websocket::{ Server, Message, Sender, Receiver };
+use websocket::message::Type;
+use websocket::header::WebSocketProtocol;
+use websocket::server::Connection;
+use websocket::server::request::Request;
+use websocket::stream::WebSocketStream;
+
+pub struct WebsocketServer {
+    context: SharedContext
+}
+
+impl WebsocketServer {
+    pub fn new(context: SharedContext) -> WebsocketServer {
+        WebsocketServer { context: context }
+    }
+
+    pub fn handle_connection<R: Read, W: Write>(context: SharedContext, request: Request<R, W>) {
+        let headers = request.headers.clone();
+        println!("===========================================================");
+        println!(" url: {}", request.url);
+        println!("  websocket headers: {}", headers);
+        println!("===========================================================");
+    }
+
+    pub fn start(&mut self) {
+        let context1 = self.context.clone();
+        let addrs: Vec<_> =
+            context1.lock().unwrap().ws_as_addrs().unwrap().collect();
+
+        let context2 = self.context.clone();
+        thread::Builder::new().name("WebsocketServer".to_owned())
+                              .spawn(move || {
+            let server = Server::bind(addrs[0]).unwrap();
+            for connection in server {
+                println!("*** WebSocket connection!");
+                if let Ok(c) = connection {
+                    if let Ok(cc) = c.read_request() {
+                        WebsocketServer::handle_connection(context2.clone(), cc)
+                    }
+                }
+            }
         }).unwrap();
     }
 }

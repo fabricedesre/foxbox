@@ -1,0 +1,28 @@
+#!/bin/bash
+
+CARGO_EXECUTABLE="cargo"
+CARGO_COMMAND="build"
+
+hash cargo > /dev/null 2>&1
+if [ $? -eq 1 ];
+then
+  echo >&2 "You should install cargo to lint your patch"
+  echo >&2 "https://crates.io/install"
+  exit 0
+fi
+
+rs_changed_files=`git diff --staged --name-only --diff-filter=ACMRT | grep '\.rs$'`
+if [ -n "$rs_changed_files" ]
+then
+
+  echo "clippy check:"
+
+  $CARGO_EXECUTABLE $CARGO_COMMAND
+  cargot_result=$?
+
+  if [ $cargot_result -ne 0 ] ; then
+    echo "There were errors while linting the files, please see above."
+    exit 1
+  fi
+
+fi

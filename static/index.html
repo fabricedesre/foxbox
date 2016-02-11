@@ -1,10 +1,46 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>FoxLink</title>
-    <script src="main.js"></script>
+    <title>FoxBox</title>
+    <meta charset="utf-8">
   </head>
   <body>
-    <h1>Welcome To FoxLink!</h1>
+    <div id="set-admin-pwd">
+      <h1>Welcome to your FoxBox!</h1>
+      <p>
+        <label for="pwd1-input">Please choose an admin password (8 characters minimum):</label>
+        <input type="password" id="pwd1-input">
+      </p>
+      <p>
+        <label for="pwd2-input">Please repeat your admin password:</label>
+        <input type="password" id="pwd2-input">
+      </p>
+      <p>
+        <input id="set-button" type="submit" value="Set">
+      </p>
+    </div>
+    <div id="success-message" style="display: none;">
+      <h1 id="thank-you">Thank you!</h1>
+      <p>
+        Now please use an app like
+        <a href="http://example.com/">http://example.com/</a>
+        to connect your IoT devices and set everything up. Please write down the
+        following information:
+      </p>
+      <ul>
+        <li>
+          FoxBox location ('<span id="location-span">
+            <em>determining...</em>
+          </span>').
+        </li>
+        <li>
+          Your username ('admin')
+        </li>
+        <li>
+          Your password (the one you just created).
+        </li>
+      </ul>
+    </div>
   </body>
+  <script src="setup.js"></script>
 </html>

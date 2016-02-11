@@ -1,6 +1,23 @@
 language: rust
 rust:
     - nightly
+
+addons:
+  hosts:
+    - foxbox.local
+
+before_script:
+    - "sh -e /etc/init.d/xvfb start"
+    - "export DISPLAY=:99.0"
+    - "wget http://selenium-release.storage.googleapis.com/2.50/selenium-server-standalone-2.50.1.jar"
+    - "java -jar selenium-server-standalone-2.50.1.jar > /dev/null &"
+    - sleep 5
+    - nvm install 4.2
+    - nvm use 4.2
+    - npm install selenium-webdriver mocha jshint
+
 script:
-    - cargo build
+    - cargo build # Linter is also executed here
     - RUST_BACKTRACE=1 cargo test
+    - jshint static/*.js test/selenium/*.js
+    - (cargo run > /dev/null &) ; ./node_modules/.bin/mocha test/selenium/ftu_test.js

@@ -13,5 +13,5 @@ socket.onmessage = function(event) {
 socket.onclose = function(event) {
   var body = document.body;
   body.appendChild(document.createElement("br"));
-  body.appendChild("services WebSocket closed");
+  body.innerHTML += "<pre>services WebSocket closed</pre>";
 }
