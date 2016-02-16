@@ -10,7 +10,7 @@ use events::*;
 use http_server::HttpServer;
 use mio::EventLoop;
 use service::{ Service, ServiceAdapter };
-use websocket_server::WebsocketServer;
+//use websocket_server::WebsocketServer;
 
 pub struct Controller {
     sender: EventSender,
@@ -39,8 +39,8 @@ impl Controller {
         http_server.start();
 
         // Start the websocket server.
-        let mut websocket_server = WebsocketServer::new(self.context.clone());
-        websocket_server.start();
+        /*let mut websocket_server = WebsocketServer::new(self.context.clone());
+        websocket_server.start();*/
 
         // Start the dummy adapter.
         let dummy_adapter = DummyAdapter::new(self.sender.clone(), self.context.clone());

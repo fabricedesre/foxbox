@@ -2,7 +2,12 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/*use context::SharedContext;
+/*
+ * uses the ws-rs crate
+ */
+
+/*
+use context::SharedContext;
 use std::sync::Arc;
 use std::thread;
 use ws::{Builder, Error, ErrorKind, Factory, Handler, Handshake, Sender, Request, Response, Result, Message, CloseCode};
@@ -160,15 +165,47 @@ impl WebsocketServer {
 }
 */
 
+/*
+  uses the websocket crate
+*/
+/*
 use context::SharedContext;
+use hyper::uri::RequestUri;
 use std::thread;
 use std::io::{ Read, Write };
-use websocket::{ Server, Message, Sender, Receiver };
+use std::sync::Arc;
+use websocket::{ Server, Message };
+use websocket::client::Client;
 use websocket::message::Type;
 use websocket::header::WebSocketProtocol;
+use websocket::receiver::Receiver;
+use websocket::sender::Sender;
 use websocket::server::Connection;
 use websocket::server::request::Request;
 use websocket::stream::WebSocketStream;
+use websocket::ws::dataframe::DataFrame;
+
+pub trait WebsocketWrapper : Send + Sync {
+
+}
+
+struct GlobalWebsocketWrapper<R: Read, W: Write> {
+    receiver: Receiver<R>,
+    sender: Sender<W>,
+}
+
+impl<R: Read, W: Write> GlobalWebsocketWrapper<R, W> {
+    fn new(sender: Sender<W>, receiver: Receiver<R>) -> GlobalWebsocketWrapper<R, W> {
+        GlobalWebsocketWrapper {
+            sender: sender,
+            receiver: receiver
+        }
+    }
+}
+
+impl<R: Read, W: Write> WebsocketWrapper for GlobalWebsocketWrapper<R, W> {
+
+}
 
 pub struct WebsocketServer {
     context: SharedContext
@@ -183,8 +220,39 @@ impl WebsocketServer {
         let headers = request.headers.clone();
         println!("===========================================================");
         println!(" url: {}", request.url);
-        println!("  websocket headers: {}", headers);
+        println!(" websocket headers: {}", headers);
         println!("===========================================================");
+
+        let service = match request.url {
+            RequestUri::AbsolutePath(ref p) => { println!("Got an AbsolutePath"); p[1..].to_owned() },
+            _ => { "_".to_owned() }
+        };
+
+        // Special case, the global endpoint.
+        if service == "services" {
+            println!("Creating wrapper for global endpoint.");
+            let mut response = request.accept();
+            if let client = Ok(response.send()) {
+                let guard = context.lock().unwrap();
+                let (mut sender, mut receiver) = client.split();
+                //guard.add_websocket(Arc::new(GlobalWebsocketWrapper::new(Arc::new(sender), Arc::new(receiver))));
+            }
+            return;
+        }
+
+        // Look for a service.
+        let guard = context.lock().unwrap();
+        match guard.get_service(&service) {
+            None => { },
+            Some(_) => {
+                // We have a service! Create a wrapper for this service.
+                let mut response = request.accept();
+                return;
+            }
+        }
+
+        // In all other circumstances, reject the request.
+        request.fail();
     }
 
     pub fn start(&mut self) {
@@ -198,12 +266,16 @@ impl WebsocketServer {
             let server = Server::bind(addrs[0]).unwrap();
             for connection in server {
                 println!("*** WebSocket connection!");
-                if let Ok(c) = connection {
-                    if let Ok(cc) = c.read_request() {
-                        WebsocketServer::handle_connection(context2.clone(), cc)
+                thread::spawn(move || {
+                    if let Ok(c) = connection {
+                        if let Ok(cc) = c.read_request() {
+                            WebsocketServer::handle_connection(context2.clone(), cc)
+                        }
                     }
-                }
+                });
             }
         }).unwrap();
     }
 }
+
+*/
