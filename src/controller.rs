@@ -16,6 +16,7 @@ use iron::status::Status;
 use mio::{ NotifyError, EventLoop };
 use self::collections::vec::IntoIter;
 use service::{ Service, ServiceAdapter, ServiceProperties };
+use std::cell::RefCell;
 use std::collections::hash_map::HashMap;
 use std::io;
 use std::net::SocketAddr;
@@ -54,7 +55,7 @@ pub trait Controller : Send + Sync + Clone + Reflect + 'static {
 
     fn add_websocket(&mut self, socket: ws::Sender);
     fn remove_websocket(&mut self, socket: ws::Sender);
-    fn broadcast_to_websockets(&self, data: String);
+    fn broadcast_to_websockets(&self, message: ws::Message);
 }
 
 impl FoxBox {
@@ -161,9 +162,10 @@ impl Controller for FoxBox {
         self.websockets.lock().unwrap().remove(&socket.token());
     }
 
-    fn broadcast_to_websockets(&self, data: String) {
+    fn broadcast_to_websockets(&self, message: ws::Message) {
+        let shared = RefCell::new(message);
         for socket in self.websockets.lock().unwrap().values() {
-            match socket.send(data.to_owned()) {
+            match socket.send(shared.clone().into_inner()) {
                 Ok(_) => (),
                 Err(err) => println!("Error sending to socket: {}", err)
             }
@@ -182,21 +184,23 @@ impl mio::Handler for FoxBoxEventLoop {
     fn notify(&mut self, _: &mut EventLoop<Self>, data: EventData) {
         println!("Receiving a notification! {}", data.description());
 
-        self.controller.broadcast_to_websockets(data.description());
-
         match data {
-            EventData::ServiceStart { id } => {
+            EventData::ServiceStart { ref id } => {
                 println!("Service started: {:?}",
                          self.controller.get_service_properties(id.to_owned()));
 
                 println!("ServiceStart {} We now have {} services.",
                          id, self.controller.services_count());
+                self.controller.broadcast_to_websockets(data.as_ws_message().unwrap());
             }
-            EventData::ServiceStop { id } => {
+            EventData::ServiceStop { ref id } => {
                 self.controller.remove_service(id.clone());
                 println!("ServiceStop {} We now have {} services.",
                          id, self.controller.services_count());
+                self.controller.broadcast_to_websockets(data.as_ws_message().unwrap());
             }
+            EventData::Notification { message } =>
+                self.controller.broadcast_to_websockets(message),
             _ => { }
         }
     }

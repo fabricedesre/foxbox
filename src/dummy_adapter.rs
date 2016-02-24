@@ -12,6 +12,7 @@ use service::{ Service, ServiceAdapter, ServiceProperties };
 use std::time::Duration;
 use std::thread;
 use uuid::Uuid;
+use ws::Message as WsMessage;
 
 struct DummyService<T> {
     controller: T,
@@ -53,7 +54,11 @@ impl<T: Controller> Service for DummyService<T> {
             let mut i = 0;
             loop {
                 thread::sleep(Duration::from_millis(1000));
-                println!("Bip #{} from {}", i, props.id);
+                let txt = format!("Bip #{} from {}", i, props.id);
+                controller.send_event(
+                    EventData::Notification { message: WsMessage::text(txt.clone()) }).unwrap();
+                controller.send_event(
+                    EventData::Notification { message: WsMessage::binary(txt.into_bytes()) }).unwrap();
                 i += 1;
                 if i == 3 && can_kill {
                     break;
