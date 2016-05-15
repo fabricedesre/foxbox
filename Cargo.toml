@@ -23,6 +23,7 @@ pkg-config = "0.3"
 [dependencies]
 foxbox_thinkerbell = { path = "components/thinkerbell/" }
 foxbox_taxonomy = { path = "components/taxonomy/" }
+jsworkers = { path = "components/jsworkers" }
 openzwave-adapter = { path = "components/openzwave-adapter/" }
 tls = { path = "components/tls/" }
 

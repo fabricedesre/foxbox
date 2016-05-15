@@ -1,0 +1,8 @@
+[package]
+name = "jsworkers"
+version = "0.1.0"
+authors = ["Fabrice Desré <fabrice@desre.org>"]
+
+[dependencies]
+log = "^0.3"
+rusqlite = "0.6.0"
