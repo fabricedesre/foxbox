@@ -1,6 +1,6 @@
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use rusqlite::Connection;
 use std::cell::Cell;
@@ -16,7 +16,7 @@ fn escape<T>(string: &str) -> String {
 #[derive(Copy, Clone, Debug, PartialEq)]
 enum WorkerState {
     Stopped,
-    Running
+    Running,
 }
 
 pub type Url = String; // FIXME: should be the url type from hyper.
@@ -35,7 +35,7 @@ impl WorkerInfo {
         WorkerInfo {
             url: url,
             user: user,
-            state: Cell::new(initial_state)
+            state: Cell::new(initial_state),
         }
     }
 
@@ -45,7 +45,7 @@ impl WorkerInfo {
     }
 
     fn key_from(url: &Url, user: User) -> String {
-        use std::hash::{ Hash, Hasher, SipHasher };
+        use std::hash::{Hash, Hasher, SipHasher};
 
         let mut hasher = SipHasher::new();
         url.hash(&mut hasher);
@@ -65,7 +65,7 @@ impl JsWorkers {
 
         JsWorkers {
             workers: HashMap::new(),
-            db: None
+            db: None,
         }
     }
 
@@ -130,7 +130,7 @@ impl JsWorkers {
             // Mark the worker as running.
             worker_info.state.set(WorkerState::Running);
 
-            return Ok(())
+            return Ok(());
         } else {
             return Err(());
         }
