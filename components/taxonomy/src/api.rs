@@ -30,17 +30,17 @@ use serde_json::value::Serializer;
 /// adapter manager
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub enum Error {
-    /// Attempting to fetch a value from a Channel<Getter> that doesn't support this operation.
-    GetterDoesNotSupportPolling(Id<Getter>),
+    /// Attempting to fetch a value from a Channel that doesn't support this operation.
+    GetterDoesNotSupportPolling(Id<Channel>),
 
-    /// Attempting to watch a value from a Channel<Getter> that doesn't support this operation.
-    GetterDoesNotSupportWatching(Id<Getter>),
+    /// Attempting to watch a value from a Channel that doesn't support this operation.
+    GetterDoesNotSupportWatching(Id<Channel>),
 
-    /// Attempting to watch all values from a Channel<Getter> that requires a filter.
-    /// For instance, some Channel<Getter> may be updated 60 times per second. Attempting to
+    /// Attempting to watch all values from a Channel that requires a filter.
+    /// For instance, some Channel may be updated 60 times per second. Attempting to
     /// watch all values could easily exceed the capacity of the network or exhaust the battery.
     /// In such a case, the adapter should return this error.
-    GetterRequiresThresholdForWatching(Id<Getter>),
+    GetterRequiresThresholdForWatching(Id<Channel>),
 
     /// Attempting to send a value with a wrong type.
     TypeError(TypeError),
@@ -82,9 +82,9 @@ impl fmt::Display for Error {
 impl error::Error for Error {
     fn description(&self) -> &str {
         match *self {
-            Error::GetterDoesNotSupportPolling(_) => "Attempting to fetch a value from a Channel<Getter> that doesn't support this operation",
-            Error::GetterDoesNotSupportWatching(_) => "Attempting to watch a value from a Channel<Getter> that doesn't support this operation",
-            Error::GetterRequiresThresholdForWatching(_) => "Attempting to watch all value from a Channel<Getter> that requires a filter",
+            Error::GetterDoesNotSupportPolling(_) => "Attempting to fetch a value from a Channel that doesn't support this operation",
+            Error::GetterDoesNotSupportWatching(_) => "Attempting to watch a value from a Channel that doesn't support this operation",
+            Error::GetterRequiresThresholdForWatching(_) => "Attempting to watch all value from a Channel that requires a filter",
             Error::TypeError(_) => "Attempting to send a value with a wrong type",
             Error::InvalidValue(_) => "Attempting to send an invalid value",
             Error::InternalError(_) => "Internal Error" // TODO implement Error for InternalError as well
@@ -101,19 +101,15 @@ impl error::Error for Error {
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub enum InternalError {
-    /// Attempting to fetch or watch a getter that isn't registered.
-    NoSuchGetter(Id<Getter>),
-    /// Attempting to send values to a setter that isn't registered.
-    NoSuchSetter(Id<Setter>),
+    /// Attempting to use a channel that isn't registered.
+    NoSuchChannel(Id<Channel>),
     /// Attempting to access a service that isn't registered.
     NoSuchService(Id<ServiceId>),
     /// Attempting to access an adapter that isn't registered.
     NoSuchAdapter(Id<AdapterId>),
 
-    /// Attempting to register a getter with an id that is already used.
-    DuplicateGetter(Id<Getter>),
-    /// Attempting to register a setter with an id that is already used.
-    DuplicateSetter(Id<Setter>),
+    /// Attempting to register a channel with an id that is already used.
+    DuplicateChannel(Id<Channel>),
     /// Attempting to register a service with an id that is already used.
     DuplicateService(Id<ServiceId>),
     /// Attempting to register an adapter with an id that is already used.
@@ -139,7 +135,7 @@ pub enum WatchEvent {
     /// is available. Otherwise, never fired.
     EnterRange {
         /// The channel that sent the value.
-        from: Id<Getter>,
+        from: Id<Channel>,
 
         /// The actual value.
         value: Value
@@ -149,7 +145,7 @@ pub enum WatchEvent {
     /// we exit this range. Otherwise, never fired.
     ExitRange {
         /// The channel that sent the value.
-        from: Id<Getter>,
+        from: Id<Channel>,
 
         /// The actual value.
         value: Value
@@ -158,18 +154,18 @@ pub enum WatchEvent {
     /// The set of devices being watched has changed, typically either
     /// because a tag was edited or because a device was
     /// removed. Payload is the id of the device that was removed.
-    GetterRemoved(Id<Getter>),
+    ChannelRemoved(Id<Channel>),
 
     /// The set of devices being watched has changed, typically either
     /// because a tag was edited or because a device was
     /// added. Payload is the id of the device that was added.
-    GetterAdded(Id<Getter>),
+    ChannelAdded(Id<Channel>),
 
     /// One of the channels encountered an error during initialization.
     /// This channel will not be watched, but other channels will remain
     /// watched.
     InitializationError {
-        channel: Id<Getter>,
+        channel: Id<Channel>,
         error: Error
     },
 }
@@ -429,8 +425,8 @@ pub trait API: Send {
     ///
     /// ### JSON
     ///
-    /// This call accepts as JSON argument a vector of `GetterSelector`. See the documentation
-    /// of `GetterSelector` for more details.
+    /// This call accepts as JSON argument a vector of `ChannelSelector`. See the documentation
+    /// of `ChannelSelector` for more details.
     ///
     /// Example: Select all doors in the entrance (tags `door`, `entrance`)
     /// that support setter channel `OpenClosed`
@@ -443,7 +439,7 @@ pub trait API: Send {
     ///   "kind": "OpenClosed"
     /// }]"#;
     ///
-    /// # Vec::<GetterSelector>::from_str(&source).unwrap();
+    /// # Vec::<ChannelSelector>::from_str(&source).unwrap();
     /// ```
     ///
     ///
@@ -470,14 +466,14 @@ pub trait API: Send {
     ///   "kind": "OnOff"
     /// }]"#;
     /// ```
-    fn get_getter_channels(& self, selectors: Vec<GetterSelector>) -> Vec<Channel<Getter>>;
+    fn get_getter_channels(& self, selectors: Vec<ChannelSelector>) -> Vec<Channel>;
 
     /// Get a list of getters matching some conditions
     ///
     /// # REST API
     ///
     /// `GET /api/v1/channels`
-    fn get_setter_channels(& self, selectors: Vec<SetterSelector>) -> Vec<Channel<Setter>>;
+    fn get_setter_channels(& self, selectors: Vec<ChannelSelector>) -> Vec<Channel>;
 
     /// Label a set of channels with a set of tags.
     ///
@@ -503,14 +499,14 @@ pub trait API: Send {
     ///
     /// ```ignore
     /// {
-    ///   set: Vec<GetterSelector>,
+    ///   set: Vec<ChannelSelector>,
     ///   tags: Vec<Id<TagId>>,
     /// }
     /// ```
     /// or
     /// ```ignore
     /// {
-    ///   set: Vec<SetterSelector>,
+    ///   set: Vec<ChannelSelector>,
     ///   tags: Vec<Id<TagId>>,
     /// }
     /// ```
@@ -523,8 +519,8 @@ pub trait API: Send {
     /// ## Success
     ///
     /// A JSON representing a number.
-    fn add_getter_tags(& self, selectors: Vec<GetterSelector>, tags: Vec<Id<TagId>>) -> usize;
-    fn add_setter_tags(& self, selectors: Vec<SetterSelector>, tags: Vec<Id<TagId>>) -> usize;
+    fn add_getter_tags(& self, selectors: Vec<ChannelSelector>, tags: Vec<Id<TagId>>) -> usize;
+    fn add_setter_tags(& self, selectors: Vec<ChannelSelector>, tags: Vec<Id<TagId>>) -> usize;
 
     /// Remove a set of tags from a set of channels.
     ///
@@ -550,14 +546,14 @@ pub trait API: Send {
     ///
     /// ```ignore
     /// {
-    ///   set: Vec<GetterSelector>,
+    ///   set: Vec<ChannelSelector>,
     ///   tags: Vec<Id<TagId>>,
     /// }
     /// ```
     /// or
     /// ```ignore
     /// {
-    ///   set: Vec<SetterSelector>,
+    ///   set: Vec<ChannelSelector>,
     ///   tags: Vec<Id<TagId>>,
     /// }
     /// ```
@@ -570,8 +566,8 @@ pub trait API: Send {
     /// ## Success
     ///
     /// A JSON representing a number.
-    fn remove_getter_tags(& self, selectors: Vec<GetterSelector>, tags: Vec<Id<TagId>>) -> usize;
-    fn remove_setter_tags(& self, selectors: Vec<SetterSelector>, tags: Vec<Id<TagId>>) -> usize;
+    fn remove_getter_tags(& self, selectors: Vec<ChannelSelector>, tags: Vec<Id<TagId>>) -> usize;
+    fn remove_setter_tags(& self, selectors: Vec<ChannelSelector>, tags: Vec<Id<TagId>>) -> usize;
 
     /// Read the latest value from a set of channels
     ///
@@ -579,7 +575,7 @@ pub trait API: Send {
     ///
     /// `GET /api/v1/channels/get`
     ///
-    /// This call supports one or more `GetterSelector`.
+    /// This call supports one or more `ChannelSelector`.
     ///
     /// ```
     /// # extern crate serde;
@@ -595,7 +591,7 @@ pub trait API: Send {
     /// # let source =
     /// r#"{"id": "my-getter"}"#;
     ///
-    /// # GetterSelector::from_str(&source).unwrap();
+    /// # ChannelSelector::from_str(&source).unwrap();
     ///
     /// # }
     /// ```
@@ -608,7 +604,7 @@ pub trait API: Send {
     /// ## Success
     ///
     /// The results, per getter.
-    fn fetch_values(&self, Vec<GetterSelector>, user: User) -> ResultMap<Id<Getter>, Option<Value>, Error>;
+    fn fetch_values(&self, Vec<ChannelSelector>, user: User) -> ResultMap<Id<Channel>, Option<Value>, Error>;
 
     /// Send a bunch of values to a set of channels.
     ///
@@ -642,7 +638,7 @@ pub trait API: Send {
     ///   "value": {"OnOff": "On"}
     /// }"#;
     ///
-    /// # TargetMap::<SetterSelector, Value>::from_str(&source).unwrap();
+    /// # TargetMap::<ChannelSelector, Value>::from_str(&source).unwrap();
     ///
     /// // The following argument will send `On` to two setters and `Unit` to everything
     /// // that supports `Ready`.
@@ -655,7 +651,7 @@ pub trait API: Send {
     ///   "value": {"Unit": null}
     /// }]"#;
     ///
-    /// # TargetMap::<SetterSelector, Value>::from_str(&source).unwrap();
+    /// # TargetMap::<ChannelSelector, Value>::from_str(&source).unwrap();
     ///
     /// # }
     /// ```
@@ -668,7 +664,7 @@ pub trait API: Send {
     /// ## Success
     ///
     /// The results, per setter.
-    fn send_values(&self, TargetMap<SetterSelector, Value>, user: User) -> ResultMap<Id<Setter>, (), Error>;
+    fn send_values(&self, TargetMap<ChannelSelector, Value>, user: User) -> ResultMap<Id<Channel>, (), Error>;
 
     /// Watch for changes from channels.
     ///
@@ -694,7 +690,7 @@ pub trait API: Send {
     /// # `WebSocket` API
     ///
     /// `/api/v1/channels/watch`
-    fn watch_values(& self, watch: TargetMap<GetterSelector, Exactly<Value>>,
+    fn watch_values(& self, watch: TargetMap<ChannelSelector, Exactly<Value>>,
             on_event: Box<ExtSender<WatchEvent>>) -> Self::WatchGuard;
 
     /// A value that causes a disconnection once it is dropped.

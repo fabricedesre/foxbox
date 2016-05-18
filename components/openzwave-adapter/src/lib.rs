@@ -9,7 +9,7 @@ mod watchers;
 
 
 use taxonomy::util::Id as TaxoId;
-use taxonomy::services::{ Setter, Getter, AdapterId, ServiceId, Service, Channel, ChannelKind };
+use taxonomy::services::{ AdapterId, ServiceId, Service, Channel, ChannelKind };
 use taxonomy::values::*;
 use taxonomy::api::{ ResultMap, Error as TaxoError, InternalError, User };
 use taxonomy::adapter::{ AdapterManagerHandle, AdapterWatchGuard, WatchEvent };
@@ -173,7 +173,7 @@ fn set_ozw_vid_from_taxo_value(vid: &ValueID, value: Value) -> Result<(), TaxoEr
     result.map_err(|e| TaxoError::InternalError(InternalError::GenericError(format!("Error while setting a value: {}", e))))
 }
 
-type ValueCache = HashMap<TaxoId<Getter>, Value>;
+type ValueCache = HashMap<TaxoId<Channel>, Value>;
 
 pub struct OpenzwaveAdapter {
     id: TaxoId<AdapterId>,
@@ -182,8 +182,8 @@ pub struct OpenzwaveAdapter {
     version: [u32; 4],
     ozw: ZWaveManager,
     node_map: IdMap<ServiceId, Node>,
-    getter_map: IdMap<Getter, ValueID>,
-    setter_map: IdMap<Setter, ValueID>,
+    getter_map: IdMap<Channel, ValueID>,
+    setter_map: IdMap<Channel, ValueID>,
     watchers: Arc<Mutex<Watchers>>,
     value_cache: Arc<Mutex<ValueCache>>,
 }
@@ -302,36 +302,28 @@ impl OpenzwaveAdapter {
                         let kind = kind.unwrap();
 
                         if has_getter {
-                            let getter_id = TaxoId::new(&value_id);
+                            let getter_id = TaxoId::<Channel>::new(&value_id);
                             getter_map.push(getter_id.clone(), vid);
                             box_manager.add_getter(Channel {
                                 id: getter_id.clone(),
                                 service: node_id.clone(),
                                 adapter: adapter_id.clone(),
-                                last_seen: None,
                                 tags: HashSet::new(),
-                                mechanism: Getter {
-                                    kind: kind.clone(),
-                                    updated: None
-                                }
+                                kind: kind.clone(),
                             }).unwrap_or_else(|e| {
                                 error!("Couldn't add the getter {}: {}", value_id, e);
                             });
                         }
 
                         if has_setter {
-                            let setter_id = TaxoId::new(&value_id);
+                            let setter_id = TaxoId::<Channel>::new(&value_id);
                             setter_map.push(setter_id.clone(), vid);
                             box_manager.add_setter(Channel {
                                 id: setter_id.clone(),
                                 service: node_id.clone(),
                                 adapter: adapter_id.clone(),
-                                last_seen: None,
                                 tags: HashSet::new(),
-                                mechanism: Setter {
-                                    kind: kind,
-                                    updated: None
-                                }
+                                kind: kind,
                             }).unwrap_or_else(|e| {
                                 error!("Couldn't add the setter {}: {}", value_id, e);
                             });
@@ -430,7 +422,7 @@ impl taxonomy::adapter::Adapter for OpenzwaveAdapter {
         &self.version
     }
 
-    fn fetch_values(&self, mut set: Vec<TaxoId<Getter>>, _: User) -> ResultMap<TaxoId<Getter>, Option<Value>, TaxoError> {
+    fn fetch_values(&self, mut set: Vec<TaxoId<Channel>>, _: User) -> ResultMap<TaxoId<Channel>, Option<Value>, TaxoError> {
         set.drain(..).map(|id| {
             let ozw_vid = self.getter_map.find_ozw_from_taxo_id(&id);
 
@@ -439,22 +431,22 @@ impl taxonomy::adapter::Adapter for OpenzwaveAdapter {
 
                 ozw_vid_as_taxo_value(&ozw_vid)
             });
-            let value_result: Result<Option<Value>, TaxoError> = taxo_value.ok_or(TaxoError::InternalError(InternalError::NoSuchGetter(id.clone())));
+            let value_result: Result<Option<Value>, TaxoError> = taxo_value.ok_or(TaxoError::InternalError(InternalError::NoSuchChannel(id.clone())));
             (id, value_result)
         }).collect()
     }
 
-    fn send_values(&self, mut values: HashMap<TaxoId<Setter>, Value>, _: User) -> ResultMap<TaxoId<Setter>, (), TaxoError> {
+    fn send_values(&self, mut values: HashMap<TaxoId<Channel>, Value>, _: User) -> ResultMap<TaxoId<Channel>, (), TaxoError> {
         values.drain().map(|(id, value)| {
             if let Some(ozw_vid) = self.setter_map.find_ozw_from_taxo_id(&id) {
                 (id, set_ozw_vid_from_taxo_value(&ozw_vid, value))
             } else {
-                (id.clone(), Err(TaxoError::InternalError(InternalError::NoSuchSetter(id))))
+                (id.clone(), Err(TaxoError::InternalError(InternalError::NoSuchChannel(id))))
             }
         }).collect()
     }
 
-    fn register_watch(&self, mut values: Vec<(TaxoId<Getter>, Option<Value>, Box<ExtSender<WatchEvent>>)>) -> Vec<(TaxoId<Getter>, Result<Box<AdapterWatchGuard>, TaxoError>)> {
+    fn register_watch(&self, mut values: Vec<(TaxoId<Channel>, Option<Value>, Box<ExtSender<WatchEvent>>)>) -> Vec<(TaxoId<Channel>, Result<Box<AdapterWatchGuard>, TaxoError>)> {
         debug!("[OpenzwaveAdapter::register_watch] Should register some watchers");
         values.drain(..).filter_map(|(id, range, sender)| {
             let sender = Arc::new(Mutex::new(sender)); // Mutex is necessary because cb is not Sync.

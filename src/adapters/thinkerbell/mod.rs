@@ -2,7 +2,7 @@
 
 use foxbox_taxonomy::api::{ Error, InternalError, User };
 use foxbox_taxonomy::manager::*;
-use foxbox_taxonomy::services::{ Setter, Getter, AdapterId, ServiceId, Service, Channel, ChannelKind };
+use foxbox_taxonomy::services::{ AdapterId, ServiceId, Service, Channel, ChannelKind };
 use foxbox_taxonomy::util::Id;
 use foxbox_taxonomy::values::{ Duration, Type, Value, TypeError, OnOff };
 
@@ -47,7 +47,7 @@ pub struct ThinkerbellAdapter {
     adapter_id: Id<AdapterId>,
 
     /// The ID of the root service's "Add Rule" setter.
-    setter_add_rule_id: Id<Setter>,
+    setter_add_rule_id: Id<Channel>,
 }
 
 /// Thinkerbell requires an execution environment following this API.
@@ -106,7 +106,7 @@ impl Adapter for ThinkerbellAdapter {
         &ADAPTER_VERSION
     }
 
-    fn fetch_values(&self, set: Vec<Id<Getter>>, _: User) -> ResultMap<Id<Getter>, Option<Value>, Error> {
+    fn fetch_values(&self, set: Vec<Id<Channel>>, _: User) -> ResultMap<Id<Channel>, Option<Value>, Error> {
         set.iter().map(|id| {
             let (tx, rx) = channel();
             let _ = self.tx.lock().unwrap().send(ThinkAction::RespondToGetter(tx, id.clone()));
@@ -119,7 +119,7 @@ impl Adapter for ThinkerbellAdapter {
         }).collect()
     }
 
-    fn send_values(&self, values: HashMap<Id<Setter>, Value>, user: User) -> ResultMap<Id<Setter>, (), Error> {
+    fn send_values(&self, values: HashMap<Id<Channel>, Value>, user: User) -> ResultMap<Id<Channel>, (), Error> {
         values.iter()
             .map(|(id, value)| {
                 let (tx, rx) = channel();
@@ -146,18 +146,18 @@ impl Adapter for ThinkerbellAdapter {
 enum ThinkAction {
     AddRuleService(Id<ScriptId>),
     RemoveRuleService(Id<ScriptId>),
-    RespondToGetter(RawSender<Result<Option<Value>, Error>>, Id<Getter>),
-    RespondToSetter(RawSender<Result<(), Error>>, Id<Setter>, Value, User),
+    RespondToGetter(RawSender<Result<Option<Value>, Error>>, Id<Channel>),
+    RespondToSetter(RawSender<Result<(), Error>>, Id<Channel>, Value, User),
 }
 
 /// An internal data structure to track getters and setters.
 struct ThinkerbellRule {
     script_id: Id<ScriptId>,
     service_id: Id<ServiceId>,
-    getter_source_id: Id<Getter>,
-    getter_is_enabled_id: Id<Getter>,
-    setter_is_enabled_id: Id<Setter>,
-    setter_remove_id: Id<Setter>,
+    getter_source_id: Id<Channel>,
+    getter_is_enabled_id: Id<Channel>,
+    setter_is_enabled_id: Id<Channel>,
+    setter_remove_id: Id<Channel>,
 }
 
 impl ThinkerbellAdapter {
@@ -229,7 +229,7 @@ impl ThinkerbellAdapter {
                             continue 'recv;
                         }
                     }
-                    let _ = tx.send(Err(Error::InternalError(InternalError::NoSuchGetter(getter_id.clone()))));
+                    let _ = tx.send(Err(Error::InternalError(InternalError::NoSuchChannel(getter_id.clone()))));
                 },
                 // Respond to a pending Setter request.
                 ThinkAction::RespondToSetter(tx, setter_id, value, user) => {
@@ -282,7 +282,7 @@ impl ThinkerbellAdapter {
                             }
                         }
                         // If we got here, no setters matched.
-                        let _ = tx.send(Err(Error::InternalError(InternalError::NoSuchSetter(setter_id.clone()))));
+                        let _ = tx.send(Err(Error::InternalError(InternalError::NoSuchChannel(setter_id.clone()))));
                     }
                 }
             }
@@ -308,12 +308,8 @@ impl ThinkerbellAdapter {
             id: rule.getter_is_enabled_id.clone(),
             service: service_id.clone(),
             adapter: self.adapter_id.clone(),
-            last_seen: None,
             tags: HashSet::new(),
-            mechanism: Getter {
-                kind: ChannelKind::ThinkerbellRuleOn,
-                updated: None
-            },
+            kind: ChannelKind::ThinkerbellRuleOn,
         }));
 
         // Add getter for script source
@@ -321,12 +317,8 @@ impl ThinkerbellAdapter {
             id: rule.getter_source_id.clone(),
             service: service_id.clone(),
             adapter: self.adapter_id.clone(),
-            last_seen: None,
             tags: HashSet::new(),
-            mechanism: Getter {
-                kind: ChannelKind::ThinkerbellRuleSource,
-                updated: None
-            },
+            kind: ChannelKind::ThinkerbellRuleSource,
         }));
 
         // Add setter for set_enabled
@@ -334,12 +326,8 @@ impl ThinkerbellAdapter {
             id: rule.setter_is_enabled_id.clone(),
             service: service_id.clone(),
             adapter: self.adapter_id.clone(),
-            last_seen: None,
             tags: HashSet::new(),
-            mechanism: Setter {
-                kind: ChannelKind::ThinkerbellRuleOn,
-                updated: None
-            },
+            kind: ChannelKind::ThinkerbellRuleOn,
         }));
 
         // Add setter for removing this rule.
@@ -347,12 +335,8 @@ impl ThinkerbellAdapter {
             id: rule.setter_remove_id.clone(),
             service: service_id.clone(),
             adapter: self.adapter_id.clone(),
-            last_seen: None,
             tags: HashSet::new(),
-            mechanism: Setter {
-                kind: ChannelKind::RemoveThinkerbellRule,
-                updated: None
-            },
+            kind: ChannelKind::RemoveThinkerbellRule,
         }));
 
         info!("[thinkerbell@link.mozilla.org] Added Thinkerbell Rule for '{}'", &script_id.to_string());
@@ -404,12 +388,8 @@ impl ThinkerbellAdapter {
             id: setter_add_rule_id.clone(),
             service: root_service_id.clone(),
             adapter: adapter_id.clone(),
-            last_seen: None,
             tags: HashSet::new(),
-            mechanism: Setter {
-                kind: ChannelKind::AddThinkerbellRule,
-                updated: None
-            },
+            kind: ChannelKind::AddThinkerbellRule,
         }));
 
         thread::spawn(move || {

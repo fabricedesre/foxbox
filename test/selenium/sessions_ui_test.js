@@ -3,237 +3,117 @@
 
 'use strict';
 
-var webdriver = require('selenium-webdriver'),
-    assert    = require('assert');
+const assert= require('assert');
+const SuiteBuilder = require('./lib/make_suite');
 
-const makeSuite = require('./lib/make_suite');
+var suiteBuilder = new SuiteBuilder('Test set up UI');
 
-makeSuite('Test set up UI', (setUpWebapp) => {
-  // TODO: Clean up this work around by not using the driver anywhere
-  // in this file
-  var driver = setUpWebapp.driver;
+suiteBuilder.build((setUpWebapp) => {
 
 describe('sessions ui', function() {
 
-  var setUpPage;
-  var signedInPage;
-  var elements;
-
-  var shortPasswordErrorMessage
-    = 'Please use a password of at least 8 characters.';
-  var errorPasswordDoNotMatch = 'Passwords don\'t match! Please try again.';
-
-
   describe('Foxbox index', function() {
-    it('should be titled FoxBox', function () {
-      return driver.wait(webdriver.until.titleIs('FoxBox'), 5000)
-        .then(function(value) {
-          assert.equal(value, true);
-        });
-    });
 
     describe('signup', function() {
+      var setUpView;
 
-        beforeEach(function() {
-          elements = {
-            pwd1: driver.findElement(webdriver.By.id('signup-pwd1')),
-            pwd2: driver.findElement(webdriver.By.id('signup-pwd2')),
-            set: driver.findElement(webdriver.By.id('signup-button'))
-          };
-          setUpPage = setUpWebapp.getSetUpView();
-          return setUpPage;
+      beforeEach(function() {
+        return suiteBuilder.browserCleanUp().then(() => {
+          setUpView = setUpWebapp.getSetUpView();
         });
+      });
 
       it('should show the signup screen by default', function() {
-          return setUpPage.isSetUpView();
+        return setUpView.isSetUpView();
+      });
+
+      describe('failures', function() {
+
+        const SHORT_PASSWORD_ERROR_MESSAGE =
+          'Please use a password of at least 8 characters.';
+
+        afterEach(function() {
+          return setUpView.dismissAlert();
         });
 
-      it('should have the rights fields', function() {
-          var types = {
-          pwd1: 'password',
-          pwd2: 'password',
-          set: 'submit'
-        };
-        var promises = Object.keys(elements).map(function(key) {
-          return elements[key].getAttribute('type')
-          .then(function(value) {
-            assert.equal(value, types[key]);
+        it('should reject non-matching passwords', function() {
+          return setUpView.failureLogin(12345678, 1234)
+          .then(text => {
+            assert.equal(text, 'Passwords don\'t match! Please try again.');
           });
         });
-        return Promise.all(promises);
-      });
 
-      it('should reject non-matching passwords', function() {
-          return setUpPage.failureLogin(12345678, 1234)
-            .then(text => { assert.equal(text, errorPasswordDoNotMatch); })
-            .then(() => setUpPage.dismissAlert());
-      });
-
-      it('should reject short passwords', function () {
-          return setUpPage.failureLogin(1234, 1234)
-            .then(text => { assert.equal(text, shortPasswordErrorMessage); })
-            .then(() => setUpPage.dismissAlert());
+        it('should reject short passwords', function () {
+          return setUpView.failureLogin(1234, 1234)
+          .then(text => { assert.equal(text, SHORT_PASSWORD_ERROR_MESSAGE); });
         });
 
-      it('should fail if password is not set', function() {
-          return setUpPage.failureLogin('', '')
-            .then(text => { assert.equal(text, shortPasswordErrorMessage); })
-            .then(() => setUpPage.dismissAlert());
+        it('should fail if password is not set', function() {
+          return setUpView.failureLogin('', '')
+          .then(text => { assert.equal(text, SHORT_PASSWORD_ERROR_MESSAGE); });
         });
+      });
+
+      describe('success', function() {
+
+        after(() => suiteBuilder.restartFromScratch());
+
+        it('should accept matching, long-enough passwords', function() {
+          return setUpView.successLogin()
+          .then(successfulPageView => successfulPageView.loginMessage)
+          .then(text => { assert.equal(text, 'Thank you!'); });
+        });
+      });
+    });
+  });
+
+  describe('once registred', function() {
+    var signedInView;
+
+    before(() => {
+      return setUpWebapp.init()
+      .then(setUpView => setUpView.successLogin())
+      .then(successfulView => successfulView.goToSignedIn())
+      .then(view => { signedInView = view; });
+    });
+
+    describe('signedin page', function() {
+      it('should sign out', function() {
+        return signedInView.signOut();
+      });
+    });
+
+    describe('signin page', function() {
+      var signInView;
+
+      beforeEach(function() {
+        return suiteBuilder.browserCleanUp()
+        .then(() => { signInView = setUpWebapp.getSignInPage(); });
+      });
+
+      [{
+        test: 'should reject short passwords',
+        pass: 'short',
+        error: 'Invalid password'
+      }, {
+        test: 'should reject not matching passwords',
+        pass: 'longEnoughButInvalid',
+        error: 'Signin error Unauthorized'
+      }, {
+        test: 'should fail if password is not typed',
+        pass: '',
+        error: 'Invalid password'
+      }].forEach(config => {
+        it(config.test, function() {
+          return signInView.failureLogin(config.pass)
+          .then(alertMessage => { assert.equal(alertMessage, config.error); });
+        });
+      });
 
       it('should accept matching, long-enough passwords', function() {
-          return setUpPage.successLogin()
-            .then(successfulPageView => successfulPageView.loginMessage)
-            .then(text => { assert.equal(text, 'Thank you!'); });
+        return signInView.successLogin();
       });
     });
   });
-
-  describe('signedin page', function() {
-    var elements;
-    var screens;
-
-    before(function() {
-      driver.navigate().refresh();
-    });
-
-    beforeEach(function() {
-      return driver.wait(webdriver.until.titleIs('FoxBox'), 5000).then(
-        function() {
-        screens = {
-          signin: driver.findElement(webdriver.By.id('signin')),
-          signedin: driver.findElement(webdriver.By.id('signedin'))
-        };
-        elements = {
-          signoutButton: driver.findElement(webdriver.By.id('signout-button'))
-        };
-      });
-    });
-
-    it('should show the signedin screen', function() {
-      return driver.wait(webdriver.until.elementIsVisible(screens.signedin),
-                         3000);
-    });
-
-    it('should not show the signin screen', function(done) {
-      screens.signin.isDisplayed().then(function(visible) {
-        assert.equal(visible, false);
-        done();
-      });
-    });
-
-    it('should show signin screen after signing out', function() {
-      return elements.signoutButton.click().then(function() {
-        return driver.wait(webdriver.until.elementIsVisible(screens.signin),
-                           5000);
-      });
-    });
-  });
-
-  describe('signin page', function() {
-    var elements;
-    var screens;
-
-    before(function() {
-      driver.navigate().refresh();
-    });
-
-    beforeEach(function() {
-      return driver.wait(webdriver.until.titleIs('FoxBox'), 5000).then(
-        function() {
-        screens = {
-          signin: driver.findElement(webdriver.By.id('signin')),
-          signedin: driver.findElement(webdriver.By.id('signedin'))
-        };
-        elements = {
-          signinPwd: driver.findElement(webdriver.By.id('signin-pwd')),
-          signinButton: driver.findElement(webdriver.By.id('signin-button'))
-        };
-      });
-    });
-
-    it('should show the signin screen', function() {
-      return driver.wait(webdriver.until.elementIsVisible(screens.signin),
-                         3000);
-    });
-
-    it('should not show the signedIn screen', function(done) {
-      screens.signedin.isDisplayed().then(function(visible) {
-        assert.equal(visible, false);
-        done();
-      });
-    });
-
-    [{
-      test: 'should reject short passwords',
-      pass: 'short',
-      error: 'Invalid password'
-    }, {
-      test: 'should reject not matching passwords',
-      pass: 'longEnoughButInvalid',
-      error: 'Signin error Unauthorized'
-    }].forEach(function(config) {
-      it(config.test, function () {
-        return elements.signinPwd.sendKeys(config.pass).then(function() {
-          return elements.signinButton.click();
-        }).then(function() {
-          return driver.wait(webdriver.until.alertIsPresent(), 5000);
-        }).then(function() {
-          return driver.switchTo().alert();
-        }).then(function(alert) {
-          return alert.getText().then(function(text) {
-            assert.equal(text, config.error);
-          }).then(function() {
-            alert.dismiss();
-          });
-        });
-      });
-    });
-
-    it('should fail if password is not typed', function() {
-      return  elements.signinButton.click().then(function() {
-          return driver.wait(webdriver.until.alertIsPresent(), 5000);
-        }).then(function() {
-          return driver.switchTo().alert();
-        }).then(function(alert) {
-          return alert.getText().then(function(text) {
-            assert.equal(text,
-                         'Invalid password');
-          }).then(function() {
-            alert.dismiss();
-          });
-        });
-    });
-
-    it('should accept matching, long-enough passwords', function () {
-
-      return elements.signinPwd.sendKeys('12345678').then(function() {
-        return elements.signinButton.click();
-      }).then(function() {
-        return driver.wait(webdriver.until.elementIsVisible(screens.signedin),
-                           5000);
-      });
-    });
-
-    describe('tests changing views', function(){
-
-        before(function() {
-          driver.navigate().refresh();
-        });
-        beforeEach(function(){
-          return driver.wait(webdriver.until.titleIs('FoxBox'), 5000).then(
-            function() {
-          return setUpWebapp.getSignInPage();
-          }).then(function(signedInPageView) {
-             signedInPage = signedInPageView;
-          });
-        });
-
-        it('should go to sign out page' , function() {
-          return signedInPage.signOut();
-        });
-    });
-  });
-
 });
 });

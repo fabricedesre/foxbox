@@ -1,5 +1,5 @@
 use taxonomy::util::Id as TaxoId;
-use taxonomy::services::Getter;
+use taxonomy::services::Channel;
 use taxonomy::values::*;
 use taxonomy::adapter::{ AdapterWatchGuard, WatchEvent };
 
@@ -16,7 +16,7 @@ pub type RangedSyncSender = (Option<Box<Range>>, Arc<SyncSender>);
 pub struct Watchers {
     current_index: usize,
     map: Arc<Mutex<WatchersMap>>,
-    getter_map: HashMap<TaxoId<Getter>, Vec<RangedWeakSender>>,
+    getter_map: HashMap<TaxoId<Channel>, Vec<RangedWeakSender>>,
 }
 
 impl Watchers {
@@ -28,7 +28,7 @@ impl Watchers {
         }
     }
 
-    pub fn push(&mut self, taxo_id: TaxoId<Getter>, range: Option<Box<Range>>, watcher: Arc<SyncSender>) -> WatcherGuard {
+    pub fn push(&mut self, taxo_id: TaxoId<Channel>, range: Option<Box<Range>>, watcher: Arc<SyncSender>) -> WatcherGuard {
         let index = self.current_index;
         self.current_index += 1;
         {
@@ -45,7 +45,7 @@ impl Watchers {
         }
     }
 
-    pub fn get_from_taxo_id(&self, taxo_id: &TaxoId<Getter>) -> Option<Vec<RangedSyncSender>> {
+    pub fn get_from_taxo_id(&self, taxo_id: &TaxoId<Channel>) -> Option<Vec<RangedSyncSender>> {
         self.getter_map.get(taxo_id).and_then(|vec| {
             let vec: Vec<_> = vec.iter().filter_map(|&(ref range, ref weak_sender)| {
                 let range = range.clone();

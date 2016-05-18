@@ -20,17 +20,17 @@ use std::thread;
 #[allow(enum_variant_names)]
 pub enum Tweak {
     /// Inject a value in a virtual getter.
-    InjectGetterValue(Id<Getter>, Result<Option<Value>, Error>),
+    InjectGetterValue(Id<Channel>, Result<Option<Value>, Error>),
 
     /// Inject an error in a virtual setter. All operations on this setter will
     /// raise the error until `None` is injected instead.
-    InjectSetterError(Id<Setter>, Option<Error>)
+    InjectSetterError(Id<Channel>, Option<Error>)
 }
 
 /// Something that happened to the virtual device, e.g. a value was sent.
 #[derive(Debug)]
 pub enum Effect {
-    ValueSent(Id<Setter>, Value)
+    ValueSent(Id<Channel>, Value)
 }
 
 fn dup<T>(t: T) -> (T, T) where T: Clone {
@@ -59,9 +59,9 @@ pub struct FakeAdapter {
     tweak: Arc<Fn(Tweak) + Sync + Send>,
     tx_effect: Mutex<Box<ExtSender<Effect>>>,
     rx_effect: Mutex<Option<Receiver<Effect>>>,
-    values: SyncMap<Id<Getter>, Result<Value, Error>>,
-    senders: SyncMap<Id<Setter>, Error>,
-    watchers: SyncMap<Id<Getter>, Vec<WatcherState>>
+    values: SyncMap<Id<Channel>, Result<Value, Error>>,
+    senders: SyncMap<Id<Channel>, Error>,
+    watchers: SyncMap<Id<Channel>, Vec<WatcherState>>
 }
 
 impl FakeAdapter {
@@ -182,7 +182,7 @@ impl Adapter for FakeAdapter {
 
     /// Request a value from a channel. The `FoxBox` (not the adapter)
     /// is in charge of keeping track of the age of values.
-    fn fetch_values(&self, mut channels: Vec<Id<Getter>>, _: User) -> ResultMap<Id<Getter>, Option<Value>, Error> {
+    fn fetch_values(&self, mut channels: Vec<Id<Channel>>, _: User) -> ResultMap<Id<Channel>, Option<Value>, Error> {
         let map = self.values.lock().unwrap();
         channels.drain(..).map(|id| {
             let result = match map.get(&id) {
@@ -195,7 +195,7 @@ impl Adapter for FakeAdapter {
     }
 
     /// Request that a value be sent to a channel.
-    fn send_values(&self, mut values: HashMap<Id<Setter>, Value>, _: User) -> ResultMap<Id<Setter>, (), Error> {
+    fn send_values(&self, mut values: HashMap<Id<Channel>, Value>, _: User) -> ResultMap<Id<Channel>, (), Error> {
         let map = self.senders.lock().unwrap();
         values.drain().map(|(id, value)| {
             let result = match map.get(&id) {

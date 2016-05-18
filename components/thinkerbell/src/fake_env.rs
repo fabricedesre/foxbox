@@ -26,8 +26,8 @@ static VERSION : [u32;4] = [0, 0, 0, 0];
 /// A back-end holding values and watchers, shared by all the virtual adapters of this simulator.
 struct TestSharedAdapterBackend {
     /// The latest known value for each getter.
-    getter_values: HashMap<Id<Getter>, Result<Value, Error>>,
-    setter_errors: HashMap<Id<Setter>, Error>,
+    getter_values: HashMap<Id<Channel>, Result<Value, Error>>,
+    setter_errors: HashMap<Id<Channel>, Error>,
 
     /// A channel to inform when things happen.
     on_event: Box<ExtSender<FakeEnvEvent>>,
@@ -38,7 +38,7 @@ struct TestSharedAdapterBackend {
     timers: BinaryHeap<Timer>,
     trigger_timers_until: Option<DateTime<UTC>>,
 
-    watchers: HashMap<usize, (Id<Getter>, Option<Box<Range>>, Box<ExtSender<WatchEvent>>)>,
+    watchers: HashMap<usize, (Id<Channel>, Option<Box<Range>>, Box<ExtSender<WatchEvent>>)>,
 }
 
 impl TestSharedAdapterBackend {
@@ -54,7 +54,7 @@ impl TestSharedAdapterBackend {
         }
     }
 
-    fn fetch_values(&self, mut getters: Vec<Id<Getter>>, _: User) -> ResultMap<Id<Getter>, Option<Value>, Error> {
+    fn fetch_values(&self, mut getters: Vec<Id<Channel>>, _: User) -> ResultMap<Id<Channel>, Option<Value>, Error> {
         getters.drain(..).map(|id| {
             let got = self.getter_values.get(&id).cloned();
             match got {
@@ -65,7 +65,7 @@ impl TestSharedAdapterBackend {
         }).collect()
     }
 
-    fn send_values(&self, mut values: HashMap<Id<Setter>, Value>, _: User) -> ResultMap<Id<Setter>, (), Error> {
+    fn send_values(&self, mut values: HashMap<Id<Channel>, Value>, _: User) -> ResultMap<Id<Channel>, (), Error> {
         values.drain().map(|(id, value)| {
             match self.setter_errors.get(&id) {
                 None => {
@@ -83,8 +83,8 @@ impl TestSharedAdapterBackend {
         }).collect()
     }
 
-    fn register_watch(&mut self, mut source: Vec<(Id<Getter>, Option<Value>, Box<ExtSender<WatchEvent>>)>) ->
-            Vec<(Id<Getter>, Result<usize, Error>)>
+    fn register_watch(&mut self, mut source: Vec<(Id<Channel>, Option<Value>, Box<ExtSender<WatchEvent>>)>) ->
+            Vec<(Id<Channel>, Result<usize, Error>)>
     {
         let results = source.drain(..).filter_map(|(id, range, tx)| {
             let range = match range {
@@ -104,7 +104,7 @@ impl TestSharedAdapterBackend {
         let _ = self.watchers.remove(&key);
     }
 
-    fn inject_setter_errors(&mut self, mut errors: Vec<(Id<Setter>, Option<Error>)>)
+    fn inject_setter_errors(&mut self, mut errors: Vec<(Id<Channel>, Option<Error>)>)
     {
         for (id, error) in errors.drain(..) {
             match error {
@@ -118,7 +118,7 @@ impl TestSharedAdapterBackend {
         }
     }
 
-    fn inject_getter_values(&mut self, mut values: Vec<(Id<Getter>, Result<Value, Error>)>)
+    fn inject_getter_values(&mut self, mut values: Vec<(Id<Channel>, Result<Value, Error>)>)
     {
         for (id, value) in values.drain(..) {
             let old = self.getter_values.insert(id.clone(), value.clone());
@@ -231,7 +231,7 @@ impl TestSharedAdapterBackend {
 pub enum FakeEnvEvent {
     /// Some value was sent to a setter channel.
     Send {
-        id: Id<Setter>,
+        id: Id<Channel>,
         value: Value
     },
 
@@ -283,7 +283,7 @@ impl Adapter for TestAdapter {
     /// expects the adapter to attempt to minimize the connections with the actual devices.
     ///
     /// The AdapterManager is in charge of keeping track of the age of values.
-    fn fetch_values(&self, getters: Vec<Id<Getter>>, _: User) -> ResultMap<Id<Getter>, Option<Value>, Error> {
+    fn fetch_values(&self, getters: Vec<Id<Channel>>, _: User) -> ResultMap<Id<Channel>, Option<Value>, Error> {
         let (tx, rx) = channel();
         self.back_end.lock().unwrap().send(AdapterOp::FetchValues {
             getters: getters,
@@ -296,7 +296,7 @@ impl Adapter for TestAdapter {
     ///
     /// The AdapterManager always attempts to group calls to `send_values` by `Adapter`, and then
     /// expects the adapter to attempt to minimize the connections with the actual devices.
-    fn send_values(&self, values: HashMap<Id<Setter>, Value>, _: User) -> ResultMap<Id<Setter>, (), Error> {
+    fn send_values(&self, values: HashMap<Id<Channel>, Value>, _: User) -> ResultMap<Id<Channel>, (), Error> {
         let (tx, rx) = channel();
         self.back_end.lock().unwrap().send(AdapterOp::SendValues {
             values: values,
@@ -320,8 +320,8 @@ impl Adapter for TestAdapter {
     /// If no `Range` option is set, the watcher expects to receive `EnterRange` events whenever
     /// a new value is available on the device. The adapter may decide to reject the request if
     /// this is clearly not the expected usage for a device, or to throttle it.
-    fn register_watch(&self, source: Vec<(Id<Getter>, Option<Value>, Box<ExtSender<WatchEvent>>)>) ->
-            Vec<(Id<Getter>, Result<Box<AdapterWatchGuard>, Error>)>
+    fn register_watch(&self, source: Vec<(Id<Channel>, Option<Value>, Box<ExtSender<WatchEvent>>)>) ->
+            Vec<(Id<Channel>, Result<Box<AdapterWatchGuard>, Error>)>
     {
         let (tx, rx) = channel();
         self.back_end.lock().unwrap().send(AdapterOp::Watch {
@@ -540,12 +540,12 @@ impl Deserialize for FakeEnv {
 pub enum Instruction {
     AddAdapters(Vec<String>),
     AddServices(Vec<Service>),
-    AddGetters(Vec<Channel<Getter>>),
-    AddSetters(Vec<Channel<Setter>>),
-    RemoveGetters(Vec<Id<Getter>>),
-    RemoveSetters(Vec<Id<Setter>>),
-    InjectGetterValues(Vec<(Id<Getter>, Result<Value, Error>)>),
-    InjectSetterErrors(Vec<(Id<Setter>, Option<Error>)>),
+    AddGetters(Vec<Channel>),
+    AddSetters(Vec<Channel>),
+    RemoveGetters(Vec<Id<Channel>>),
+    RemoveSetters(Vec<Id<Channel>>),
+    InjectGetterValues(Vec<(Id<Channel>, Result<Value, Error>)>),
+    InjectSetterErrors(Vec<(Id<Channel>, Option<Error>)>),
     TriggerTimersUntil(TimeStamp),
     ResetTimers,
 }
@@ -553,21 +553,21 @@ pub enum Instruction {
 /// Operations internal to a TestAdapter.
 enum AdapterOp {
     FetchValues {
-        getters: Vec<Id<Getter>>,
-        tx: Box<ExtSender<ResultMap<Id<Getter>, Option<Value>, Error>>>
+        getters: Vec<Id<Channel>>,
+        tx: Box<ExtSender<ResultMap<Id<Channel>, Option<Value>, Error>>>
     },
     SendValues {
-        values: HashMap<Id<Setter>, Value>,
-        tx: Box<ExtSender<ResultMap<Id<Setter>, (), Error>>>
+        values: HashMap<Id<Channel>, Value>,
+        tx: Box<ExtSender<ResultMap<Id<Channel>, (), Error>>>
     },
     Watch {
-        source: Vec<(Id<Getter>, Option<Value>, Box<ExtSender<WatchEvent>>)>,
-        tx: Box<ExtSender<Vec<(Id<Getter>, Result<usize, Error>)>>>
+        source: Vec<(Id<Channel>, Option<Value>, Box<ExtSender<WatchEvent>>)>,
+        tx: Box<ExtSender<Vec<(Id<Channel>, Result<usize, Error>)>>>
     },
     AddTimer(Timer),
     Unwatch(usize),
-    InjectGetterValues(Vec<(Id<Getter>, Result<Value, Error>)>, Box<ExtSender<FakeEnvEvent>>),
-    InjectSetterErrors(Vec<(Id<Setter>, Option<Error>)>, Box<ExtSender<FakeEnvEvent>>),
+    InjectGetterValues(Vec<(Id<Channel>, Result<Value, Error>)>, Box<ExtSender<FakeEnvEvent>>),
+    InjectSetterErrors(Vec<(Id<Channel>, Option<Error>)>, Box<ExtSender<FakeEnvEvent>>),
     TriggerTimersUntil(TimeStamp, Box<ExtSender<FakeEnvEvent>>),
     ResetTimers(Box<ExtSender<FakeEnvEvent>>),
 }

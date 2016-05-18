@@ -1,19 +1,17 @@
 'use strict';
 
 var By = require('selenium-webdriver').By;
+var Accessors = require('../accessors');
 
-var SELECTORS = Object.freeze({
-    signOutButton: By.id('signout-button')
-});
 
-function SignedInPageAccessor(driver) {
-  this.driver = driver;
+function SignedInPageAccessor() {
+  Accessors.apply(this, arguments);
 }
 
-SignedInPageAccessor.prototype = {
-   get getSignOutButton() {
-        return this.driver.findElement(SELECTORS.signOutButton);
-   }
-};
+SignedInPageAccessor.prototype = Object.assign({
+  get signOutButton() {
+    return this.waitForElement(By.id('signout-button'));
+  }
+}, Accessors.prototype);
 
 module.exports = SignedInPageAccessor;

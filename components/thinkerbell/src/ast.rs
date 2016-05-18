@@ -117,7 +117,7 @@ impl Parser<Rule<UncheckedCtx>> for Rule<UncheckedCtx> {
 ///
 /// A match is represented as an object with the following fields:
 ///
-/// - source (array of GetterSelector) - the selector for getters that will
+/// - source (array of ChannelSelector) - the selector for getters that will
 ///   provide the data;
 /// - kind (ChannelKind) - the kind of getters;
 /// - range (Range) - the condition in whih the match is considered met –
@@ -151,7 +151,7 @@ pub struct Match<Ctx> where Ctx: Context {
     /// The set of getters to watch. Note that the set of getters may
     /// change (e.g. when devices are added/removed) without rebooting
     /// the script.
-    pub source: Vec<GetterSelector>,
+    pub source: Vec<ChannelSelector>,
 
     /// The kind of channel expected from `source`, e.g. "the current
     /// time of day", "is the door opened?", etc. During compilation,
@@ -179,7 +179,7 @@ impl Parser<Match<UncheckedCtx>> for Match<UncheckedCtx> {
 
     fn parse(path: Path, source: &mut JSON) -> Result<Self, ParseError> {
         let sources = try!(path.push("source",
-            |path| GetterSelector::take_vec(path, source, "source"))
+            |path| ChannelSelector::take_vec(path, source, "source"))
         );
         let kind = try!(path.push("kind",
             |path| ChannelKind::take(path, source, "kind"))
@@ -209,7 +209,7 @@ impl Parser<Match<UncheckedCtx>> for Match<UncheckedCtx> {
 /// # JSON
 ///
 /// A statement is represented as an object with the following fields:
-/// - destination (array of SetterSelector);
+/// - destination (array of ChannelSelector);
 /// - value (Value);
 /// - kind (ChannelKind);
 ///
@@ -239,7 +239,7 @@ pub struct Statement<Ctx> where Ctx: Context {
     /// The set of setters to which to send a command. Note that the
     /// set of setters may change (e.g. when devices are
     /// added/removed) without rebooting the script.
-    pub destination: Vec<SetterSelector>,
+    pub destination: Vec<ChannelSelector>,
 
     /// Data to send to the resource. During compilation, we check
     /// that the type of `value` is compatible with that of
@@ -261,7 +261,7 @@ impl Parser<Statement<UncheckedCtx>> for Statement<UncheckedCtx> {
 
     fn parse(path: Path, source: &mut JSON) -> Result<Self, ParseError> {
         let destination = try!(path.push("destination",
-            |path| SetterSelector::take_vec(path, source, "destination"))
+            |path| ChannelSelector::take_vec(path, source, "destination"))
         );
         let kind = try!(path.push("kind",
             |path| ChannelKind::take(path, source, "kind"))

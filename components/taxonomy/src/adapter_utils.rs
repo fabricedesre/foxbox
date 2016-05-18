@@ -2,7 +2,7 @@
 
 use api::{ Error, User };
 use manager::*;
-use services::{ Getter, Setter };
+use services::Channel;
 use util::{ Id, AdapterId };
 use values::*;
 
@@ -48,11 +48,11 @@ impl<T> Adapter for MakeSyncAdapter<T> where T: Adapter {
         &self.version
     }
 
-    fn fetch_values(&self, set: Vec<Id<Getter>>, user: User) -> ResultMap<Id<Getter>, Option<Value>, Error> {
+    fn fetch_values(&self, set: Vec<Id<Channel>>, user: User) -> ResultMap<Id<Channel>, Option<Value>, Error> {
         self.lock.lock().unwrap().fetch_values(set, user)
     }
 
-    fn send_values(&self, values: HashMap<Id<Setter>, Value>, user: User) -> ResultMap<Id<Setter>, (), Error> {
+    fn send_values(&self, values: HashMap<Id<Channel>, Value>, user: User) -> ResultMap<Id<Channel>, (), Error> {
         self.lock.lock().unwrap().send_values(values, user)
     }
 

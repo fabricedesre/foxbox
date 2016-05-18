@@ -151,12 +151,12 @@ impl Subscription {
 pub struct WebPush<C> {
     controller: C,
     crypto: CryptoContext,
-    getter_resource_id: Id<Getter>,
-    getter_subscription_id: Id<Getter>,
-    setter_resource_id: Id<Setter>,
-    setter_subscribe_id: Id<Setter>,
-    setter_unsubscribe_id: Id<Setter>,
-    setter_notify_id: Id<Setter>,
+    getter_resource_id: Id<Channel>,
+    getter_subscription_id: Id<Channel>,
+    setter_resource_id: Id<Channel>,
+    setter_subscribe_id: Id<Channel>,
+    setter_unsubscribe_id: Id<Channel>,
+    setter_notify_id: Id<Channel>,
 }
 
 impl<C: Controller> WebPush<C> {
@@ -168,27 +168,27 @@ impl<C: Controller> WebPush<C> {
         Id::new("service:webpush@link.mozilla.org")
     }
 
-    pub fn getter_resource_id() -> Id<Getter> {
+    pub fn getter_resource_id() -> Id<Channel> {
         Id::new("getter:resource.webpush@link.mozilla.org")
     }
 
-    pub fn getter_subscription_id() -> Id<Getter> {
+    pub fn getter_subscription_id() -> Id<Channel> {
         Id::new("getter:subscription.webpush@link.mozilla.org")
     }
 
-    pub fn setter_resource_id() -> Id<Setter> {
+    pub fn setter_resource_id() -> Id<Channel> {
         Id::new("setter:resource.webpush@link.mozilla.org")
     }
 
-    pub fn setter_subscribe_id() -> Id<Setter> {
+    pub fn setter_subscribe_id() -> Id<Channel> {
         Id::new("setter:subscribe.webpush@link.mozilla.org")
     }
 
-    pub fn setter_unsubscribe_id() -> Id<Setter> {
+    pub fn setter_unsubscribe_id() -> Id<Channel> {
         Id::new("setter:unsubscribe.webpush@link.mozilla.org")
     }
 
-    pub fn setter_notify_id() -> Id<Setter> {
+    pub fn setter_notify_id() -> Id<Channel> {
         Id::new("setter:notify.webpush@link.mozilla.org")
     }
 }
@@ -210,7 +210,7 @@ impl<C: Controller> Adapter for WebPush<C> {
         &ADAPTER_VERSION
     }
 
-    fn fetch_values(&self, mut set: Vec<Id<Getter>>, user: User) -> ResultMap<Id<Getter>, Option<Value>, Error> {
+    fn fetch_values(&self, mut set: Vec<Id<Channel>>, user: User) -> ResultMap<Id<Channel>, Option<Value>, Error> {
         set.drain(..).map(|id| {
             let user_id = if cfg!(feature = "authentication") {
                 match user {
@@ -240,11 +240,11 @@ impl<C: Controller> Adapter for WebPush<C> {
 
             getter_api!(get_subscriptions, getter_subscription_id, SubscriptionGetter);
             getter_api!(get_resources, getter_resource_id, ResourceGetter);
-            (id.clone(), Err(Error::InternalError(InternalError::NoSuchGetter(id))))
+            (id.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(id))))
         }).collect()
     }
 
-    fn send_values(&self, mut values: HashMap<Id<Setter>, Value>, user: User) -> ResultMap<Id<Setter>, (), Error> {
+    fn send_values(&self, mut values: HashMap<Id<Channel>, Value>, user: User) -> ResultMap<Id<Channel>, (), Error> {
         values.drain().map(|(id, value)| {
             let user_id = if cfg!(feature = "authentication") {
                 match user {
@@ -294,7 +294,7 @@ impl<C: Controller> Adapter for WebPush<C> {
             setter_api!(set_resources, "set_resources", setter_resource_id, ResourceGetter);
             setter_api!(set_subscribe, "set_subscribe", setter_subscribe_id, SubscriptionGetter);
             setter_api!(set_unsubscribe, "set_unsubscribe", setter_unsubscribe_id, SubscriptionGetter);
-            (id.clone(), Err(Error::InternalError(InternalError::NoSuchSetter(id))))
+            (id.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(id))))
         }).collect()
     }
 
@@ -327,17 +327,13 @@ impl<C: Controller> WebPush<C> {
                     tags: HashSet::new(),
                     adapter: id.clone(),
                     id: $id,
-                    last_seen: None,
                     service: service_id.clone(),
-                    mechanism: Getter {
-                        kind: ChannelKind::Extension {
-                            vendor: Id::new(ADAPTER_VENDOR),
-                            adapter: Id::new(ADAPTER_NAME),
-                            kind: Id::new($kind_id),
-                            typ: Type::Json,
-                        },
-                        updated: None
-                    }
+                    kind: ChannelKind::Extension {
+                        vendor: Id::new(ADAPTER_VENDOR),
+                        adapter: Id::new(ADAPTER_NAME),
+                        kind: Id::new($kind_id),
+                        typ: Type::Json,
+                    },
                 }));
             )
         }
@@ -348,17 +344,13 @@ impl<C: Controller> WebPush<C> {
                     tags: HashSet::new(),
                     adapter: id.clone(),
                     id: $id,
-                    last_seen: None,
                     service: service_id.clone(),
-                    mechanism: Setter {
-                        kind: ChannelKind::Extension {
-                            vendor: Id::new(ADAPTER_VENDOR),
-                            adapter: Id::new(ADAPTER_NAME),
-                            kind: Id::new($kind_id),
-                            typ: Type::Json,
-                        },
-                        updated: None
-                    }
+                    kind: ChannelKind::Extension {
+                        vendor: Id::new(ADAPTER_VENDOR),
+                        adapter: Id::new(ADAPTER_NAME),
+                        kind: Id::new($kind_id),
+                        typ: Type::Json,
+                    },
                 }));
             )
         }
@@ -367,12 +359,8 @@ impl<C: Controller> WebPush<C> {
             tags: HashSet::new(),
             adapter: id.clone(),
             id: setter_notify_id,
-            last_seen: None,
             service: service_id.clone(),
-            mechanism: Setter {
-                kind: ChannelKind::WebPushNotify,
-                updated: None
-            }
+            kind: ChannelKind::WebPushNotify,
         }));
 
         add_getter!(getter_resource_id, "WebPushResource");

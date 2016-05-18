@@ -2,13 +2,10 @@
 
 var SetUpAccessor = require('./accessors.js');
 
-var SuccessfulPageView = require('../successful_page/view.js');
-var successfulPageView;
 
 function SetUpView(driver) {
     this.driver = driver;
     this.accessors = new SetUpAccessor(this.driver);
-    successfulPageView = new SuccessfulPageView(this.driver);
 }
 
 SetUpView.prototype = {
@@ -30,7 +27,10 @@ SetUpView.prototype = {
 
     successLogin: function(password) {
       return this._submitPassword(password)
-        .then(() => successfulPageView);
+        .then(() => {
+          const SuccessfulPageView = require('../successful_page/view.js');
+          return new SuccessfulPageView(this.driver);
+        });
     },
 
     successSignUpFromApp: function(password) {

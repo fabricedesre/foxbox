@@ -9,14 +9,14 @@ function SignedInPageView(driver) {
     this.driver = driver;
     this.accessors = new SignedInPageAccessor(this.driver);
     signedOutPageView = new SignedOutPageView(this.driver);
+    this.accessors.signOutButton; // Wait until button is displayed
 }
 
 SignedInPageView.prototype = {
-    signOut: function() {
-    	return this.accessors.getSignOutButton.click().then(function() {
-            return signedOutPageView.hasSignedOut();
-        });
-    }
+  signOut: function() {
+    return this.accessors.signOutButton.click()
+    .then(() => signedOutPageView.hasSignedOut());
+  }
 };
 
 module.exports = SignedInPageView;

@@ -1,10 +1,11 @@
 'use strict';
 
-const makeSuite = require('./lib/make_suite');
+const SuiteBuilder = require('./lib/make_suite');
 const HOST_URL = 'http://fxbox.github.io/app';
 
+var suiteBuilder = new SuiteBuilder('Github.io webapp', HOST_URL);
 
-makeSuite('Github.io webapp', HOST_URL, (app) => {
+suiteBuilder.build((app) => {
 
   describe('open the web app', () => {
 

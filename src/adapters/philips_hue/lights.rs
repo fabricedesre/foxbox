@@ -28,11 +28,11 @@ pub struct Light {
     hub_id: String,
     light_id: String,
     service_id: Id<ServiceId>,
-    pub get_available_id: Id<Getter>,
-    pub get_power_id: Id<Getter>,
-    pub set_power_id: Id<Setter>,
-    pub get_color_id: Id<Getter>,
-    pub set_color_id: Id<Setter>,
+    pub get_available_id: Id<Channel>,
+    pub get_power_id: Id<Channel>,
+    pub set_power_id: Id<Channel>,
+    pub get_color_id: Id<Channel>,
+    pub set_color_id: Id<Channel>,
 }
 
 impl Light {
@@ -89,16 +89,12 @@ impl Light {
                 tags: HashSet::new(),
                 adapter: adapter_id.clone(),
                 id: self.get_available_id.clone(),
-                last_seen: None,
                 service: self.service_id.clone(),
-                mechanism: Getter {
-                    kind: ChannelKind::Extension {
-                        vendor: Id::new("foxlink@mozilla.com"),
-                        adapter: Id::new("Philips Hue Adapter"),
-                        kind: Id::new("available"),
-                        typ: Type::OnOff,
-                    },
-                    updated: None,
+                kind: ChannelKind::Extension {
+                    vendor: Id::new("foxlink@mozilla.com"),
+                    adapter: Id::new("Philips Hue Adapter"),
+                    kind: Id::new("available"),
+                    typ: Type::OnOff,
                 },
             }));
 
@@ -106,40 +102,28 @@ impl Light {
                 tags: HashSet::new(),
                 adapter: adapter_id.clone(),
                 id: self.get_power_id.clone(),
-                last_seen: None,
                 service: self.service_id.clone(),
-                mechanism: Getter {
-                    kind: ChannelKind::LightOn,
-                    updated: None,
-                },
+                kind: ChannelKind::LightOn,
             }));
 
             try!(manager.add_setter(Channel {
                 tags: HashSet::new(),
                 adapter: adapter_id.clone(),
                 id: self.set_power_id.clone(),
-                last_seen: None,
                 service: self.service_id.clone(),
-                mechanism: Setter {
-                    kind: ChannelKind::LightOn,
-                    updated: None,
-                },
+                kind: ChannelKind::LightOn,
             }));
 
             try!(manager.add_getter(Channel {
                 tags: HashSet::new(),
                 adapter: adapter_id.clone(),
                 id: self.get_color_id.clone(),
-                last_seen: None,
                 service: self.service_id.clone(),
-                mechanism: Getter {
-                    kind: ChannelKind::Extension {
-                        vendor: Id::new("foxlink@mozilla.com"),
-                        adapter: Id::new("Philips Hue Adapter"),
-                        kind: Id::new("Color"),
-                        typ: Type::Color,
-                    },
-                    updated: None,
+                kind: ChannelKind::Extension {
+                    vendor: Id::new("foxlink@mozilla.com"),
+                    adapter: Id::new("Philips Hue Adapter"),
+                    kind: Id::new("Color"),
+                    typ: Type::Color,
                 },
             }));
 
@@ -147,16 +131,12 @@ impl Light {
                 tags: HashSet::new(),
                 adapter: adapter_id.clone(),
                 id: self.set_color_id.clone(),
-                last_seen: None,
                 service: self.service_id.clone(),
-                mechanism: Setter {
-                    kind: ChannelKind::Extension {
-                        vendor: Id::new("foxlink@mozilla.com"),
-                        adapter: Id::new("Philips Hue Adapter"),
-                        kind: Id::new("Color"),
-                        typ: Type::Color,
-                    },
-                    updated: None,
+                kind: ChannelKind::Extension {
+                    vendor: Id::new("foxlink@mozilla.com"),
+                    adapter: Id::new("Philips Hue Adapter"),
+                    kind: Id::new("Color"),
+                    typ: Type::Color,
                 },
             }));
 
@@ -187,16 +167,12 @@ impl Light {
                 tags: HashSet::new(),
                 adapter: adapter_id.clone(),
                 id: self.get_available_id.clone(),
-                last_seen: None,
                 service: self.service_id.clone(),
-                mechanism: Getter {
-                    kind: ChannelKind::Extension {
-                        vendor: Id::new("foxlink@mozilla.com"),
-                        adapter: Id::new("Philips Hue Adapter"),
-                        kind: Id::new("available"),
-                        typ: Type::OnOff,
-                    },
-                    updated: None,
+                kind: ChannelKind::Extension {
+                    vendor: Id::new("foxlink@mozilla.com"),
+                    adapter: Id::new("Philips Hue Adapter"),
+                    kind: Id::new("available"),
+                    typ: Type::OnOff,
                 },
             }));
 
@@ -204,24 +180,16 @@ impl Light {
                 tags: HashSet::new(),
                 adapter: adapter_id.clone(),
                 id: self.get_power_id.clone(),
-                last_seen: None,
                 service: self.service_id.clone(),
-                mechanism: Getter {
-                    kind: ChannelKind::LightOn,
-                    updated: None,
-                },
+                kind: ChannelKind::LightOn,
             }));
 
             try!(manager.add_setter(Channel {
                 tags: HashSet::new(),
                 adapter: adapter_id.clone(),
                 id: self.set_power_id.clone(),
-                last_seen: None,
                 service: self.service_id.clone(),
-                mechanism: Setter {
-                    kind: ChannelKind::LightOn,
-                    updated: None,
-                },
+                kind: ChannelKind::LightOn,
             }));
 
             let mut services_lock = services.lock().unwrap();

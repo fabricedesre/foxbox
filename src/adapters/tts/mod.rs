@@ -10,7 +10,7 @@
 use foxbox_taxonomy::adapter::*;
 use foxbox_taxonomy::manager::AdapterManager;
 use foxbox_taxonomy::api::{ Error, InternalError, User };
-use foxbox_taxonomy::services::{ AdapterId, Channel, ChannelKind, Getter, Id, Service, ServiceId, Setter };
+use foxbox_taxonomy::services::{ AdapterId, Channel, ChannelKind, Id, Service, ServiceId };
 use foxbox_taxonomy::values::{ Type, Value };
 use std::collections::{ HashMap, HashSet };
 use std::sync::Arc;
@@ -29,7 +29,7 @@ static ADAPTER_VENDOR: &'static str = "team@link.mozilla.org";
 static ADAPTER_VERSION: [u32;4] = [0, 0, 0, 0];
 
 pub struct TtsAdapter<T> {
-    talk_setter_id: Id<Setter>,
+    talk_setter_id: Id<Channel>,
     engine: T
 }
 
@@ -50,13 +50,13 @@ impl<T: TtsEngine> Adapter for TtsAdapter<T> {
         &ADAPTER_VERSION
     }
 
-    fn fetch_values(&self, mut set: Vec<Id<Getter>>, _: User) -> ResultMap<Id<Getter>, Option<Value>, Error> {
+    fn fetch_values(&self, mut set: Vec<Id<Channel>>, _: User) -> ResultMap<Id<Channel>, Option<Value>, Error> {
         set.drain(..).map(|id| {
-            (id.clone(), Err(Error::InternalError(InternalError::NoSuchGetter(id))))
+            (id.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(id))))
         }).collect()
     }
 
-    fn send_values(&self, mut values: HashMap<Id<Setter>, Value>, _: User) -> ResultMap<Id<Setter>, (), Error> {
+    fn send_values(&self, mut values: HashMap<Id<Channel>, Value>, _: User) -> ResultMap<Id<Channel>, (), Error> {
         use core::ops::Deref;
 
         values.drain().map(|(id, value)| {
@@ -66,7 +66,7 @@ impl<T: TtsEngine> Adapter for TtsAdapter<T> {
                     return (id, Ok(()));
                 }
             }
-            (id.clone(), Err(Error::InternalError(InternalError::NoSuchSetter(id))))
+            (id.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(id))))
         }).collect()
     }
 
@@ -97,17 +97,13 @@ pub fn init(adapt: &Arc<AdapterManager>) -> Result<(), Error> {
         tags: HashSet::new(),
         adapter: adapter_id.clone(),
         id: talk_setter_id.clone(),
-        last_seen: None,
         service: service_id.clone(),
-        mechanism: Setter {
-            kind: ChannelKind::Extension {
-                vendor: Id::new(ADAPTER_VENDOR),
-                adapter: Id::new(ADAPTER_NAME),
-                kind: Id::new("Sentence"),
-                typ: Type::String,
-            },
-            updated: None
-        }
+        kind: ChannelKind::Extension {
+            vendor: Id::new(ADAPTER_VENDOR),
+            adapter: Id::new(ADAPTER_NAME),
+            kind: Id::new("Sentence"),
+            typ: Type::String,
+        },
     }));
     Ok(())
 }

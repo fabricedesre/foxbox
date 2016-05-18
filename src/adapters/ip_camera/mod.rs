@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 //! An adapter providing access to IP cameras. Currently only the following IP cameras are
-//! supported: DLink DCS-5010L, DLink DCS-5020L and DLink DCS-5025.
+//! supported: `DLink DCS-5010L`, `DLink DCS-5020L` and `DLink DCS-5025`.
 //!
 
 extern crate serde_json;
@@ -38,8 +38,8 @@ static SNAPSHOT_DIR: &'static str = "snapshots";
 pub type IpCameraServiceMap = Arc<Mutex<IpCameraServiceMapInternal>>;
 
 pub struct IpCameraServiceMapInternal {
-    getters: HashMap<Id<Getter>, Arc<IpCamera>>,
-    setters: HashMap<Id<Setter>, Arc<IpCamera>>,
+    getters: HashMap<Id<Channel>, Arc<IpCamera>>,
+    setters: HashMap<Id<Channel>, Arc<IpCamera>>,
     snapshot_root: String,
 }
 
@@ -121,16 +121,12 @@ impl IPCameraAdapter {
             tags: HashSet::new(),
             adapter: adapter_id.clone(),
             id: getter_image_list_id.clone(),
-            last_seen: None,
             service: service_id.clone(),
-            mechanism: Getter {
-                kind: ChannelKind::Extension {
-                    vendor: Id::new("foxlink@mozilla.com"),
-                    adapter: Id::new("IPCam Adapter"),
-                    kind: Id::new("image_list"),
-                    typ: Type::Json,
-                },
-                updated: None,
+            kind: ChannelKind::Extension {
+                vendor: Id::new("foxlink@mozilla.com"),
+                adapter: Id::new("IPCam Adapter"),
+                kind: Id::new("image_list"),
+                typ: Type::Json,
             },
         }));
 
@@ -139,16 +135,12 @@ impl IPCameraAdapter {
             tags: HashSet::new(),
             adapter: adapter_id.clone(),
             id: getter_image_newest_id.clone(),
-            last_seen: None,
             service: service_id.clone(),
-            mechanism: Getter {
-                kind: ChannelKind::Extension {
-                    vendor: Id::new("foxlink@mozilla.com"),
-                    adapter: Id::new("IPCam Adapter"),
-                    kind: Id::new("latest image"),
-                    typ: Type::Binary,
-                },
-                updated: None,
+            kind: ChannelKind::Extension {
+                vendor: Id::new("foxlink@mozilla.com"),
+                adapter: Id::new("IPCam Adapter"),
+                kind: Id::new("latest image"),
+                typ: Type::Binary,
             },
         }));
 
@@ -157,12 +149,8 @@ impl IPCameraAdapter {
             tags: HashSet::new(),
             adapter: adapter_id.clone(),
             id: setter_snapshot_id.clone(),
-            last_seen: None,
             service: service_id.clone(),
-            mechanism: Setter {
-                kind: ChannelKind::TakeSnapshot,
-                updated: None,
-            },
+            kind: ChannelKind::TakeSnapshot,
         }));
 
         let getter_username_id = create_getter_id("username", udn);
@@ -170,12 +158,8 @@ impl IPCameraAdapter {
             tags: HashSet::new(),
             adapter: adapter_id.clone(),
             id: getter_username_id.clone(),
-            last_seen: None,
             service: service_id.clone(),
-            mechanism: Getter {
-                kind: ChannelKind::Username,
-                updated: None,
-            },
+            kind: ChannelKind::Username,
         }));
 
         let setter_username_id = create_setter_id("username", udn);
@@ -183,12 +167,8 @@ impl IPCameraAdapter {
             tags: HashSet::new(),
             adapter: adapter_id.clone(),
             id: setter_username_id.clone(),
-            last_seen: None,
             service: service_id.clone(),
-            mechanism: Setter {
-                kind: ChannelKind::Username,
-                updated: None,
-            },
+            kind: ChannelKind::Username,
         }));
 
         let getter_password_id = create_getter_id("password", udn);
@@ -196,12 +176,8 @@ impl IPCameraAdapter {
             tags: HashSet::new(),
             adapter: adapter_id.clone(),
             id: getter_password_id.clone(),
-            last_seen: None,
             service: service_id.clone(),
-            mechanism: Getter {
-                kind: ChannelKind::Password,
-                updated: None,
-            },
+            kind: ChannelKind::Password,
         }));
 
         let setter_password_id = create_setter_id("password", udn);
@@ -209,12 +185,8 @@ impl IPCameraAdapter {
             tags: HashSet::new(),
             adapter: adapter_id.clone(),
             id: setter_password_id.clone(),
-            last_seen: None,
             service: service_id.clone(),
-            mechanism: Setter {
-                kind: ChannelKind::Password,
-                updated: None,
-            },
+            kind: ChannelKind::Password,
         }));
 
         let mut serv = services.lock().unwrap();
@@ -250,13 +222,13 @@ impl Adapter for IPCameraAdapter {
     }
 
     fn fetch_values(&self,
-                    mut set: Vec<Id<Getter>>,
+                    mut set: Vec<Id<Channel>>,
                     _: User)
-                    -> ResultMap<Id<Getter>, Option<Value>, Error> {
+                    -> ResultMap<Id<Channel>, Option<Value>, Error> {
         set.drain(..).map(|id| {
             let camera = match self.services.lock().unwrap().getters.get(&id) {
                 Some(camera) => camera.clone(),
-                None => return (id.clone(), Err(Error::InternalError(InternalError::NoSuchGetter(id))))
+                None => return (id.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(id))))
             };
 
             if id == camera.get_username_id {
@@ -284,11 +256,11 @@ impl Adapter for IPCameraAdapter {
                 };
             }
 
-            (id.clone(), Err(Error::InternalError(InternalError::NoSuchGetter(id))))
+            (id.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(id))))
         }).collect()
     }
 
-    fn send_values(&self, mut values: HashMap<Id<Setter>, Value>, _: User) -> ResultMap<Id<Setter>, (), Error> {
+    fn send_values(&self, mut values: HashMap<Id<Channel>, Value>, _: User) -> ResultMap<Id<Channel>, (), Error> {
         values.drain().map(|(id, value)| {
             let camera = match self.services.lock().unwrap().setters.get(&id) {
                 Some(camera) => camera.clone(),
@@ -324,7 +296,7 @@ impl Adapter for IPCameraAdapter {
                 };
             }
 
-            (id.clone(), Err(Error::InternalError(InternalError::NoSuchSetter(id))))
+            (id.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(id))))
         }).collect()
     }
 

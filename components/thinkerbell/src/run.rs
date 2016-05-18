@@ -7,7 +7,7 @@ use compile;
 
 use foxbox_taxonomy::api;
 use foxbox_taxonomy::api::{ API, Error as APIError, Targetted, User, WatchEvent };
-use foxbox_taxonomy::services::{ Getter, Setter };
+use foxbox_taxonomy::services::Channel;
 use foxbox_taxonomy::util::{ Exactly, Id };
 use foxbox_taxonomy::values::{ Duration, Value };
 
@@ -141,7 +141,7 @@ pub enum ExecutionEvent {
     Sent {
         rule_index: usize,
         statement_index: usize,
-        result: Vec<(Id<Setter>, Result<(), Error>)>
+        result: Vec<(Id<Channel>, Result<(), Error>)>
     },
     TimerStart {
         rule_index: usize,
@@ -152,7 +152,7 @@ pub enum ExecutionEvent {
         condition_index: usize,
     },
     ChannelError {
-        id: Id<Getter>,
+        id: Id<Channel>,
         error: APIError,
     }
 }
@@ -174,7 +174,7 @@ enum ExecutionOp {
     /// have waited long enough to trigger the consequences.
     UpdateCondition {
         /// The channel that has changed state.
-        id: Id<Getter>,
+        id: Id<Channel>,
 
         /// `true` if the condition is now met, `false` otherwise.
         is_met: bool,
@@ -205,7 +205,7 @@ struct ConditionState {
     match_is_met: bool,
 
     /// The set of getters for which the condition is met.
-    per_getter: HashSet<Id<Getter>>,
+    per_getter: HashSet<Id<Channel>>,
 
     /// If `None`, a duration is attached to this condition and we need to make sure that the
     /// condition remains true for at least `duration` before we decide whether to proceed with
@@ -248,7 +248,7 @@ impl<Env> ExecutionTask<Env> where Env: ExecutableDevEnv + Debug {
         // Generate the state of rules, conditions, getters and start
         // listening to changes in the getters.
 
-        // FIXME: We could optimize requests by detecting if several share a `TargetMap<GetterSelector, Exactly<Range>>`
+        // FIXME: We could optimize requests by detecting if several share a `TargetMap<ChannelSelector, Exactly<Range>>`
         let mut per_rule : Vec<_> = self.script.rules.iter().zip(0 as usize..).map(|(rule, rule_index)| {
             let per_condition = rule.conditions.iter().zip(0 as usize..).map(|(condition, condition_index)| {
                 // We will often end up watching several times the
@@ -318,7 +318,7 @@ impl<Env> ExecutionTask<Env> where Env: ExecutableDevEnv + Debug {
                                 error: error,
                             });
                         },
-                        WatchEvent::GetterRemoved(id) => {
+                        WatchEvent::ChannelRemoved(id) => {
                             debug!("[Recipe '{}'] Removed getter {}, resetting condition to `false`", self.script.name, id);
                             // A getter was removed. Its condition is therefore not met anymore.
                             let msg = ExecutionOp::UpdateCondition {
@@ -330,7 +330,7 @@ impl<Env> ExecutionTask<Env> where Env: ExecutableDevEnv + Debug {
                             // This send will fail only if the thread is already down.
                             let _ = self.tx.send(msg);
                         },
-                        WatchEvent::GetterAdded(id) => {
+                        WatchEvent::ChannelAdded(id) => {
                             debug!("[Recipe '{}'] Added getter {}.", self.script.name, id);
                             // An getter was added. Nothing to do.
                         }
@@ -398,7 +398,7 @@ impl<Env> ExecutionTask<Env> where Env: ExecutableDevEnv + Debug {
 
     /// A getter just entered/left a range. Update the conditions to determine whether
     /// we now need to fire the statements.
-    fn update_conditions<S>(&self, name: &str, id: Id<Getter>, getter_is_met: bool,
+    fn update_conditions<S>(&self, name: &str, id: Id<Channel>, getter_is_met: bool,
             per_rule: &mut Vec<RuleState<Env>>, rule_index: usize, condition_index: usize,
             api: &Env::API, on_event: &S)
             where S: ExtSender<ExecutionEvent> + Clone
@@ -481,7 +481,7 @@ impl<Env> ExecutionTask<Env> where Env: ExecutableDevEnv + Debug {
 
 
 impl<Env> Statement<CompiledCtx<Env>> where Env: ExecutableDevEnv {
-    fn eval(&self, api: &Env::API, owner: &User) ->  Vec<(Id<Setter>, Result<(), Error>)> {
+    fn eval(&self, api: &Env::API, owner: &User) ->  Vec<(Id<Channel>, Result<(), Error>)> {
         api.send_values(vec![Targetted {
             select: self.destination.clone(),
             payload: self.value.clone()

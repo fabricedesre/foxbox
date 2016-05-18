@@ -21,16 +21,15 @@ pub fn create_service_id(service_id: &str) -> Id<ServiceId> {
     Id::new(&format!("service:{}@link.mozilla.org", service_id))
 }
 
-pub fn create_setter_id(operation: &str, service_id: &str) -> Id<Setter> {
+pub fn create_setter_id(operation: &str, service_id: &str) -> Id<Channel> {
     create_io_mechanism_id("setter", operation, service_id)
 }
 
-pub fn create_getter_id(operation: &str, service_id: &str) -> Id<Getter> {
+pub fn create_getter_id(operation: &str, service_id: &str) -> Id<Channel> {
     create_io_mechanism_id("getter", operation, service_id)
 }
 
 pub fn create_io_mechanism_id<IO>(prefix: &str, operation: &str, service_id: &str) -> Id<IO>
-    where IO: IOMechanism
 {
     Id::new(&format!("{}:{}.{}@link.mozilla.org", prefix, operation, service_id))
 }
@@ -44,13 +43,13 @@ pub struct IpCamera {
 
     upnp_name: String,
 
-    pub image_list_id: Id<Getter>,
-    pub image_newest_id: Id<Getter>,
-    pub snapshot_id: Id<Setter>,
-    pub get_username_id: Id<Getter>,
-    pub set_username_id: Id<Setter>,
-    pub get_password_id: Id<Getter>,
-    pub set_password_id: Id<Setter>,
+    pub image_list_id: Id<Channel>,
+    pub image_newest_id: Id<Channel>,
+    pub snapshot_id: Id<Channel>,
+    pub get_username_id: Id<Channel>,
+    pub set_username_id: Id<Channel>,
+    pub get_password_id: Id<Channel>,
+    pub set_password_id: Id<Channel>,
 }
 
 impl IpCamera {

@@ -48,8 +48,8 @@ pub enum HueAction {
 pub type LightServiceMap = Arc<Mutex<LightServiceMapInternal>>;
 
 pub struct LightServiceMapInternal {
-    getters: HashMap<Id<Getter>, Light>,
-    setters: HashMap<Id<Setter>, Light>,
+    getters: HashMap<Id<Channel>, Light>,
+    setters: HashMap<Id<Channel>, Light>,
 }
 
 #[derive(Clone)]
@@ -202,11 +202,11 @@ pub fn create_light_id(hub_id: &str, light_id: &str) -> Id<ServiceId> {
     Id::new(&format!("service:{}.{}.{}", light_id, hub_id, create_adapter_id()))
 }
 
-pub fn create_getter_id(op: &str, hub_id: &str, light_id: &str) -> Id<Getter> {
+pub fn create_getter_id(op: &str, hub_id: &str, light_id: &str) -> Id<Channel> {
     Id::new(&format!("getter:{}.{}.{}.{}", op, light_id, hub_id, create_adapter_id()))
 }
 
-pub fn create_setter_id(op: &str, hub_id: &str, light_id: &str) -> Id<Setter> {
+pub fn create_setter_id(op: &str, hub_id: &str, light_id: &str) -> Id<Channel> {
     Id::new(&format!("setter:{}.{}.{}.{}", op, light_id, hub_id, create_adapter_id()))
 }
 
@@ -227,13 +227,13 @@ impl<C: Controller> Adapter for PhilipsHueAdapter<C> {
         &ADAPTER_VERSION
     }
 
-    fn fetch_values(&self, mut set: Vec<Id<Getter>>, _: User)
-        -> ResultMap<Id<Getter>, Option<Value>, Error>
+    fn fetch_values(&self, mut set: Vec<Id<Channel>>, _: User)
+        -> ResultMap<Id<Channel>, Option<Value>, Error>
     {
         set.drain(..).map(|id| {
             let light = match self.services.lock().unwrap().getters.get(&id) {
                 Some(light) => light.clone(),
-                None => return (id.clone(), Err(Error::InternalError(InternalError::NoSuchGetter(id))))
+                None => return (id.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(id))))
             };
 
             if id == light.get_available_id {
@@ -255,17 +255,17 @@ impl<C: Controller> Adapter for PhilipsHueAdapter<C> {
                 return (id, Ok(Some(Value::Color(Color::HSV(h, s, v)))));
             }
 
-            (id.clone(), Err(Error::InternalError(InternalError::NoSuchGetter(id))))
+            (id.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(id))))
         }).collect()
     }
 
-    fn send_values(&self, mut values: HashMap<Id<Setter>, Value>, _: User)
-        -> ResultMap<Id<Setter>, (), Error>
+    fn send_values(&self, mut values: HashMap<Id<Channel>, Value>, _: User)
+        -> ResultMap<Id<Channel>, (), Error>
     {
         values.drain().map(|(id, value)| {
             let light = match self.services.lock().unwrap().setters.get(&id) {
                 Some(light) => light.clone(),
-                None => return (id.clone(), Err(Error::InternalError(InternalError::NoSuchSetter(id))))
+                None => return (id.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(id))))
             };
 
             if id == light.set_power_id {
@@ -294,7 +294,7 @@ impl<C: Controller> Adapter for PhilipsHueAdapter<C> {
                 return (id, Ok(()));
             }
 
-            (id.clone(), Err(Error::InternalError(InternalError::NoSuchSetter(id))))
+            (id.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(id))))
         }).collect()
     }
 

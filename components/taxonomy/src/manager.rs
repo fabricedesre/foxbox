@@ -127,7 +127,7 @@ impl AdapterManagerHandle for AdapterManager {
     /// Returns an error if the adapter is not registered, the parent service is not
     /// registered, or a channel with the same identifier is already registered.
     /// In either cases, this method reverts all its changes.
-    fn add_getter(&self, getter: Channel<Getter>) -> Result<(), Error> {
+    fn add_getter(&self, getter: Channel) -> Result<(), Error> {
         let request = {
             // Acquire and release lock asap.
             try!(self.back_end.write().unwrap().add_getter(getter))
@@ -147,7 +147,7 @@ impl AdapterManagerHandle for AdapterManager {
     /// This method returns an error if the setter is not registered or if the service
     /// is not registered. In either case, it attemps to clean as much as possible, even
     /// if the state is inconsistent.
-    fn remove_getter(&self, id: &Id<Getter>) -> Result<(), Error> {
+    fn remove_getter(&self, id: &Id<Channel>) -> Result<(), Error> {
         self.back_end.write().unwrap().remove_getter(id)
     }
 
@@ -164,8 +164,16 @@ impl AdapterManagerHandle for AdapterManager {
     /// Returns an error if the adapter is not registered, the parent service is not
     /// registered, or a channel with the same identifier is already registered.
     /// In either cases, this method reverts all its changes.
-    fn add_setter(&self, setter: Channel<Setter>) -> Result<(), Error> {
-        self.back_end.write().unwrap().add_setter(setter)
+    fn add_setter(&self, setter: Channel) -> Result<(), Error> {
+        let request = {
+            // Acquire and release lock asap.
+            try!(self.back_end.write().unwrap().add_setter(setter))
+        };
+        if !request.is_empty() {
+            debug!(target: "Taxonomy-manager", "manager.add_setter => need to register watches");
+        }
+        self.register_watches(request);
+        Ok(())
     }
 
     /// Remove a setter previously registered on the system. Typically, called by
@@ -176,7 +184,7 @@ impl AdapterManagerHandle for AdapterManager {
     /// This method returns an error if the setter is not registered or if the service
     /// is not registered. In either case, it attemps to clean as much as possible, even
     /// if the state is inconsistent.
-    fn remove_setter(&self, id: &Id<Setter>) -> Result<(), Error> {
+    fn remove_setter(&self, id: &Id<Channel>) -> Result<(), Error> {
         self.back_end.write().unwrap().remove_setter(id)
     }
 }
@@ -228,10 +236,10 @@ impl API for AdapterManager {
     }
 
     /// Get a list of channels matching some conditions
-    fn get_getter_channels(&self, selectors: Vec<GetterSelector>) -> Vec<Channel<Getter>> {
+    fn get_getter_channels(&self, selectors: Vec<ChannelSelector>) -> Vec<Channel> {
         self.back_end.read().unwrap().get_getter_channels(selectors)
     }
-    fn get_setter_channels(&self, selectors: Vec<SetterSelector>) -> Vec<Channel<Setter>> {
+    fn get_setter_channels(&self, selectors: Vec<ChannelSelector>) -> Vec<Channel> {
         self.back_end.read().unwrap().get_setter_channels(selectors)
     }
 
@@ -248,7 +256,7 @@ impl API for AdapterManager {
     ///
     /// Note that this call is _not live_. In other words, if channels
     /// are added after the call, they will not be affected.
-    fn add_getter_tags(&self, selectors: Vec<GetterSelector>, tags: Vec<Id<TagId>>) -> usize {
+    fn add_getter_tags(&self, selectors: Vec<ChannelSelector>, tags: Vec<Id<TagId>>) -> usize {
         let (request, result) = {
             // Acquire and release the write lock.
             self.back_end.write().unwrap().add_getter_tags(selectors, tags)
@@ -259,8 +267,16 @@ impl API for AdapterManager {
         self.register_watches(request);
         result
     }
-    fn add_setter_tags(&self, selectors: Vec<SetterSelector>, tags: Vec<Id<TagId>>) -> usize {
-        self.back_end.write().unwrap().add_setter_tags(selectors, tags)
+    fn add_setter_tags(&self, selectors: Vec<ChannelSelector>, tags: Vec<Id<TagId>>) -> usize {
+        let (request, result) = {
+            // Acquire and release the write lock.
+            self.back_end.write().unwrap().add_setter_tags(selectors, tags)
+        };
+        if !request.is_empty() {
+            debug!(target: "Taxonomy-manager", "manager.add_setter_tags => need to register watches");
+        }
+        self.register_watches(request);
+        result
     }
 
     /// Remove a set of tags from a set of channels.
@@ -276,16 +292,16 @@ impl API for AdapterManager {
     ///
     /// Note that this call is _not live_. In other words, if channels
     /// are added after the call, they will not be affected.
-    fn remove_getter_tags(&self, selectors: Vec<GetterSelector>, tags: Vec<Id<TagId>>) -> usize {
+    fn remove_getter_tags(&self, selectors: Vec<ChannelSelector>, tags: Vec<Id<TagId>>) -> usize {
         self.back_end.write().unwrap().remove_getter_tags(selectors, tags)
     }
-    fn remove_setter_tags(&self, selectors: Vec<SetterSelector>, tags: Vec<Id<TagId>>) -> usize {
+    fn remove_setter_tags(&self, selectors: Vec<ChannelSelector>, tags: Vec<Id<TagId>>) -> usize {
         self.back_end.write().unwrap().remove_setter_tags(selectors, tags)
     }
 
     /// Read the latest value from a set of channels
-    fn fetch_values(&self, selectors: Vec<GetterSelector>, user: User) ->
-        ResultMap<Id<Getter>, Option<Value>, Error>
+    fn fetch_values(&self, selectors: Vec<ChannelSelector>, user: User) ->
+        ResultMap<Id<Channel>, Option<Value>, Error>
     {
         // First, prepare the request.
         let mut request;
@@ -323,8 +339,8 @@ impl API for AdapterManager {
     }
 
     /// Send a bunch of values to a set of channels
-    fn send_values(&self, keyvalues: TargetMap<SetterSelector, Value>, user: User) ->
-        ResultMap<Id<Setter>, (), Error>
+    fn send_values(&self, keyvalues: TargetMap<ChannelSelector, Value>, user: User) ->
+        ResultMap<Id<Channel>, (), Error>
     {
         // First, prepare the request.
         let mut prepared;
@@ -345,7 +361,7 @@ impl API for AdapterManager {
     }
 
     /// Watch for any change
-    fn watch_values(&self, watch: TargetMap<GetterSelector, Exactly<Value>>,
+    fn watch_values(&self, watch: TargetMap<ChannelSelector, Exactly<Value>>,
         on_event: Box<ExtSender<api::WatchEvent>>) -> Self::WatchGuard
     {
         let (request, watch_key, is_dropped) =

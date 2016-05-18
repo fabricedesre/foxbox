@@ -73,7 +73,7 @@ pub trait AdapterManagerHandle: Send {
     /// Returns an error if the adapter is not registered, the parent service is not
     /// registered, or a channel with the same identifier is already registered.
     /// In either cases, this method reverts all its changes.
-    fn add_getter(& self, setter: Channel<Getter>) -> Result<(), Error>;
+    fn add_getter(& self, setter: Channel) -> Result<(), Error>;
 
     /// Remove a setter previously registered on the system. Typically, called by
     /// an adapter when a service is reconfigured to remove one of its getters.
@@ -83,7 +83,7 @@ pub trait AdapterManagerHandle: Send {
     /// This method returns an error if the setter is not registered or if the service
     /// is not registered. In either case, it attemps to clean as much as possible, even
     /// if the state is inconsistent.
-    fn remove_getter(& self, id: &Id<Getter>) -> Result<(), Error>;
+    fn remove_getter(& self, id: &Id<Channel>) -> Result<(), Error>;
 
     /// Add a setter to the system. Typically, this is called by the adapter when a new
     /// service has been detected/configured. Some services may gain/lose setters at
@@ -98,7 +98,7 @@ pub trait AdapterManagerHandle: Send {
     /// Returns an error if the adapter is not registered, the parent service is not
     /// registered, or a channel with the same identifier is already registered.
     /// In either cases, this method reverts all its changes.
-    fn add_setter(& self, setter: Channel<Setter>) -> Result<(), Error>;
+    fn add_setter(& self, setter: Channel) -> Result<(), Error>;
 
     /// Remove a setter previously registered on the system. Typically, called by
     /// an adapter when a service is reconfigured to remove one of its setters.
@@ -108,21 +108,21 @@ pub trait AdapterManagerHandle: Send {
     /// This method returns an error if the setter is not registered or if the service
     /// is not registered. In either case, it attemps to clean as much as possible, even
     /// if the state is inconsistent.
-    fn remove_setter(& self, id: &Id<Setter>) -> Result<(), Error>;
+    fn remove_setter(& self, id: &Id<Channel>) -> Result<(), Error>;
 }
 
 pub enum WatchEvent {
     /// Fired when we enter the range specified when we started watching, or if no range was
     /// specified, fired whenever a new value is available.
     Enter {
-        id: Id<Getter>,
+        id: Id<Channel>,
         value: Value
     },
 
     /// Fired when we exit the range specified when we started watching. If no range was
     /// specified, never fired.
     Exit {
-        id: Id<Getter>,
+        id: Id<Channel>,
         value: Value
     }
 }
@@ -153,13 +153,13 @@ pub trait Adapter: Send + Sync {
     /// expects the adapter to attempt to minimize the connections with the actual devices.
     ///
     /// The AdapterManager is in charge of keeping track of the age of values.
-    fn fetch_values(&self, mut target: Vec<Id<Getter>>, _: User) -> ResultMap<Id<Getter>, Option<Value>, Error>;
+    fn fetch_values(&self, mut target: Vec<Id<Channel>>, _: User) -> ResultMap<Id<Channel>, Option<Value>, Error>;
 
     /// Request that values be sent to channels.
     ///
     /// The AdapterManager always attempts to group calls to `send_values` by `Adapter`, and then
     /// expects the adapter to attempt to minimize the connections with the actual devices.
-    fn send_values(&self, values: HashMap<Id<Setter>, Value>, user: User) -> ResultMap<Id<Setter>, (), Error>;
+    fn send_values(&self, values: HashMap<Id<Channel>, Value>, user: User) -> ResultMap<Id<Channel>, (), Error>;
 
     /// Watch a bunch of getters as they change.
     ///
@@ -181,5 +181,5 @@ pub trait Adapter: Send + Sync {
     }
 }
 
-pub type WatchTarget = (Id<Getter>, Option<Value>, Box<ExtSender<WatchEvent>>);
-pub type WatchResult = Vec<(Id<Getter>, Result<Box<AdapterWatchGuard>, Error>)>;
+pub type WatchTarget = (Id<Channel>, Option<Value>, Box<ExtSender<WatchEvent>>);
+pub type WatchResult = Vec<(Id<Channel>, Result<Box<AdapterWatchGuard>, Error>)>;

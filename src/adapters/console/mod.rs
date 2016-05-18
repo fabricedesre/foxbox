@@ -18,7 +18,7 @@ static ADAPTER_VENDOR: &'static str = "team@link.mozilla.org";
 static ADAPTER_VERSION: [u32;4] = [0, 0, 0, 0];
 
 pub struct Console {
-    setter_stdout_id: Id<Setter>
+    setter_stdout_id: Id<Channel>
 }
 
 impl Console {
@@ -28,7 +28,7 @@ impl Console {
     pub fn service_console_id() -> Id<ServiceId> {
         Id::new("service:console@link.mozilla.org")
     }
-    pub fn setter_stdout_id() -> Id<Setter> {
+    pub fn setter_stdout_id() -> Id<Channel> {
         Id::new("setter:stdout@link.mozilla.org")
     }
 }
@@ -49,13 +49,13 @@ impl Adapter for Console {
         &ADAPTER_VERSION
     }
 
-    fn fetch_values(&self, mut set: Vec<Id<Getter>>, _: User) -> ResultMap<Id<Getter>, Option<Value>, Error> {
+    fn fetch_values(&self, mut set: Vec<Id<Channel>>, _: User) -> ResultMap<Id<Channel>, Option<Value>, Error> {
         set.drain(..).map(|id| {
-            (id.clone(), Err(Error::InternalError(InternalError::NoSuchGetter(id))))
+            (id.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(id))))
         }).collect()
     }
 
-    fn send_values(&self, mut values: HashMap<Id<Setter>, Value>, user: User) -> ResultMap<Id<Setter>, (), Error> {
+    fn send_values(&self, mut values: HashMap<Id<Channel>, Value>, user: User) -> ResultMap<Id<Channel>, (), Error> {
         values.drain()
             .map(|(id, value)| {
                 let result = {
@@ -67,7 +67,7 @@ impl Adapter for Console {
                         }
                         Ok(())
                     } else {
-                        Err(Error::InternalError(InternalError::NoSuchSetter(id.clone())))
+                        Err(Error::InternalError(InternalError::NoSuchChannel(id.clone())))
                     }
                 };
                 (id, result)
@@ -99,12 +99,8 @@ impl Console {
                 tags: HashSet::new(),
                 adapter: Console::id(),
                 id: setter_stdout_id.clone(),
-                last_seen: None,
                 service: service_console_id.clone(),
-                mechanism: Setter {
-                    kind: ChannelKind::Log,
-                    updated: None
-                }
+                kind: ChannelKind::Log,
         }));
         Ok(())
     }

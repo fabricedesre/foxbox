@@ -30,7 +30,7 @@ pub struct TaxonomyRouter {
     api: Arc<AdapterManager>
 }
 
-type GetterResultMap = ResultMap<Id<Getter>, Option<Value>, Error>;
+type GetterResultMap = ResultMap<Id<Channel>, Option<Value>, Error>;
 
 impl TaxonomyRouter {
     pub fn new(adapter_api: &Arc<AdapterManager>) -> Self {
@@ -218,14 +218,14 @@ impl Handler for TaxonomyRouter {
 
         // Selectors queries.
         get_post_api!(get_services, ServiceSelector, ["services"]);
-        get_post_api!(get_getter_channels, GetterSelector, ["channels", "getters"]);
-        get_post_api!(get_setter_channels, SetterSelector, ["channels", "setters"]);
+        get_post_api!(get_getter_channels, ChannelSelector, ["channels", "getters"]);
+        get_post_api!(get_setter_channels, ChannelSelector, ["channels", "setters"]);
 
         // Fetching and getting values.
         // We can't use a GET http method here because the Fetch() DOM api
         // doesn't allow bodies with GET and HEAD requests.
-        payload_api!(fetch_values, Vec<GetterSelector>, ["channels", "get"], Method::Put, binary);
-        payload_api!(send_values, TargetMap<SetterSelector, Value>, ["channels", "set"], Method::Put, simple);
+        payload_api!(fetch_values, Vec<ChannelSelector>, ["channels", "get"], Method::Put, binary);
+        payload_api!(send_values, TargetMap<ChannelSelector, Value>, ["channels", "set"], Method::Put, simple);
 
         // Adding tags.
         payload_api2!(add_service_tags,
@@ -233,13 +233,13 @@ impl Handler for TaxonomyRouter {
                       tags => Vec<Id<TagId>>,
                       ["services", "tags"], Method::Post);
         payload_api2!(add_getter_tags,
-                      getters => Vec<GetterSelector>,
+                      getters => Vec<ChannelSelector>,
                       tags => Vec<Id<TagId>>,
-                      ["channels", "getter", "tags"], Method::Post);
+                      ["channels", "getters", "tags"], Method::Post);
         payload_api2!(add_setter_tags,
-                      setters => Vec<SetterSelector>,
+                      setters => Vec<ChannelSelector>,
                       tags => Vec<Id<TagId>>,
-                      ["channels", "setter", "tags"], Method::Post);
+                      ["channels", "setters", "tags"], Method::Post);
 
         // Removing tags.
         payload_api2!(remove_service_tags,
@@ -247,13 +247,13 @@ impl Handler for TaxonomyRouter {
                       tags => Vec<Id<TagId>>,
                       ["services", "tags"], Method::Delete);
         payload_api2!(remove_getter_tags,
-                      getters => Vec<GetterSelector>,
+                      getters => Vec<ChannelSelector>,
                       tags => Vec<Id<TagId>>,
-                      ["channels", "getter", "tags"], Method::Delete);
+                      ["channels", "getters", "tags"], Method::Delete);
         payload_api2!(remove_setter_tags,
-                      setters => Vec<SetterSelector>,
+                      setters => Vec<ChannelSelector>,
                       tags => Vec<Id<TagId>>,
-                      ["channels", "setter", "tags"], Method::Delete);
+                      ["channels", "setters", "tags"], Method::Delete);
 
         // Fallthrough, returning a 404.
         Ok(Response::with((Status::NotFound,
@@ -275,8 +275,8 @@ pub fn create<T>(controller: T, adapter_api: &Arc<AdapterManager>) -> Chain
             AuthEndpoint(vec![Method::Get, Method::Post], "channels/setters".to_owned()),
             AuthEndpoint(vec![Method::Get], "channels/get".to_owned()),
             AuthEndpoint(vec![Method::Put], "channels/set".to_owned()),
-            AuthEndpoint(vec![Method::Post, Method::Delete], "channel/getters/tags".to_owned()),
-            AuthEndpoint(vec![Method::Post, Method::Delete], "channel/setters/tags".to_owned())
+            AuthEndpoint(vec![Method::Post, Method::Delete], "channels/getters/tags".to_owned()),
+            AuthEndpoint(vec![Method::Post, Method::Delete], "channels/setters/tags".to_owned())
         ]
     } else {
         vec![]
@@ -313,7 +313,7 @@ describe! taxonomy_router {
                                     Headers::new(),
                                     &mount).unwrap();
         let body = response::extract_body_to_string(response);
-        let s = r#"[{"adapter":"clock@link.mozilla.org","getters":{"getter:interval.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","id":"getter:interval.clock@link.mozilla.org","kind":"CountEveryInterval","mechanism":"getter","service":"service:clock@link.mozilla.org","tags":[]},"getter:timeofday.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","id":"getter:timeofday.clock@link.mozilla.org","kind":"CurrentTimeOfDay","mechanism":"getter","service":"service:clock@link.mozilla.org","tags":[]},"getter:timestamp.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","id":"getter:timestamp.clock@link.mozilla.org","kind":"CurrentTime","mechanism":"getter","service":"service:clock@link.mozilla.org","tags":[]}},"id":"service:clock@link.mozilla.org","properties":{"model":"Mozilla clock v1"},"setters":{},"tags":[]}]"#;
+        let s = r#"[{"adapter":"clock@link.mozilla.org","getters":{"getter:interval.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","id":"getter:interval.clock@link.mozilla.org","kind":"CountEveryInterval","service":"service:clock@link.mozilla.org","tags":[]},"getter:timeofday.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","id":"getter:timeofday.clock@link.mozilla.org","kind":"CurrentTimeOfDay","service":"service:clock@link.mozilla.org","tags":[]},"getter:timestamp.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","id":"getter:timestamp.clock@link.mozilla.org","kind":"CurrentTime","service":"service:clock@link.mozilla.org","tags":[]}},"id":"service:clock@link.mozilla.org","properties":{"model":"Mozilla clock v1"},"setters":{},"tags":[]}]"#;
 
         assert_eq!(body, s);
     }
@@ -324,7 +324,7 @@ describe! taxonomy_router {
                                     r#"[{"id":"service:clock@link.mozilla.org"}]"#,
                                     &mount).unwrap();
         let body = response::extract_body_to_string(response);
-        let s = r#"[{"adapter":"clock@link.mozilla.org","getters":{"getter:interval.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","id":"getter:interval.clock@link.mozilla.org","kind":"CountEveryInterval","mechanism":"getter","service":"service:clock@link.mozilla.org","tags":[]},"getter:timeofday.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","id":"getter:timeofday.clock@link.mozilla.org","kind":"CurrentTimeOfDay","mechanism":"getter","service":"service:clock@link.mozilla.org","tags":[]},"getter:timestamp.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","id":"getter:timestamp.clock@link.mozilla.org","kind":"CurrentTime","mechanism":"getter","service":"service:clock@link.mozilla.org","tags":[]}},"id":"service:clock@link.mozilla.org","properties":{"model":"Mozilla clock v1"},"setters":{},"tags":[]}]"#;
+        let s = r#"[{"adapter":"clock@link.mozilla.org","getters":{"getter:interval.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","id":"getter:interval.clock@link.mozilla.org","kind":"CountEveryInterval","service":"service:clock@link.mozilla.org","tags":[]},"getter:timeofday.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","id":"getter:timeofday.clock@link.mozilla.org","kind":"CurrentTimeOfDay","service":"service:clock@link.mozilla.org","tags":[]},"getter:timestamp.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","id":"getter:timestamp.clock@link.mozilla.org","kind":"CurrentTime","service":"service:clock@link.mozilla.org","tags":[]}},"id":"service:clock@link.mozilla.org","properties":{"model":"Mozilla clock v1"},"setters":{},"tags":[]}]"#;
 
         assert_eq!(body, s);
     }
@@ -376,8 +376,8 @@ describe! binary_getter {
                 &ADAPTER_VERSION
             }
 
-            fn fetch_values(&self, mut set: Vec<Id<Getter>>, user: User)
-                -> ResultMap<Id<Getter>, Option<Value>, Error> {
+            fn fetch_values(&self, mut set: Vec<Id<Channel>>, user: User)
+                -> ResultMap<Id<Channel>, Option<Value>, Error> {
                 assert_eq!(user, User::Id(2));
                 set.drain(..).map(|id| {
                     if id == Id::new("getter:binary@link.mozilla.org") {
@@ -389,14 +389,14 @@ describe! binary_getter {
                         return (id.clone(), Ok(Some(Value::Binary(binary))));
                     }
 
-                    (id.clone(), Err(Error::InternalError(InternalError::NoSuchGetter(id))))
+                    (id.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(id))))
                 }).collect()
             }
 
-            fn send_values(&self, mut values: HashMap<Id<Setter>, Value>, _: User)
-                -> ResultMap<Id<Setter>, (), Error> {
+            fn send_values(&self, mut values: HashMap<Id<Channel>, Value>, _: User)
+                -> ResultMap<Id<Channel>, (), Error> {
                 values.drain().map(|(id, _)| {
-                    (id.clone(), Err(Error::InternalError(InternalError::NoSuchSetter(id))))
+                    (id.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(id))))
                 }).collect()
             }
 
@@ -418,17 +418,13 @@ describe! binary_getter {
                     tags: HashSet::new(),
                     adapter: adapter_id.clone(),
                     id: Id::new("getter:binary@link.mozilla.org"),
-                    last_seen: None,
                     service: service_id.clone(),
-                    mechanism: Getter {
-                        kind: ChannelKind::Extension {
-                            vendor: Id::new(ADAPTER_VENDOR),
-                            adapter: Id::new(ADAPTER_NAME),
-                            kind: Id::new("binary_getter"),
-                            typ: Type::Binary,
-                        },
-                        updated: None
-                    }
+                    kind: ChannelKind::Extension {
+                        vendor: Id::new(ADAPTER_VENDOR),
+                        adapter: Id::new(ADAPTER_NAME),
+                        kind: Id::new("binary_getter"),
+                        typ: Type::Binary,
+                    },
                 }));
 
                 Ok(())

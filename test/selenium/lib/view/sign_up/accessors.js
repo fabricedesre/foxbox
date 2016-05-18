@@ -4,11 +4,13 @@ var webdriver = require('selenium-webdriver');
 var By = require('selenium-webdriver').By;
 
 var SELECTORS = Object.freeze({
-    passwordField: By.id('signup-pwd1'),
-    confirmPasswordField: By.id('signup-pwd2'),
-    submit: By.id('signup-button'),
-    successMessage: By.id('thank-you'),
-    page: By.id('signup')
+  // Make sure these field are not plain text
+  passwordField: By.css('#signup-pwd1[type="password"]'),
+  confirmPasswordField: By.css('#signup-pwd2[type="password"]'),
+
+  submit: By.id('signup-button'),
+  successMessage: By.id('thank-you'),
+  page: By.id('signup')
 });
 
 function SetUpAccessor(driver) {

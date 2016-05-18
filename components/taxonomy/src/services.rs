@@ -73,10 +73,10 @@ pub struct Service {
     pub properties: HashMap<String, String>,
 
     /// Getter channels connected directly to this service.
-    pub getters: HashMap<Id<Getter>, Channel<Getter>>,
+    pub getters: HashMap<Id<Channel>, Channel>,
 
     /// Setter channels connected directly to this service.
-    pub setters: HashMap<Id<Setter>, Channel<Setter>>,
+    pub setters: HashMap<Id<Channel>, Channel>,
 
     /// Identifier of the adapter for this service.
     pub adapter: Id<AdapterId>,
@@ -574,42 +574,13 @@ impl ChannelKind {
     }
 }
 
-/// A getter operation available on a channel.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Getter {
-    /// The kind of value that can be obtained from this channel.
-    pub kind: ChannelKind,
-
-    /// Date at which the latest value was received, whether through
-    /// polling or through a trigger.
-    #[serde(default)]
-    pub updated: Option<TimeStamp>,
-}
-
-impl IOMechanism for Getter {
-}
-
-/// An setter operation available on an channel.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Setter {
-    /// The kind of value that can be sent to this channel.
-    pub kind: ChannelKind,
-
-    /// Date at which the latest value was sent to the channel.
-    #[serde(default)]
-    pub updated: Option<TimeStamp>,
-}
-
-impl IOMechanism for Setter {
-}
-
 /// An channel represents a single place where data can enter or
 /// leave a device. Note that channels support either a single kind
 /// of getter or a single kind of setter. Devices that support both
 /// getters or setters, or several kinds of getters, or several kinds of
 /// setters, are represented as services containing several channels.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Channel<IO> where IO: IOMechanism {
+pub struct Channel {
     /// Tags describing the channel.
     ///
     /// These tags can be set by the user, adapters or
@@ -620,38 +591,26 @@ pub struct Channel<IO> where IO: IOMechanism {
     pub tags: HashSet<Id<TagId>>,
 
     /// An id unique to this channel.
-    pub id: Id<IO>,
+    pub id: Id<Channel>,
 
     /// The service owning this channel.
     pub service: Id<ServiceId>,
 
-    /// The update mechanism for this channel.
-    pub mechanism: IO,
-
     /// Identifier of the adapter for this channel.
     pub adapter: Id<AdapterId>,
 
-    /// The last time the device was seen.
-    #[serde(default)]
-    pub last_seen: Option<TimeStamp>,
+    pub kind: ChannelKind,
 }
 
-impl ToJSON for Channel<Getter> {
+impl ToJSON for Channel {
     fn to_json(&self) -> JSON {
         let mut source = vec![
             ("id", self.id.to_json()),
             ("adapter", self.adapter.to_json()),
             ("tags", self.tags.to_json()),
             ("service", self.service.to_json()),
-            ("mechanism", JSON::String("getter".to_owned())),
-            ("kind", self.mechanism.kind.to_json()),
+            ("kind", self.kind.to_json()),
         ];
-        if let Some(ref ts) = self.last_seen {
-            source.push(("last_seen", ts.to_json()))
-        }
-        if let Some(ref ts) = self.mechanism.updated {
-            source.push(("updated", ts.to_json()));
-        }
 
         let map = source.drain(..)
             .map(|(key, value)| (key.to_owned(), value))
@@ -660,46 +619,17 @@ impl ToJSON for Channel<Getter> {
     }
 }
 
-
-impl ToJSON for Channel<Setter> {
-    fn to_json(&self) -> JSON {
-        let mut source = vec![
-            ("id", self.id.to_json()),
-            ("adapter", self.adapter.to_json()),
-            ("tags", self.tags.to_json()),
-            ("service", self.service.to_json()),
-            ("mechanism", JSON::String("setter".to_owned())),
-            ("kind", self.mechanism.kind.to_json()),
-        ];
-        if let Some(ref ts) = self.last_seen {
-            source.push(("last_seen", ts.to_json()))
-        }
-        if let Some(ref ts) = self.mechanism.updated {
-            source.push(("updated", ts.to_json()));
-        }
-
-        let map = source.drain(..)
-            .map(|(key, value)| (key.to_owned(), value))
-            .collect();
-        JSON::Object(map)
-    }
+impl Eq for Channel {
 }
 
-impl<IO> Eq for Channel<IO> where IO: IOMechanism {
-}
-
-impl<IO> PartialEq for Channel<IO> where IO: IOMechanism {
+impl PartialEq for Channel {
      fn eq(&self, other: &Self) -> bool {
          self.id.eq(&other.id)
      }
 }
 
-impl<IO> Hash for Channel<IO> where IO: IOMechanism {
+impl Hash for Channel {
     fn hash<H>(&self, state: &mut H) where H: Hasher {
         self.id.hash(state)
     }
-}
-
-/// The communication mechanism used by the channel.
-pub trait IOMechanism: Deserialize + Serialize {
 }

@@ -7,7 +7,11 @@ const spawn = require('child_process').spawn;
 const format = require('util').format;
 
 const PROFILE_PATH = path.join(process.env.HOME, '.local/share/foxbox-tests/');
-const STARTUP_WAIT_TIME_IN_MS = 5000;
+const WAIT_TIME_IN_MS = {
+  startUp: 2500,
+  shutdown: 500
+};
+
 
 function FoxboxManager() {
   this._foxboxInstance = null;
@@ -18,19 +22,23 @@ FoxboxManager.HOST_URL = format('http://localhost:%d/', FoxboxManager.PORT);
 
 FoxboxManager.prototype = {
   start: function() {
-    this._foxboxInstance = spawn('./target/debug/foxbox', [
-      '--disable-tls',
-      '--port', FoxboxManager.PORT,
-      '--profile', PROFILE_PATH,
-    ], { stdio: 'inherit' });
-
     return new Promise(resolve => {
-      setTimeout(resolve, STARTUP_WAIT_TIME_IN_MS);
+      this._foxboxInstance = spawn('./target/debug/foxbox', [
+        '--disable-tls',
+        '--port', FoxboxManager.PORT,
+        '--profile', PROFILE_PATH,
+      ], { stdio: 'inherit' });
+
+      setTimeout(resolve, WAIT_TIME_IN_MS.startUp);
     });
   },
 
   kill: function() {
-    this._foxboxInstance.kill('SIGINT');
+    return new Promise(resolve => {
+      this._foxboxInstance.kill('SIGINT');
+
+      setTimeout(resolve, WAIT_TIME_IN_MS.shutdown);
+    });
   },
 
   cleanData: function() {

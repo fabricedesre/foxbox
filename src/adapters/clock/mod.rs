@@ -21,8 +21,8 @@ static ADAPTER_VERSION: [u32;4] = [0, 0, 0, 0];
 
 #[derive(Clone)]
 enum Op {
-    Enter(Id<Getter>, Value),
-    Exit(Id<Getter>, Value),
+    Enter(Id<Channel>, Value),
+    Exit(Id<Channel>, Value),
 }
 
 enum Movement { Enter, Exit }
@@ -31,9 +31,9 @@ pub struct Clock {
     /// Timer used to dispatch `register_watch` requests.
     timer: Mutex<timer::Timer>,
 
-    getter_timestamp_id: Id<Getter>,
-    getter_time_of_day_id: Id<Getter>,
-    getter_interval_id: Id<Getter>,
+    getter_timestamp_id: Id<Channel>,
+    getter_time_of_day_id: Id<Channel>,
+    getter_interval_id: Id<Channel>,
 }
 
 /// A guard used to cancel watching for values.
@@ -48,13 +48,13 @@ impl Clock {
     pub fn service_clock_id() -> Id<ServiceId> {
         Id::new("service:clock@link.mozilla.org")
     }
-    pub fn getter_timestamp_id() -> Id<Getter> {
+    pub fn getter_timestamp_id() -> Id<Channel> {
         Id::new("getter:timestamp.clock@link.mozilla.org")
     }
-    pub fn getter_time_of_day_id() -> Id<Getter> {
+    pub fn getter_time_of_day_id() -> Id<Channel> {
         Id::new("getter:timeofday.clock@link.mozilla.org")
     }
-    pub fn getter_interval_id() -> Id<Getter> {
+    pub fn getter_interval_id() -> Id<Channel> {
         Id::new("getter:interval.clock@link.mozilla.org")
     }
 }
@@ -75,7 +75,7 @@ impl Adapter for Clock {
         &ADAPTER_VERSION
     }
 
-    fn fetch_values(&self, mut set: Vec<Id<Getter>>, _: User) -> ResultMap<Id<Getter>, Option<Value>, Error> {
+    fn fetch_values(&self, mut set: Vec<Id<Channel>>, _: User) -> ResultMap<Id<Channel>, Option<Value>, Error> {
         set.drain(..).map(|id| {
             if id == self.getter_timestamp_id {
                 let date = TimeStamp::from_datetime(chrono::UTC::now());
@@ -86,15 +86,15 @@ impl Adapter for Clock {
                 let duration = chrono::Duration::seconds(date.num_seconds_from_midnight() as i64);
                 (id, Ok(Some(Value::Duration(ValDuration::from(duration)))))
             } else {
-                (id.clone(), Err(Error::InternalError(InternalError::NoSuchGetter(id))))
+                (id.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(id))))
             }
         }).collect()
     }
 
-    fn send_values(&self, mut values: HashMap<Id<Setter>, Value>, _: User) -> ResultMap<Id<Setter>, (), Error> {
+    fn send_values(&self, mut values: HashMap<Id<Channel>, Value>, _: User) -> ResultMap<Id<Channel>, (), Error> {
         values.drain()
             .map(|(id, _)| {
-                (id.clone(), Err(Error::InternalError(InternalError::NoSuchSetter(id))))
+                (id.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(id))))
             })
             .collect()
     }
@@ -127,7 +127,7 @@ impl Adapter for Clock {
 }
 
 impl Clock {
-    fn aux_register_watch(&self, id: &Id<Getter>, range: &Range, tx: Box<ExtSender<Op>>)
+    fn aux_register_watch(&self, id: &Id<Channel>, range: &Range, tx: Box<ExtSender<Op>>)
         -> Result<Box<AdapterWatchGuard>, Error>
     {
         match () {
@@ -138,7 +138,7 @@ impl Clock {
         }
     }
 
-    fn aux_register_watch_interval(&self, id: &Id<Getter>, range: &Range, tx: Box<ExtSender<Op>>)
+    fn aux_register_watch_interval(&self, id: &Id<Channel>, range: &Range, tx: Box<ExtSender<Op>>)
         -> Result<Box<AdapterWatchGuard>, Error>
     {
         use foxbox_taxonomy::values::Range::*;
@@ -171,7 +171,7 @@ impl Clock {
         Ok(Box::new(Guard(vec![guard])))
     }
 
-    fn aux_register_watch_timeofday(&self, id: &Id<Getter>, range: &Range, tx: Box<ExtSender<Op>>)
+    fn aux_register_watch_timeofday(&self, id: &Id<Channel>, range: &Range, tx: Box<ExtSender<Op>>)
         -> Result<Box<AdapterWatchGuard>, Error>
     {
         use foxbox_taxonomy::values::Range::*;
@@ -263,7 +263,7 @@ impl Clock {
         }
     }
 
-    fn aux_register_watch_timestamp(&self, id: &Id<Getter>, range: &Range, tx: Box<ExtSender<Op>>)
+    fn aux_register_watch_timestamp(&self, id: &Id<Channel>, range: &Range, tx: Box<ExtSender<Op>>)
         -> Result<Box<AdapterWatchGuard>, Error>
     {
         use foxbox_taxonomy::values::Range::*;
@@ -347,34 +347,22 @@ impl Clock {
                 tags: HashSet::new(),
                 adapter: Clock::id(),
                 id: getter_time_of_day_id,
-                last_seen: None,
                 service: service_clock_id.clone(),
-                mechanism: Getter {
-                    kind: ChannelKind::CurrentTimeOfDay,
-                    updated: None
-                }
+                kind: ChannelKind::CurrentTimeOfDay,
         }));
         try!(adapt.add_getter(Channel {
                 tags: HashSet::new(),
                 adapter: Clock::id(),
                 id: getter_timestamp_id,
-                last_seen: None,
                 service: service_clock_id.clone(),
-                mechanism: Getter {
-                    kind: ChannelKind::CurrentTime,
-                    updated: None
-                }
+                kind: ChannelKind::CurrentTime,
         }));
         try!(adapt.add_getter(Channel {
                 tags: HashSet::new(),
                 adapter: Clock::id(),
                 id: getter_interval_id,
-                last_seen: None,
                 service: service_clock_id.clone(),
-                mechanism: Getter {
-                    kind: ChannelKind::CountEveryInterval,
-                    updated: None
-                }
+                kind: ChannelKind::CountEveryInterval,
         }));
         Ok(())
     }
