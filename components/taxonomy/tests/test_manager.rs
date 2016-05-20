@@ -64,92 +64,96 @@ fn test_tags_in_db() {
     let tag_id_3 = Id::<TagId>::new("tag id 3");
     let tag_id_4 = Id::<TagId>::new("tag id 4");
 
-    let service_1 = Service {
-        id: service_id_1.clone(),
-        adapter: id_1.clone(),
-        tags: HashSet::new(),
-        properties: HashMap::new(),
-        getters: HashMap::new(),
-        setters: HashMap::new(),
-    };
+    let service_1 = Service::empty(&service_id_1, &id_1);
 
     let getter_1 = Channel {
-        id: getter_id_1.clone(),
-        service: service_id_1.clone(),
-        adapter: id_1.clone(),
-        tags: HashSet::new(),
         kind: ChannelKind::LightOn,
+        supports_fetch: true,
+        .. Channel::empty(&getter_id_1, &service_id_1, &id_1)
     };
 
     let setter_1 = Channel {
-        id: setter_id_1.clone(),
-        service: service_id_1.clone(),
-        adapter: id_1.clone(),
-        tags: HashSet::new(),
         kind: ChannelKind::LightOn,
+        supports_send: true,
+        .. Channel::empty(&setter_id_1, &service_id_1, &id_1)
     };
 
-    // Fist "session", starting from an empty state.
+    println!("* Start a session, add tags.");
     {
         let manager = AdapterManager::new(Some(get_db_environment()));
         manager.add_adapter(Arc::new(FakeAdapter::new(&id_1))).unwrap();
         manager.add_service(service_1.clone()).unwrap();
-        manager.add_getter(getter_1.clone()).unwrap();
-        manager.add_setter(setter_1.clone()).unwrap();
+        manager.add_channel(getter_1.clone()).unwrap();
+        manager.add_channel(setter_1.clone()).unwrap();
 
         manager.add_service_tags(vec![ServiceSelector::new().with_id(service_id_1.clone())],
                                  vec![tag_id_1.clone(), tag_id_2.clone()]);
 
-        manager.add_getter_tags(vec![ChannelSelector::new().with_id(getter_id_1.clone())],
+        manager.add_channel_tags(vec![ChannelSelector::new().with_id(getter_id_1.clone())],
                                 vec![tag_id_2.clone(), tag_id_3.clone()]);
 
-        manager.add_setter_tags(vec![ChannelSelector::new().with_id(setter_id_1.clone())],
+        manager.add_channel_tags(vec![ChannelSelector::new().with_id(setter_id_1.clone())],
                                 vec![tag_id_1.clone(), tag_id_4.clone(), tag_id_3.clone()]);
 
-        manager.remove_getter(&getter_id_1).unwrap();
-        manager.remove_setter(&setter_id_1).unwrap();
+        println!("* Remove the service, tags should be persisted.");
+
+        manager.remove_channel(&getter_id_1).unwrap();
+        manager.remove_channel(&setter_id_1).unwrap();
         manager.remove_service(&service_id_1).unwrap();
         assert_eq!(manager.get_services(vec![]).len(), 0);
 
+        println!("* Re-add the service, tags should be re-attached.");
+
         // Re-add the same service, getter and setter to check if we persisted the tags.
         manager.add_service(service_1.clone()).unwrap();
-        manager.add_getter(getter_1.clone()).unwrap();
-        manager.add_setter(setter_1.clone()).unwrap();
+        manager.add_channel(getter_1.clone()).unwrap();
+        manager.add_channel(setter_1.clone()).unwrap();
 
         let services = manager.get_services(vec![]);
         assert_eq!(services.len(), 1);
 
+        println!("* The service must have the same tags.");
         let ref service = services[0];
         assert_eq!(service.tags.len(), 2);
         assert_eq!(service.tags.contains(&tag_id_1), true);
         assert_eq!(service.tags.contains(&tag_id_2), true);
 
-        let getters = manager.get_getter_channels(vec![ChannelSelector::new()]);
-        assert_eq!(getters.len(), 1);
-        let ref getter = getters[0];
-        assert_eq!(getter.tags.len(), 2);
-        assert_eq!(getter.tags.contains(&tag_id_2), true);
-        assert_eq!(getter.tags.contains(&tag_id_3), true);
+        println!("* The channels must have the same tags.");
 
-        let setters = manager.get_setter_channels(vec![ChannelSelector::new()]);
-        assert_eq!(setters.len(), 1);
-        let ref setter = setters[0];
-        assert_eq!(setter.tags.len(), 3);
-        assert_eq!(setter.tags.contains(&tag_id_1), true);
-        assert_eq!(setter.tags.contains(&tag_id_3), true);
-        assert_eq!(setter.tags.contains(&tag_id_4), true);
+        let with_tag = manager.get_channels(vec![ChannelSelector::new().with_tags(vec![tag_id_1.clone()])]);
+        assert_eq!(with_tag.len(), 1);
+        assert_eq!(with_tag[0].id, setter_id_1);
+
+        let with_tag = manager.get_channels(vec![ChannelSelector::new().with_tags(vec![tag_id_2.clone()])]);
+        assert_eq!(with_tag.len(), 1);
+        assert_eq!(with_tag[0].id, getter_id_1);
+
+        let mut with_tag = manager.get_channels(vec![ChannelSelector::new().with_tags(vec![tag_id_3.clone()])]);
+        assert_eq!(with_tag.len(), 2);
+        let with_tag : HashSet<_> = with_tag.drain(..).map(|tag| {
+            tag.id
+        }).collect();
+        assert_eq!(with_tag.len(), 2);
+        assert!(with_tag.contains(&getter_id_1));
+        assert!(with_tag.contains(&setter_id_1));
+
+        let with_tag = manager.get_channels(vec![ChannelSelector::new().with_tags(vec![tag_id_4.clone()])]);
+        assert_eq!(with_tag.len(), 1);
+        assert_eq!(with_tag[0].id, setter_id_1);
 
         manager.remove_adapter(&id_1).unwrap();
         manager.stop();
     }
+
+    println!("* Start a new session, tags must still be present.");
 
     // Second "session", starting with content added in session 1.
     {
         let manager = AdapterManager::new(Some(get_db_environment()));
         manager.add_adapter(Arc::new(FakeAdapter::new(&id_1))).unwrap();
         manager.add_service(service_1.clone()).unwrap();
-        manager.add_getter(getter_1.clone()).unwrap();
-        manager.add_setter(setter_1.clone()).unwrap();
+        manager.add_channel(getter_1.clone()).unwrap();
+        manager.add_channel(setter_1.clone()).unwrap();
 
         let services = manager.get_services(vec![]);
         assert_eq!(services.len(), 1);
@@ -159,20 +163,28 @@ fn test_tags_in_db() {
         assert_eq!(service.tags.contains(&tag_id_1), true);
         assert_eq!(service.tags.contains(&tag_id_2), true);
 
-        let getters = manager.get_getter_channels(vec![ChannelSelector::new()]);
-        assert_eq!(getters.len(), 1);
-        let ref getter = getters[0];
-        assert_eq!(getter.tags.len(), 2);
-        assert_eq!(getter.tags.contains(&tag_id_2), true);
-        assert_eq!(getter.tags.contains(&tag_id_3), true);
+        let with_tag = manager.get_channels(vec![ChannelSelector::new().with_tags(vec![tag_id_1.clone()])]);
+        assert_eq!(with_tag.len(), 1);
+        assert_eq!(with_tag[0].id, setter_id_1);
 
-        let setters = manager.get_setter_channels(vec![ChannelSelector::new()]);
-        assert_eq!(setters.len(), 1);
-        let ref setter = setters[0];
-        assert_eq!(setter.tags.len(), 3);
-        assert_eq!(setter.tags.contains(&tag_id_1), true);
-        assert_eq!(setter.tags.contains(&tag_id_3), true);
-        assert_eq!(setter.tags.contains(&tag_id_4), true);
+        let with_tag = manager.get_channels(vec![ChannelSelector::new().with_tags(vec![tag_id_2.clone()])]);
+        assert_eq!(with_tag.len(), 1);
+        assert_eq!(with_tag[0].id, getter_id_1);
+
+        let mut with_tag = manager.get_channels(vec![ChannelSelector::new().with_tags(vec![tag_id_3.clone()])]);
+        assert_eq!(with_tag.len(), 2);
+        let with_tag : HashSet<_> = with_tag.drain(..).map(|tag| {
+            tag.id
+        }).collect();
+        assert_eq!(with_tag.len(), 2);
+        assert!(with_tag.contains(&getter_id_1));
+        assert!(with_tag.contains(&setter_id_1));
+
+        let with_tag = manager.get_channels(vec![ChannelSelector::new().with_tags(vec![tag_id_4.clone()])]);
+        assert_eq!(with_tag.len(), 1);
+        assert_eq!(with_tag[0].id, setter_id_1);
+
+        println!("* Remove tags from the service.");
 
         // Remove all the tags, to check in session 3 if we start empty again.
         manager.remove_service_tags(vec![ServiceSelector::new().with_id(service_id_1.clone())],
@@ -181,41 +193,84 @@ fn test_tags_in_db() {
         assert_eq!(services.len(), 1);
         assert_eq!(services[0].tags.len(), 0);
 
-        manager.remove_getter_tags(vec![ChannelSelector::new().with_id(getter_id_1.clone())],
-                                vec![tag_id_2.clone(), tag_id_3.clone()]);
-        let getters = manager.get_getter_channels(vec![ChannelSelector::new()]);
-        assert_eq!(getters.len(), 1);
-        assert_eq!(getters[0].tags.len(), 0);
+        println!("* At this stage, channel tags should still be present.");
+        let with_tag = manager.get_channels(vec![ChannelSelector::new().with_tags(vec![tag_id_1.clone()])]);
+        assert_eq!(with_tag.len(), 1);
+        assert_eq!(with_tag[0].id, setter_id_1);
 
-        manager.remove_setter_tags(vec![ChannelSelector::new().with_id(setter_id_1.clone())],
+        let with_tag = manager.get_channels(vec![ChannelSelector::new().with_tags(vec![tag_id_2.clone()])]);
+        assert_eq!(with_tag.len(), 1);
+        assert_eq!(with_tag[0].id, getter_id_1);
+
+        let mut with_tag = manager.get_channels(vec![ChannelSelector::new().with_tags(vec![tag_id_3.clone()])]);
+        assert_eq!(with_tag.len(), 2);
+        let with_tag : HashSet<_> = with_tag.drain(..).map(|tag| {
+            tag.id
+        }).collect();
+        assert_eq!(with_tag.len(), 2);
+        assert!(with_tag.contains(&getter_id_1));
+        assert!(with_tag.contains(&setter_id_1));
+
+        let with_tag = manager.get_channels(vec![ChannelSelector::new().with_tags(vec![tag_id_4.clone()])]);
+        assert_eq!(with_tag.len(), 1);
+        assert_eq!(with_tag[0].id, setter_id_1);
+
+        println!("* Removing channel tags should work.");
+
+        manager.remove_channel_tags(vec![ChannelSelector::new().with_id(getter_id_1.clone())],
+                                vec![tag_id_2.clone(), tag_id_3.clone()]);
+        let with_tag = manager.get_channels(vec![ChannelSelector::new().with_tags(vec![tag_id_1.clone()])]);
+        assert_eq!(with_tag.len(), 1);
+        assert_eq!(with_tag[0].id, setter_id_1);
+
+        let with_tag = manager.get_channels(vec![ChannelSelector::new().with_tags(vec![tag_id_2.clone()])]);
+        assert_eq!(with_tag.len(), 0);
+
+        let with_tag = manager.get_channels(vec![ChannelSelector::new().with_tags(vec![tag_id_3.clone()])]);
+        assert_eq!(with_tag.len(), 1);
+        assert_eq!(with_tag[0].id, setter_id_1);
+
+        let with_tag = manager.get_channels(vec![ChannelSelector::new().with_tags(vec![tag_id_4.clone()])]);
+        assert_eq!(with_tag.len(), 1);
+        assert_eq!(with_tag[0].id, setter_id_1);
+
+        manager.remove_channel_tags(vec![ChannelSelector::new().with_id(setter_id_1.clone())],
                                 vec![tag_id_1.clone(), tag_id_4.clone(), tag_id_3.clone()]);
-        let setters = manager.get_setter_channels(vec![ChannelSelector::new()]);
-        assert_eq!(setters.len(), 1);
-        assert_eq!(setters[0].tags.len(), 0);
+        let with_tag = manager.get_channels(vec![ChannelSelector::new().with_tags(vec![tag_id_1.clone()])]);
+        assert_eq!(with_tag.len(), 0);
+
+        let with_tag = manager.get_channels(vec![ChannelSelector::new().with_tags(vec![tag_id_2.clone()])]);
+        assert_eq!(with_tag.len(), 0);
+
+        let with_tag = manager.get_channels(vec![ChannelSelector::new().with_tags(vec![tag_id_3.clone()])]);
+        assert_eq!(with_tag.len(), 0);
+
+        let with_tag = manager.get_channels(vec![ChannelSelector::new().with_tags(vec![tag_id_4.clone()])]);
+        assert_eq!(with_tag.len(), 0);
 
         manager.remove_adapter(&id_1).unwrap();
         manager.stop();
     }
+
+    println!("* Start a new session, tags must still be absent.");
 
     // Third "session", checking that we have no tags anymore.
     {
         let manager = AdapterManager::new(Some(get_db_environment()));
         manager.add_adapter(Arc::new(FakeAdapter::new(&id_1))).unwrap();
         manager.add_service(service_1.clone()).unwrap();
-        manager.add_getter(getter_1.clone()).unwrap();
-        manager.add_setter(setter_1.clone()).unwrap();
+        manager.add_channel(getter_1.clone()).unwrap();
+        manager.add_channel(setter_1.clone()).unwrap();
 
         let services = manager.get_services(vec![]);
         assert_eq!(services.len(), 1);
         assert_eq!(services[0].tags.len(), 0);
 
-        let getters = manager.get_getter_channels(vec![ChannelSelector::new()]);
-        assert_eq!(getters.len(), 1);
-        assert_eq!(getters[0].tags.len(), 0);
-
-        let setters = manager.get_setter_channels(vec![ChannelSelector::new()]);
-        assert_eq!(setters.len(), 1);
-        assert_eq!(setters[0].tags.len(), 0);
+        let channels = manager.get_channels(vec![ChannelSelector::new()]);
+        assert_eq!(channels.len(), 2);
+        for channel in channels {
+            assert_eq!(channel.tags.len(), 0);
+        }
 
         manager.remove_adapter(&id_1).unwrap();
         manager.stop();
@@ -295,40 +350,33 @@ fn test_add_remove_services() {
         let service_id_3 = Id::<ServiceId>::new("service id 3");
 
         let getter_1 = Channel {
-            id: getter_id_1.clone(),
-            service: service_id_1.clone(),
-            adapter: id_1.clone(),
-            tags: HashSet::new(),
             kind: ChannelKind::LightOn,
+            supports_fetch: true,
+            .. Channel::empty(&getter_id_1, &service_id_1, &id_1)
         };
 
         let setter_1 = Channel {
-            id: setter_id_1.clone(),
-            service: service_id_1.clone(),
-            adapter: id_1.clone(),
-            tags: HashSet::new(),
             kind: ChannelKind::LightOn,
+            supports_send: true,
+            .. Channel::empty(&setter_id_1, &service_id_1, &id_1)
         };
 
         let getter_1_with_bad_service = Channel {
-            id: getter_id_1.clone(),
-            service: service_id_3.clone(),
-            adapter: id_1.clone(),
-            tags: HashSet::new(),
             kind: ChannelKind::LightOn,
+            supports_fetch: true,
+            .. Channel::empty(&getter_id_1, &service_id_3, &id_1)
         };
 
         let setter_1_with_bad_service = Channel {
-            id: setter_id_1.clone(),
-            service: service_id_3.clone(),
-            adapter: id_1.clone(),
-            tags: HashSet::new(),
             kind: ChannelKind::LightOn,
+            supports_send: true,
+            .. Channel::empty(&setter_id_1, &service_id_3, &id_1)
         };
 
         let getter_2_with_bad_adapter = Channel {
-            adapter: id_3.clone(),
-            .. getter_1.clone()
+            kind: ChannelKind::LightOn,
+            supports_fetch: true,
+            .. Channel::empty(&getter_id_1, &service_id_1, &id_3)
         };
 
         let setter_2_with_bad_adapter = Channel {
@@ -336,43 +384,27 @@ fn test_add_remove_services() {
             .. setter_1.clone()
         };
 
-        let service_1 = Service {
-            id: service_id_1.clone(),
-            adapter: id_1.clone(),
-            tags: HashSet::new(),
-            properties: HashMap::new(),
-            getters: HashMap::new(),
-            setters: HashMap::new(),
-        };
+        let service_1 = Service::empty(&service_id_1, &id_1);
 
         let getter_2 = Channel {
-            id: getter_id_2.clone(),
-            service: service_id_2.clone(),
-            adapter: id_2.clone(),
-            tags: HashSet::new(),
             kind: ChannelKind::LightOn,
+            supports_fetch: true,
+            .. Channel::empty(&getter_id_2, &service_id_2, &id_2)
         };
 
         let setter_2 = Channel {
-            id: setter_id_2.clone(),
-            service: service_id_2.clone(),
-            adapter: id_2.clone(),
-            tags: HashSet::new(),
             kind: ChannelKind::LightOn,
+            supports_send: true,
+            .. Channel::empty(&setter_id_2, &service_id_2, &id_2)
         };
 
-        let service_2 = Service {
-            id: service_id_2.clone(),
-            adapter: id_2.clone(),
-            tags: HashSet::new(),
-            properties: HashMap::new(),
-            getters: HashMap::new(),
-            setters: HashMap::new(),
-        };
+        let service_2 = Service::empty(&service_id_2, &id_2);
 
         let service_2_with_channels = Service {
-            getters: vec![(getter_id_2.clone(), getter_2.clone())].iter().cloned().collect(),
-            setters: vec![(setter_id_2.clone(), setter_2.clone())].iter().cloned().collect(),
+            channels: vec![
+                (getter_id_2.clone(), getter_2.clone()),
+                (setter_id_2.clone(), setter_2.clone())
+            ].iter().cloned().collect(),
             ..service_2.clone()
         };
 
@@ -396,8 +428,8 @@ fn test_add_remove_services() {
         }
 
         println!("* We shouldn't have any channels.");
-        assert_eq!(manager.get_getter_channels(vec![ChannelSelector::new()]).len(), 0);
-        assert_eq!(manager.get_setter_channels(vec![ChannelSelector::new()]).len(), 0);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new()]).len(), 0);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new()]).len(), 0);
 
         println!("* Make sure that none of the services has been added.");
         assert_eq!(manager.get_services(vec![ServiceSelector::new()]).len(), 0);
@@ -418,28 +450,28 @@ fn test_add_remove_services() {
         }
 
         println!("* Adding channels should fail if the service doesn't exist.");
-        match manager.add_getter(getter_1_with_bad_service.clone()) {
+        match manager.add_channel(getter_1_with_bad_service.clone()) {
             Err(Error::InternalError(InternalError::NoSuchService(ref err))) if *err == service_id_3 => {},
             other => panic!("Unexpected result {:?}", other)
         }
-        match manager.add_setter(setter_1_with_bad_service.clone()) {
+        match manager.add_channel(setter_1_with_bad_service.clone()) {
             Err(Error::InternalError(InternalError::NoSuchService(ref err))) if *err == service_id_3 => {},
             other => panic!("Unexpected result {:?}", other)
         }
 
         println!("* The attempt shouldn't let any channel lying around.");
-        assert_eq!(manager.get_getter_channels(vec![ChannelSelector::new()]).len(), 0);
-        assert_eq!(manager.get_setter_channels(vec![ChannelSelector::new()]).len(), 0);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new()]).len(), 0);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new()]).len(), 0);
 
         println!("* Adding channels should fail if the adapter doesn't match that of its service.");
-        match manager.add_getter(getter_2_with_bad_adapter) {
+        match manager.add_channel(getter_2_with_bad_adapter) {
             Err(Error::InternalError(InternalError::ConflictingAdapter(ref err_1, ref err_2)))
                 if *err_1 == id_3 && *err_2 == id_1 => {},
             Err(Error::InternalError(InternalError::ConflictingAdapter(ref err_1, ref err_2)))
                 if *err_1 == id_1 && *err_2 == id_3 => {},
             other => panic!("Unexpected result {:?}", other)
         }
-        match manager.add_setter(setter_2_with_bad_adapter) {
+        match manager.add_channel(setter_2_with_bad_adapter) {
             Err(Error::InternalError(InternalError::ConflictingAdapter(ref err_1, ref err_2)))
                 if *err_1 == id_3 && *err_2 == id_1 => {},
             Err(Error::InternalError(InternalError::ConflictingAdapter(ref err_1, ref err_2)))
@@ -448,52 +480,40 @@ fn test_add_remove_services() {
         }
 
         println!("* The attempt shouldn't let any channel lying around.");
-        assert_eq!(manager.get_getter_channels(vec![ChannelSelector::new()]).len(), 0);
-        assert_eq!(manager.get_setter_channels(vec![ChannelSelector::new()]).len(), 0);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new()]).len(), 0);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new()]).len(), 0);
 
         println!("* Adding getter channels can succeed.");
-        manager.add_getter(getter_1.clone()).unwrap();
-        assert_eq!(manager.get_getter_channels(vec![ChannelSelector::new()]).len(), 1);
-        assert_eq!(manager.get_setter_channels(vec![ChannelSelector::new()]).len(), 0);
-        assert_eq!(manager.get_getter_channels(vec![ChannelSelector::new().with_id(getter_id_1.clone())]).len(), 1);
-        assert_eq!(manager.get_setter_channels(vec![ChannelSelector::new().with_id(setter_id_1.clone())]).len(), 0);
-        assert_eq!(manager.get_getter_channels(vec![ChannelSelector::new().with_parent(service_id_1.clone())]).len(), 1);
-        assert_eq!(manager.get_setter_channels(vec![ChannelSelector::new().with_parent(service_id_1.clone())]).len(), 0);
-        assert_eq!(manager.get_getter_channels(vec![ChannelSelector::new().with_kind(ChannelKind::LightOn)]).len(), 1);
-        assert_eq!(manager.get_setter_channels(vec![ChannelSelector::new().with_kind(ChannelKind::LightOn)]).len(), 0);
+        manager.add_channel(getter_1.clone()).unwrap();
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new()]).len(), 1);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_id(getter_id_1.clone())]).len(), 1);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_id(setter_id_1.clone())]).len(), 0);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_parent(service_id_1.clone())]).len(), 1);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_kind(ChannelKind::LightOn)]).len(), 1);
 
         println!("* Adding setter channels can succeed.");
-        manager.add_setter(setter_1.clone()).unwrap();
-        assert_eq!(manager.get_getter_channels(vec![ChannelSelector::new()]).len(), 1);
-        assert_eq!(manager.get_setter_channels(vec![ChannelSelector::new()]).len(), 1);
-        assert_eq!(manager.get_getter_channels(vec![ChannelSelector::new().with_id(getter_id_1.clone())]).len(), 1);
-        assert_eq!(manager.get_setter_channels(vec![ChannelSelector::new().with_id(setter_id_1.clone())]).len(), 1);
-        assert_eq!(manager.get_getter_channels(vec![ChannelSelector::new().with_parent(service_id_1.clone())]).len(), 1);
-        assert_eq!(manager.get_setter_channels(vec![ChannelSelector::new().with_parent(service_id_1.clone())]).len(), 1);
-        assert_eq!(manager.get_getter_channels(vec![ChannelSelector::new().with_kind(ChannelKind::LightOn)]).len(), 1);
-        assert_eq!(manager.get_setter_channels(vec![ChannelSelector::new().with_kind(ChannelKind::LightOn)]).len(), 1);
+        manager.add_channel(setter_1.clone()).unwrap();
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new()]).len(), 2);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_id(getter_id_1.clone())]).len(), 1);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_id(setter_id_1.clone())]).len(), 1);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_parent(service_id_1.clone())]).len(), 2);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_kind(ChannelKind::LightOn)]).len(), 2);
 
         println!("* Removing getter channels can succeed.");
-        manager.remove_getter(&getter_id_1).unwrap();
-        assert_eq!(manager.get_getter_channels(vec![ChannelSelector::new()]).len(), 0);
-        assert_eq!(manager.get_setter_channels(vec![ChannelSelector::new()]).len(), 1);
-        assert_eq!(manager.get_getter_channels(vec![ChannelSelector::new().with_id(getter_id_1.clone())]).len(), 0);
-        assert_eq!(manager.get_setter_channels(vec![ChannelSelector::new().with_id(setter_id_1.clone())]).len(), 1);
-        assert_eq!(manager.get_getter_channels(vec![ChannelSelector::new().with_parent(service_id_1.clone())]).len(), 0);
-        assert_eq!(manager.get_setter_channels(vec![ChannelSelector::new().with_parent(service_id_1.clone())]).len(), 1);
-        assert_eq!(manager.get_getter_channels(vec![ChannelSelector::new().with_kind(ChannelKind::LightOn)]).len(), 0);
-        assert_eq!(manager.get_setter_channels(vec![ChannelSelector::new().with_kind(ChannelKind::LightOn)]).len(), 1);
+        manager.remove_channel(&getter_id_1).unwrap();
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new()]).len(), 1);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_id(getter_id_1.clone())]).len(), 0);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_id(setter_id_1.clone())]).len(), 1);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_parent(service_id_1.clone())]).len(), 1);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_kind(ChannelKind::LightOn)]).len(), 1);
 
         println!("* Removing setter channels can succeed.");
-        manager.remove_setter(&setter_id_1).unwrap();
-        assert_eq!(manager.get_getter_channels(vec![ChannelSelector::new()]).len(), 0);
-        assert_eq!(manager.get_setter_channels(vec![ChannelSelector::new()]).len(), 0);
-        assert_eq!(manager.get_getter_channels(vec![ChannelSelector::new().with_id(getter_id_1.clone())]).len(), 0);
-        assert_eq!(manager.get_setter_channels(vec![ChannelSelector::new().with_id(setter_id_1.clone())]).len(), 0);
-        assert_eq!(manager.get_getter_channels(vec![ChannelSelector::new().with_parent(service_id_1.clone())]).len(), 0);
-        assert_eq!(manager.get_setter_channels(vec![ChannelSelector::new().with_parent(service_id_1.clone())]).len(), 0);
-        assert_eq!(manager.get_getter_channels(vec![ChannelSelector::new().with_kind(ChannelKind::LightOn)]).len(), 0);
-        assert_eq!(manager.get_setter_channels(vec![ChannelSelector::new().with_kind(ChannelKind::LightOn)]).len(), 0);
+        manager.remove_channel(&setter_id_1).unwrap();
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new()]).len(), 0);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_id(getter_id_1.clone())]).len(), 0);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_id(setter_id_1.clone())]).len(), 0);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_parent(service_id_1.clone())]).len(), 0);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_kind(ChannelKind::LightOn)]).len(), 0);
 
         println!("* We can remove a service without channels.");
         manager.remove_service(&service_id_1).unwrap();
@@ -501,30 +521,25 @@ fn test_add_remove_services() {
         println!("* We can add several services, then several channels.");
         manager.add_service(service_1.clone()).unwrap();
         manager.add_service(service_2.clone()).unwrap();
-        manager.add_getter(getter_1.clone()).unwrap();
-        manager.add_setter(setter_1.clone()).unwrap();
-        manager.add_getter(getter_2.clone()).unwrap();
-        manager.add_setter(setter_2.clone()).unwrap();
+        manager.add_channel(getter_1.clone()).unwrap();
+        manager.add_channel(setter_1.clone()).unwrap();
+        manager.add_channel(getter_2.clone()).unwrap();
+        manager.add_channel(setter_2.clone()).unwrap();
         assert_eq!(manager.get_services(vec![ServiceSelector::new()]).len(), 2);
         assert_eq!(manager.get_services(vec![ServiceSelector::new().with_id(service_id_1.clone())]).len(), 1);
         assert_eq!(manager.get_services(vec![ServiceSelector::new().with_id(service_id_2.clone())]).len(), 1);
         assert_eq!(manager.get_services(vec![ServiceSelector::new().with_id(service_id_3.clone())]).len(), 0);
-        assert_eq!(manager.get_getter_channels(vec![ChannelSelector::new()]).len(), 2);
-        assert_eq!(manager.get_setter_channels(vec![ChannelSelector::new()]).len(), 2);
-        assert_eq!(manager.get_getter_channels(vec![ChannelSelector::new().with_id(getter_id_1.clone())]).len(), 1);
-        assert_eq!(manager.get_setter_channels(vec![ChannelSelector::new().with_id(setter_id_1.clone())]).len(), 1);
-        assert_eq!(manager.get_getter_channels(vec![ChannelSelector::new().with_id(getter_id_2.clone())]).len(), 1);
-        assert_eq!(manager.get_setter_channels(vec![ChannelSelector::new().with_id(setter_id_2.clone())]).len(), 1);
-        assert_eq!(manager.get_getter_channels(vec![ChannelSelector::new().with_id(getter_id_3.clone())]).len(), 0);
-        assert_eq!(manager.get_setter_channels(vec![ChannelSelector::new().with_id(setter_id_3.clone())]).len(), 0);
-        assert_eq!(manager.get_getter_channels(vec![ChannelSelector::new().with_parent(service_id_1.clone())]).len(), 1);
-        assert_eq!(manager.get_setter_channels(vec![ChannelSelector::new().with_parent(service_id_1.clone())]).len(), 1);
-        assert_eq!(manager.get_getter_channels(vec![ChannelSelector::new().with_parent(service_id_2.clone())]).len(), 1);
-        assert_eq!(manager.get_setter_channels(vec![ChannelSelector::new().with_parent(service_id_2.clone())]).len(), 1);
-        assert_eq!(manager.get_getter_channels(vec![ChannelSelector::new().with_parent(service_id_3.clone())]).len(), 0);
-        assert_eq!(manager.get_setter_channels(vec![ChannelSelector::new().with_parent(service_id_3.clone())]).len(), 0);
-        assert_eq!(manager.get_getter_channels(vec![ChannelSelector::new().with_kind(ChannelKind::LightOn)]).len(), 2);
-        assert_eq!(manager.get_setter_channels(vec![ChannelSelector::new().with_kind(ChannelKind::LightOn)]).len(), 2);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new()]).len(), 4);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_id(getter_id_1.clone())]).len(), 1);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_id(setter_id_1.clone())]).len(), 1);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_id(getter_id_2.clone())]).len(), 1);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_id(setter_id_2.clone())]).len(), 1);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_id(getter_id_3.clone())]).len(), 0);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_id(setter_id_3.clone())]).len(), 0);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_parent(service_id_1.clone())]).len(), 2);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_parent(service_id_2.clone())]).len(), 2);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_parent(service_id_3.clone())]).len(), 0);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_kind(ChannelKind::LightOn)]).len(), 4);
 
         println!("* We can remove a service with channels.");
         manager.remove_service(&service_id_1).unwrap();
@@ -534,30 +549,23 @@ fn test_add_remove_services() {
         assert_eq!(manager.get_services(vec![ServiceSelector::new().with_id(service_id_3.clone())]).len(), 0);
 
         println!("* Removing a service with channels also removes its channels.");
-        assert_eq!(manager.get_getter_channels(vec![ChannelSelector::new()]).len(), 1);
-        assert_eq!(manager.get_setter_channels(vec![ChannelSelector::new()]).len(), 1);
-        assert_eq!(manager.get_getter_channels(vec![ChannelSelector::new().with_id(getter_id_1.clone())]).len(), 0);
-        assert_eq!(manager.get_setter_channels(vec![ChannelSelector::new().with_id(setter_id_1.clone())]).len(), 0);
-        assert_eq!(manager.get_getter_channels(vec![ChannelSelector::new().with_parent(service_id_1.clone())]).len(), 0);
-        assert_eq!(manager.get_setter_channels(vec![ChannelSelector::new().with_parent(service_id_1.clone())]).len(), 0);
-        assert_eq!(manager.get_getter_channels(vec![ChannelSelector::new().with_kind(ChannelKind::LightOn)]).len(), 1);
-        assert_eq!(manager.get_setter_channels(vec![ChannelSelector::new().with_kind(ChannelKind::LightOn)]).len(), 1);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new()]).len(), 2);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_id(getter_id_1.clone())]).len(), 0);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_id(setter_id_1.clone())]).len(), 0);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_parent(service_id_1.clone())]).len(), 0);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_kind(ChannelKind::LightOn)]).len(), 2);
 
         println!("* Removing a service with channels doesn't remove other channels.");
-        assert_eq!(manager.get_getter_channels(vec![ChannelSelector::new().with_id(getter_id_2.clone())]).len(), 1);
-        assert_eq!(manager.get_setter_channels(vec![ChannelSelector::new().with_id(setter_id_2.clone())]).len(), 1);
-        assert_eq!(manager.get_getter_channels(vec![ChannelSelector::new().with_parent(service_id_2.clone())]).len(), 1);
-        assert_eq!(manager.get_setter_channels(vec![ChannelSelector::new().with_parent(service_id_2.clone())]).len(), 1);
-        assert_eq!(manager.get_getter_channels(vec![ChannelSelector::new().with_parent(service_id_3.clone())]).len(), 0);
-        assert_eq!(manager.get_setter_channels(vec![ChannelSelector::new().with_parent(service_id_3.clone())]).len(), 0);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_id(getter_id_2.clone())]).len(), 1);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_id(setter_id_2.clone())]).len(), 1);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_parent(service_id_2.clone())]).len(), 2);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_parent(service_id_3.clone())]).len(), 0);
 
         if clear {
-            println!("* Clearing does not break the manager.
-");
+            println!("* Clearing does not break the manager.");
             manager.stop();
         } else {
-            println!("* Not clearing does not break the manager.
-");
+            println!("* Not clearing does not break the manager.");
         }
     }
 }
@@ -566,8 +574,7 @@ fn test_add_remove_services() {
 fn test_add_remove_tags() {
     println!("");
     for clear in vec![false, true] {
-		println!("# Starting with test with clear {}.
-", clear);
+		println!("# Starting with test with clear {}.", clear);
 
         let manager = AdapterManager::new(None);
         let id_1 = Id::<AdapterId>::new("adapter id 1");
@@ -583,54 +590,32 @@ fn test_add_remove_tags() {
         let service_id_2 = Id::<ServiceId>::new("service id 2");
 
         let getter_1 = Channel {
-            id: getter_id_1.clone(),
-            service: service_id_1.clone(),
-            adapter: id_1.clone(),
-            tags: HashSet::new(),
             kind: ChannelKind::LightOn,
+            supports_fetch: true,
+            .. Channel::empty(&getter_id_1, &service_id_1, &id_1)
         };
 
         let setter_1 = Channel {
-            id: setter_id_1.clone(),
-            service: service_id_1.clone(),
-            adapter: id_1.clone(),
-            tags: HashSet::new(),
             kind: ChannelKind::LightOn,
+            supports_send: true,
+            .. Channel::empty(&setter_id_1, &service_id_1, &id_1)
         };
 
-        let service_1 = Service {
-            id: service_id_1.clone(),
-            adapter: id_1.clone(),
-            tags: HashSet::new(),
-            properties: HashMap::new(),
-            getters: HashMap::new(),
-            setters: HashMap::new(),
-        };
+        let service_1 = Service::empty(&service_id_1, &id_1);
 
         let getter_2 = Channel {
-            id: getter_id_2.clone(),
-            service: service_id_2.clone(),
-            adapter: id_2.clone(),
-            tags: HashSet::new(),
             kind: ChannelKind::LightOn,
+            supports_fetch: true,
+            .. Channel::empty(&getter_id_2, &service_id_2, &id_2)
         };
 
         let setter_2 = Channel {
-            id: setter_id_2.clone(),
-            service: service_id_2.clone(),
-            adapter: id_2.clone(),
-            tags: HashSet::new(),
             kind: ChannelKind::LightOn,
+            supports_send: true,
+            .. Channel::empty(&setter_id_2, &service_id_2, &id_2)
         };
 
-        let service_2 = Service {
-            id: service_id_2.clone(),
-            adapter: id_2.clone(),
-            tags: HashSet::new(),
-            properties: HashMap::new(),
-            getters: HashMap::new(),
-            setters: HashMap::new(),
-        };
+        let service_2 = Service::empty(&service_id_2, &id_2);
 
         let tag_1 = Id::<TagId>::new("tag_1");
         let tag_2 = Id::<TagId>::new("tag_2");
@@ -638,17 +623,17 @@ fn test_add_remove_tags() {
 
         println!("* Initially, there are no tags.");
         assert_eq!(manager.get_services(vec![ServiceSelector::new().with_tags(vec![tag_1.clone()])]).len(), 0);
-        assert_eq!(manager.get_getter_channels(vec![ChannelSelector::new().with_tags(vec![tag_1.clone()])]).len(), 0);
-        assert_eq!(manager.get_setter_channels(vec![ChannelSelector::new().with_tags(vec![tag_1.clone()])]).len(), 0);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_tags(vec![tag_1.clone()])]).len(), 0);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_tags(vec![tag_1.clone()])]).len(), 0);
 
         println!("* After adding an adapter, service, getter, setter, still no tags.");
         manager.add_adapter(Arc::new(FakeAdapter::new(&id_1))).unwrap();
         manager.add_service(service_1.clone()).unwrap();
-        manager.add_getter(getter_1.clone()).unwrap();
-        manager.add_setter(setter_1.clone()).unwrap();
+        manager.add_channel(getter_1.clone()).unwrap();
+        manager.add_channel(setter_1.clone()).unwrap();
         assert_eq!(manager.get_services(vec![ServiceSelector::new().with_tags(vec![tag_1.clone()])]).len(), 0);
-        assert_eq!(manager.get_getter_channels(vec![ChannelSelector::new().with_tags(vec![tag_1.clone()])]).len(), 0);
-        assert_eq!(manager.get_setter_channels(vec![ChannelSelector::new().with_tags(vec![tag_1.clone()])]).len(), 0);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_tags(vec![tag_1.clone()])]).len(), 0);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_tags(vec![tag_1.clone()])]).len(), 0);
 
         println!("* Removing tags from non-existent services and channels doesn't hurt and returns 0.");
         assert_eq!(manager
@@ -657,12 +642,12 @@ fn test_add_remove_tags() {
             ),
             0);
         assert_eq!(manager
-            .remove_getter_tags(
+            .remove_channel_tags(
                 vec![ChannelSelector::new().with_id(getter_id_2.clone())], vec![tag_2.clone(), tag_3.clone()]
             ),
             0);
         assert_eq!(manager
-            .remove_setter_tags(
+            .remove_channel_tags(
                 vec![ChannelSelector::new().with_id(setter_id_2.clone())], vec![tag_2.clone(), tag_3.clone()]
             ),
             0);
@@ -674,38 +659,38 @@ fn test_add_remove_tags() {
             ),
             0);
         assert_eq!(manager
-            .add_getter_tags(
+            .add_channel_tags(
                 vec![ChannelSelector::new().with_id(getter_id_2.clone())], vec![tag_2.clone(), tag_3.clone()]
             ),
             0);
         assert_eq!(manager
-            .add_setter_tags(
+            .add_channel_tags(
                 vec![ChannelSelector::new().with_id(setter_id_2.clone())], vec![tag_2.clone(), tag_3.clone()]
             ),
             0);
 
         println!("* There are still no tags.");
         assert_eq!(manager.get_services(vec![ServiceSelector::new().with_tags(vec![tag_2.clone()])]).len(), 0);
-        assert_eq!(manager.get_getter_channels(vec![ChannelSelector::new().with_tags(vec![tag_2.clone()])]).len(), 0);
-        assert_eq!(manager.get_setter_channels(vec![ChannelSelector::new().with_tags(vec![tag_2.clone()])]).len(), 0);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_tags(vec![tag_2.clone()])]).len(), 0);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_tags(vec![tag_2.clone()])]).len(), 0);
 
         println!("* Removing non-added tags from existent services and channels doesn't hurt and returns 1.");
         manager.add_adapter(Arc::new(FakeAdapter::new(&id_2))).unwrap();
         manager.add_service(service_2.clone()).unwrap();
-        manager.add_getter(getter_2.clone()).unwrap();
-        manager.add_setter(setter_2.clone()).unwrap();
+        manager.add_channel(getter_2.clone()).unwrap();
+        manager.add_channel(setter_2.clone()).unwrap();
         assert_eq!(manager
             .remove_service_tags(
                 vec![ServiceSelector::new().with_id(service_id_2.clone())], vec![tag_2.clone(), tag_3.clone()]
             ),
             1);
         assert_eq!(manager
-            .remove_getter_tags(
+            .remove_channel_tags(
                 vec![ChannelSelector::new().with_id(getter_id_2.clone())], vec![tag_2.clone(), tag_3.clone()]
             ),
             1);
         assert_eq!(manager
-            .remove_setter_tags(
+            .remove_channel_tags(
                 vec![ChannelSelector::new().with_id(setter_id_2.clone())], vec![tag_2.clone(), tag_3.clone()]
             ),
             1);
@@ -717,26 +702,23 @@ fn test_add_remove_tags() {
             ),
             1);
         assert_eq!(manager
-            .add_getter_tags(
+            .add_channel_tags(
                 vec![ChannelSelector::new().with_id(getter_id_2.clone())], vec![tag_2.clone(), tag_3.clone()]
             ),
             1);
         assert_eq!(manager
-            .add_setter_tags(
+            .add_channel_tags(
                 vec![ChannelSelector::new().with_id(setter_id_2.clone())], vec![tag_2.clone(), tag_3.clone()]
             ),
             1);
 
         println!("* We can select using these tags.");
         assert_eq!(manager.get_services(vec![ServiceSelector::new().with_tags(vec![tag_1.clone()])]).len(), 0);
-        assert_eq!(manager.get_getter_channels(vec![ChannelSelector::new().with_tags(vec![tag_1.clone()])]).len(), 0);
-        assert_eq!(manager.get_setter_channels(vec![ChannelSelector::new().with_tags(vec![tag_1.clone()])]).len(), 0);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_tags(vec![tag_1.clone()])]).len(), 0);
         assert_eq!(manager.get_services(vec![ServiceSelector::new().with_tags(vec![tag_2.clone()])]).len(), 1);
-        assert_eq!(manager.get_getter_channels(vec![ChannelSelector::new().with_tags(vec![tag_2.clone()])]).len(), 1);
-        assert_eq!(manager.get_setter_channels(vec![ChannelSelector::new().with_tags(vec![tag_2.clone()])]).len(), 1);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_tags(vec![tag_2.clone()])]).len(), 2);
         assert_eq!(manager.get_services(vec![ServiceSelector::new().with_tags(vec![tag_3.clone()])]).len(), 1);
-        assert_eq!(manager.get_getter_channels(vec![ChannelSelector::new().with_tags(vec![tag_3.clone()])]).len(), 1);
-        assert_eq!(manager.get_setter_channels(vec![ChannelSelector::new().with_tags(vec![tag_3.clone()])]).len(), 1);
+        assert_eq!(manager.get_channels(vec![ChannelSelector::new().with_tags(vec![tag_3.clone()])]).len(), 2);
 
         println!("* The tags are only applied to the right services/getters.");
         assert_eq!(manager.get_services(vec![
@@ -745,13 +727,13 @@ fn test_add_remove_tags() {
                 .with_id(service_id_1.clone())
             ]).len(), 0
         );
-        assert_eq!(manager.get_getter_channels(vec![
+        assert_eq!(manager.get_channels(vec![
             ChannelSelector::new()
                 .with_tags(vec![tag_2.clone()])
                 .with_id(getter_id_1.clone())
             ]).len(), 0
         );
-        assert_eq!(manager.get_setter_channels(vec![
+        assert_eq!(manager.get_channels(vec![
             ChannelSelector::new()
                 .with_tags(vec![tag_2.clone()])
                 .with_id(setter_id_1.clone())
@@ -770,7 +752,7 @@ fn test_add_remove_tags() {
         assert!(selection[0].tags.contains(&tag_2));
         assert!(selection[0].tags.contains(&tag_3));
 
-        let selection = manager.get_getter_channels(vec![
+        let selection = manager.get_channels(vec![
             ChannelSelector::new()
                 .with_tags(vec![tag_2.clone()])
                 .with_id(getter_id_2.clone())
@@ -781,7 +763,7 @@ fn test_add_remove_tags() {
         assert!(selection[0].tags.contains(&tag_2));
         assert!(selection[0].tags.contains(&tag_3));
 
-        let selection = manager.get_setter_channels(vec![
+        let selection = manager.get_channels(vec![
             ChannelSelector::new()
                 .with_tags(vec![tag_2.clone()])
                 .with_id(setter_id_2.clone())
@@ -803,7 +785,7 @@ fn test_add_remove_tags() {
         assert!(selection[0].tags.contains(&tag_2));
         assert!(selection[0].tags.contains(&tag_3));
 
-        let selection = manager.get_getter_channels(vec![
+        let selection = manager.get_channels(vec![
             ChannelSelector::new()
                 .with_tags(vec![tag_3.clone()])
                 .with_id(getter_id_2.clone())
@@ -814,7 +796,7 @@ fn test_add_remove_tags() {
         assert!(selection[0].tags.contains(&tag_2));
         assert!(selection[0].tags.contains(&tag_3));
 
-        let selection = manager.get_setter_channels(vec![
+        let selection = manager.get_channels(vec![
             ChannelSelector::new()
                 .with_tags(vec![tag_3.clone()])
                 .with_id(setter_id_2.clone())
@@ -832,12 +814,12 @@ fn test_add_remove_tags() {
             ),
             1);
         assert_eq!(manager
-            .remove_getter_tags(
+            .remove_channel_tags(
                 vec![ChannelSelector::new().with_id(getter_id_2.clone())], vec![tag_1.clone(), tag_3.clone()]
             ),
             1);
         assert_eq!(manager
-            .remove_setter_tags(
+            .remove_channel_tags(
                 vec![ChannelSelector::new().with_id(setter_id_2.clone())], vec![tag_1.clone(), tag_3.clone()]
             ),
             1);
@@ -853,7 +835,7 @@ fn test_add_remove_tags() {
         assert_eq!(selection[0].tags.len(), 1);
         assert!(selection[0].tags.contains(&tag_2));
 
-        let selection = manager.get_getter_channels(vec![
+        let selection = manager.get_channels(vec![
             ChannelSelector::new()
                 .with_tags(vec![tag_2.clone()])
                 .with_id(getter_id_2.clone())
@@ -863,7 +845,7 @@ fn test_add_remove_tags() {
         assert_eq!(selection[0].tags.len(), 1);
         assert!(selection[0].tags.contains(&tag_2));
 
-        let selection = manager.get_setter_channels(vec![
+        let selection = manager.get_channels(vec![
             ChannelSelector::new()
                 .with_tags(vec![tag_2.clone()])
                 .with_id(setter_id_2.clone())
@@ -880,14 +862,14 @@ fn test_add_remove_tags() {
             ]);
         assert_eq!(selection.len(), 0);
 
-        let selection = manager.get_getter_channels(vec![
+        let selection = manager.get_channels(vec![
             ChannelSelector::new()
                 .with_tags(vec![tag_3.clone()])
                 .with_id(getter_id_2.clone())
         ]);
         assert_eq!(selection.len(), 0);
 
-        let selection = manager.get_setter_channels(vec![
+        let selection = manager.get_channels(vec![
             ChannelSelector::new()
                 .with_tags(vec![tag_3.clone()])
                 .with_id(setter_id_2.clone())
@@ -895,12 +877,10 @@ fn test_add_remove_tags() {
         assert_eq!(selection.len(), 0);
 
         if clear {
-            println!("* Clearing does not break the manager.
-");
+            println!("* Clearing does not break the manager.");
             manager.stop();
         } else {
-            println!("* Not clearing does not break the manager.
-");
+            println!("* Not clearing does not break the manager.");
         }
     }
 
@@ -912,8 +892,7 @@ fn test_fetch() {
     println!("");
 
     for clear in vec![false, true] {
-		println!("# Starting with test with clear {}.
-", clear);
+		println!("# Starting with test with clear {}.", clear);
 
         let manager = AdapterManager::new(None);
         let id_1 = Id::<AdapterId>::new("adapter id 1");
@@ -929,54 +908,32 @@ fn test_fetch() {
         let service_id_2 = Id::<ServiceId>::new("service id 2");
 
         let getter_1_1 = Channel {
-            id: getter_id_1_1.clone(),
-            service: service_id_1.clone(),
-            adapter: id_1.clone(),
-            tags: HashSet::new(),
             kind: ChannelKind::LightOn,
+            supports_fetch: true,
+            .. Channel::empty(&getter_id_1_1, &service_id_1, &id_1)
         };
 
         let getter_1_2 = Channel {
-            id: getter_id_1_2.clone(),
-            service: service_id_1.clone(),
-            adapter: id_1.clone(),
-            tags: HashSet::new(),
             kind: ChannelKind::LightOn,
+            supports_fetch: true,
+            .. Channel::empty(&getter_id_1_2, &service_id_1, &id_1)
         };
 
         let getter_1_3 = Channel {
-            id: getter_id_1_3.clone(),
-            service: service_id_1.clone(),
-            adapter: id_1.clone(),
-            tags: HashSet::new(),
             kind: ChannelKind::LightOn,
+            supports_fetch: true,
+            .. Channel::empty(&getter_id_1_3, &service_id_1, &id_1)
         };
 
         let getter_2 = Channel {
-            id: getter_id_2.clone(),
-            service: service_id_2.clone(),
-            adapter: id_2.clone(),
-            tags: HashSet::new(),
             kind: ChannelKind::LightOn,
+            supports_fetch: true,
+            .. Channel::empty(&getter_id_2, &service_id_2, &id_2)
         };
 
-        let service_1 = Service {
-            id: service_id_1.clone(),
-            adapter: id_1.clone(),
-            tags: HashSet::new(),
-            properties: HashMap::new(),
-            getters: HashMap::new(),
-            setters: HashMap::new(),
-        };
+        let service_1 = Service::empty(&service_id_1, &id_1);
 
-        let service_2 = Service {
-            id: service_id_2.clone(),
-            adapter: id_2.clone(),
-            tags: HashSet::new(),
-            properties: HashMap::new(),
-            getters: HashMap::new(),
-            setters: HashMap::new(),
-        };
+        let service_2 = Service::empty(&service_id_2, &id_2);
 
         let adapter_1 = FakeAdapter::new(&id_1);
         let adapter_2 = FakeAdapter::new(&id_2);
@@ -992,10 +949,10 @@ fn test_fetch() {
         assert_eq!(manager.fetch_values(vec![ChannelSelector::new()], User::None).len(), 0);
 
         println!("* Fetching empty values from a selector that has channels returns a vector of empty values.");
-        manager.add_getter(getter_1_1.clone()).unwrap();
-        manager.add_getter(getter_1_2.clone()).unwrap();
-        manager.add_getter(getter_1_3.clone()).unwrap();
-        manager.add_getter(getter_2.clone()).unwrap();
+        manager.add_channel(getter_1_1.clone()).unwrap();
+        manager.add_channel(getter_1_2.clone()).unwrap();
+        manager.add_channel(getter_1_3.clone()).unwrap();
+        manager.add_channel(getter_2.clone()).unwrap();
         let data = manager.fetch_values(vec![ChannelSelector::new()], User::None);
         assert_eq!(data.len(), 4);
 
@@ -1110,54 +1067,31 @@ fn test_send() {
         let service_id_2 = Id::<ServiceId>::new("service id 2");
 
         let setter_1_1 = Channel {
-            id: setter_id_1_1.clone(),
-            service: service_id_1.clone(),
-            adapter: id_1.clone(),
-            tags: HashSet::new(),
             kind: ChannelKind::LightOn,
+            supports_send: true,
+            .. Channel::empty(&setter_id_1_1, &service_id_1, &id_1)
         };
 
         let setter_1_2 = Channel {
-            id: setter_id_1_2.clone(),
-            service: service_id_1.clone(),
-            adapter: id_1.clone(),
-            tags: HashSet::new(),
             kind: ChannelKind::LightOn,
+            supports_send: true,
+            .. Channel::empty(&setter_id_1_2, &service_id_1, &id_1)
         };
 
         let setter_1_3 = Channel {
-            id: setter_id_1_3.clone(),
-            service: service_id_1.clone(),
-            adapter: id_1.clone(),
-            tags: HashSet::new(),
             kind: ChannelKind::LightOn,
+            supports_send: true,
+            .. Channel::empty(&setter_id_1_3, &service_id_1, &id_1)
         };
 
         let setter_2 = Channel {
-            id: setter_id_2.clone(),
-            service: service_id_2.clone(),
-            adapter: id_2.clone(),
-            tags: HashSet::new(),
             kind: ChannelKind::LightOn,
+            supports_send: true,
+            .. Channel::empty(&setter_id_2, &service_id_2, &id_2)
         };
 
-        let service_1 = Service {
-            id: service_id_1.clone(),
-            adapter: id_1.clone(),
-            tags: HashSet::new(),
-            properties: HashMap::new(),
-            getters: HashMap::new(),
-            setters: HashMap::new(),
-        };
-
-        let service_2 = Service {
-            id: service_id_2.clone(),
-            adapter: id_2.clone(),
-            tags: HashSet::new(),
-            properties: HashMap::new(),
-            getters: HashMap::new(),
-            setters: HashMap::new(),
-        };
+        let service_1 = Service::empty(&service_id_1, &id_1);
+        let service_2 = Service::empty(&service_id_2, &id_2);
 
         let adapter_1 = FakeAdapter::new(&id_1);
         let adapter_2 = FakeAdapter::new(&id_2);
@@ -1179,10 +1113,10 @@ fn test_send() {
         assert_eq!(data.len(), 0);
 
         println!("* Sending well-typed values to channels succeeds if the adapter succeeds.");
-        manager.add_setter(setter_1_1.clone()).unwrap();
-        manager.add_setter(setter_1_2.clone()).unwrap();
-        manager.add_setter(setter_1_3.clone()).unwrap();
-        manager.add_setter(setter_2.clone()).unwrap();
+        manager.add_channel(setter_1_1.clone()).unwrap();
+        manager.add_channel(setter_1_2.clone()).unwrap();
+        manager.add_channel(setter_1_3.clone()).unwrap();
+        manager.add_channel(setter_2.clone()).unwrap();
 
         let data = manager.send_values(target_map(vec![(vec![ChannelSelector::new()], Value::OnOff(OnOff::On))]), User::None);
         assert_eq!(data.len(), 4);
@@ -1286,12 +1220,10 @@ fn test_send() {
         tweak_1(Tweak::InjectSetterError(setter_id_1_1.clone(), None));
 
         if clear {
-            println!("* Clearing does not break the manager.
-");
+            println!("* Clearing does not break the manager.");
             manager.stop();
         } else {
-            println!("* Not clearing does not break the manager.
-");
+            println!("* Not clearing does not break the manager.");
         }
     }
 
@@ -1304,8 +1236,7 @@ fn test_watch() {
     println!("");
 
     for clear in vec![false, true] {
-		println!("# Starting with test with clear {}.
-", clear);
+		println!("# Starting with test with clear {}.", clear);
 
         let manager = AdapterManager::new(None);
         let id_1 = Id::<AdapterId>::new("adapter id 1");
@@ -1322,62 +1253,37 @@ fn test_watch() {
         let service_id_2 = Id::<ServiceId>::new("service id 2");
 
         let getter_1_1 = Channel {
-            id: getter_id_1_1.clone(),
-            service: service_id_1.clone(),
-            adapter: id_1.clone(),
-            tags: HashSet::new(),
             kind: ChannelKind::LightOn,
+            supports_watch: true,
+            .. Channel::empty(&getter_id_1_1, &service_id_1, &id_1)
         };
 
         let getter_1_2 = Channel {
-            id: getter_id_1_2.clone(),
-            service: service_id_1.clone(),
-            adapter: id_1.clone(),
-            tags: HashSet::new(),
             kind: ChannelKind::LightOn,
+            supports_watch: true,
+            .. Channel::empty(&getter_id_1_2, &service_id_1, &id_1)
         };
 
         let getter_1_3 = Channel {
-            id: getter_id_1_3.clone(),
-            service: service_id_1.clone(),
-            adapter: id_1.clone(),
-            tags: HashSet::new(),
             kind: ChannelKind::LightOn,
+            supports_watch: true,
+            .. Channel::empty(&getter_id_1_3, &service_id_1, &id_1)
         };
 
         let getter_1_4 = Channel {
-            id: getter_id_1_4.clone(),
-            service: service_id_1.clone(),
-            adapter: id_1.clone(),
-            tags: HashSet::new(),
             kind: ChannelKind::LightOn,
+            supports_watch: true,
+            .. Channel::empty(&getter_id_1_4, &service_id_1, &id_1)
         };
 
         let getter_2 = Channel {
-            id: getter_id_2.clone(),
-            service: service_id_2.clone(),
-            adapter: id_2.clone(),
-            tags: HashSet::new(),
             kind: ChannelKind::LightOn,
+            supports_watch: true,
+            .. Channel::empty(&getter_id_2, &service_id_2, &id_2)
         };
 
-        let service_1 = Service {
-            id: service_id_1.clone(),
-            adapter: id_1.clone(),
-            tags: HashSet::new(),
-            properties: HashMap::new(),
-            getters: HashMap::new(),
-            setters: HashMap::new(),
-        };
-
-        let service_2 = Service {
-            id: service_id_2.clone(),
-            adapter: id_2.clone(),
-            tags: HashSet::new(),
-            properties: HashMap::new(),
-            getters: HashMap::new(),
-            setters: HashMap::new(),
-        };
+        let service_1 = Service::empty(&service_id_1, &id_1);
+        let service_2 = Service::empty(&service_id_2, &id_2);
 
         let tag_1 = Id::<TagId>::new("tag 1");
 
@@ -1423,10 +1329,10 @@ fn test_watch() {
             Exactly::Always
         )]), Box::new(tx_watch)); // We keep `guard` out of `guards` to drop it manually later.
 
-        manager.add_getter(getter_1_1.clone()).unwrap();
-        manager.add_getter(getter_1_2.clone()).unwrap();
-        manager.add_getter(getter_1_3.clone()).unwrap();
-        manager.add_getter(getter_2.clone()).unwrap();
+        manager.add_channel(getter_1_1.clone()).unwrap();
+        manager.add_channel(getter_1_2.clone()).unwrap();
+        manager.add_channel(getter_1_3.clone()).unwrap();
+        manager.add_channel(getter_2.clone()).unwrap();
 
         let events : HashSet<_> = (0..4).map(|_| {
             match rx_watch.recv().unwrap() {
@@ -1441,7 +1347,7 @@ fn test_watch() {
 
         println!("* We can observe channels being removed.");
 
-        manager.remove_getter(&getter_id_1_2).unwrap();
+        manager.remove_channel(&getter_id_1_2).unwrap();
         match rx_watch.recv().unwrap() {
             Event::ChannelRemoved(ref id) if *id == getter_id_1_2 => {}
             other => panic!("Unexpected event {:?}", other)
@@ -1468,7 +1374,7 @@ fn test_watch() {
         assert_matches!(rx_watch.try_recv(), Err(_));
 
         println!("* We can have several watchers at once");
-        assert_eq!(manager.add_getter_tags(vec![
+        assert_eq!(manager.add_channel_tags(vec![
             ChannelSelector::new().with_id(getter_id_1_3.clone()),
             ChannelSelector::new().with_id(getter_id_2.clone()),
         ], vec![tag_1.clone()]), 2);
@@ -1495,6 +1401,7 @@ fn test_watch() {
                 other => panic!("Unexpected event {:?}", other)
             }
         }).collect();
+
         match rx_watch_2.recv().unwrap() {
             Event::EnterRange { from, value } => {
                 events.insert(from, value);
@@ -1543,16 +1450,16 @@ fn test_watch() {
         assert_matches!(rx_watch.try_recv(), Err(_));
 
         println!("* We stop receiving connection notifications once we have dropped the guard.");
-        manager.add_getter(getter_1_4.clone()).unwrap();
+        manager.add_channel(getter_1_4.clone()).unwrap();
         assert_matches!(rx_watch.try_recv(), Err(_));
 
         println!("* We stop receiving disconnection notifications once we have dropped the guard.");
-        manager.remove_getter(&getter_id_1_4).unwrap();
+        manager.remove_channel(&getter_id_1_4).unwrap();
         assert_matches!(rx_watch.try_recv(), Err(_));
 
         println!("* We are notified when a getter is added to a watch by changing a tag.");
 
-        assert_eq!(manager.add_getter_tags(vec![
+        assert_eq!(manager.add_channel_tags(vec![
             ChannelSelector::new().with_id(getter_id_1_1.clone()),
             ChannelSelector::new().with_id(getter_id_2.clone()),
         ], vec![tag_1.clone()]), 2);
@@ -1565,7 +1472,7 @@ fn test_watch() {
 
         println!("* We are notified when a getter is removed from a watch by changing a tag.");
 
-        assert_eq!(manager.remove_getter_tags(vec![
+        assert_eq!(manager.remove_channel_tags(vec![
             ChannelSelector::new().with_id(getter_id_1_1.clone()),
         ], vec![tag_1.clone()]), 1);
         match rx_watch_2.recv().unwrap() {

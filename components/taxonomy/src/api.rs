@@ -417,63 +417,9 @@ pub trait API: Send {
     /// A JSON string representing a number.
     fn remove_service_tags(& self, selectors: Vec<ServiceSelector>, tags: Vec<Id<TagId>>) -> usize;
 
-    /// Get a list of getters matching some conditions
-    ///
-    /// # REST API
-    ///
-    /// `GET /api/v1/channels/getters`
-    ///
-    /// ### JSON
-    ///
-    /// This call accepts as JSON argument a vector of `ChannelSelector`. See the documentation
-    /// of `ChannelSelector` for more details.
-    ///
-    /// Example: Select all doors in the entrance (tags `door`, `entrance`)
-    /// that support setter channel `OpenClosed`
-    ///
-    /// ```
-    /// # use foxbox_taxonomy::selector::*;
-    ///
-    /// let source = r#"[{
-    ///   "tags": ["entrance", "door"],
-    ///   "kind": "OpenClosed"
-    /// }]"#;
-    ///
-    /// # Vec::<ChannelSelector>::from_str(&source).unwrap();
-    /// ```
-    ///
-    ///
-    /// ## Errors
-    ///
-    /// In case of syntax error, Error 400, accompanied with a
-    /// somewhat human-readable JSON string detailing the error.
-    ///
-    /// ## Success
-    ///
-    /// A JSON representing an array of `Service`. See the implementation
-    /// of `Service` for details.
-    ///
-    /// ### Example
-    ///
-    /// ```
-    /// # let source =
-    /// r#"[{
-    ///   "tags": ["entrance", "door", "somevendor"],
-    ///   "id: "some-getter-id",
-    ///   "service": "some-service-id",
-    ///   "updated": "2014-11-28T12:00:09+00:00",
-    ///   "mechanism": "getter",
-    ///   "kind": "OnOff"
-    /// }]"#;
-    /// ```
-    fn get_getter_channels(& self, selectors: Vec<ChannelSelector>) -> Vec<Channel>;
 
-    /// Get a list of getters matching some conditions
-    ///
-    /// # REST API
-    ///
-    /// `GET /api/v1/channels`
-    fn get_setter_channels(& self, selectors: Vec<ChannelSelector>) -> Vec<Channel>;
+    /// Get a list of channels matching some conditions
+    fn get_channels(& self, selectors: Vec<ChannelSelector>) -> Vec<Channel>;
 
     /// Label a set of channels with a set of tags.
     ///
@@ -519,8 +465,7 @@ pub trait API: Send {
     /// ## Success
     ///
     /// A JSON representing a number.
-    fn add_getter_tags(& self, selectors: Vec<ChannelSelector>, tags: Vec<Id<TagId>>) -> usize;
-    fn add_setter_tags(& self, selectors: Vec<ChannelSelector>, tags: Vec<Id<TagId>>) -> usize;
+    fn add_channel_tags(& self, selectors: Vec<ChannelSelector>, tags: Vec<Id<TagId>>) -> usize;
 
     /// Remove a set of tags from a set of channels.
     ///
@@ -566,8 +511,7 @@ pub trait API: Send {
     /// ## Success
     ///
     /// A JSON representing a number.
-    fn remove_getter_tags(& self, selectors: Vec<ChannelSelector>, tags: Vec<Id<TagId>>) -> usize;
-    fn remove_setter_tags(& self, selectors: Vec<ChannelSelector>, tags: Vec<Id<TagId>>) -> usize;
+    fn remove_channel_tags(& self, selectors: Vec<ChannelSelector>, tags: Vec<Id<TagId>>) -> usize;
 
     /// Read the latest value from a set of channels
     ///

@@ -27,7 +27,7 @@ use rusqlite::{ self };
 use self::crypto::CryptoContext;
 use serde_json;
 use std::cmp::min;
-use std::collections::{ HashMap, HashSet };
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::thread;
 use traits::Controller;
@@ -319,48 +319,42 @@ impl<C: Controller> WebPush<C> {
         let setter_notify_id = wp.setter_notify_id.clone();
 
         try!(adapt.add_adapter(wp));
-        try!(adapt.add_service(Service::empty(service_id.clone(), id.clone())));
+        try!(adapt.add_service(Service::empty(&service_id, &id)));
 
         macro_rules! add_getter {
             ($id:ident, $kind_id:expr) => (
-                try!(adapt.add_getter(Channel {
-                    tags: HashSet::new(),
-                    adapter: id.clone(),
-                    id: $id,
-                    service: service_id.clone(),
+                try!(adapt.add_channel(Channel {
                     kind: ChannelKind::Extension {
                         vendor: Id::new(ADAPTER_VENDOR),
                         adapter: Id::new(ADAPTER_NAME),
                         kind: Id::new($kind_id),
                         typ: Type::Json,
                     },
+                    supports_fetch: true,
+                    ..Channel::empty(&$id, &service_id, &id)
                 }));
             )
         }
 
         macro_rules! add_setter {
             ($id:ident, $kind_id:expr) => (
-                try!(adapt.add_setter(Channel {
-                    tags: HashSet::new(),
-                    adapter: id.clone(),
-                    id: $id,
-                    service: service_id.clone(),
+                try!(adapt.add_channel(Channel {
                     kind: ChannelKind::Extension {
                         vendor: Id::new(ADAPTER_VENDOR),
                         adapter: Id::new(ADAPTER_NAME),
                         kind: Id::new($kind_id),
                         typ: Type::Json,
                     },
+                    supports_send: true,
+                    ..Channel::empty(&$id, &service_id, &id)
                 }));
             )
         }
 
-        try!(adapt.add_setter(Channel {
-            tags: HashSet::new(),
-            adapter: id.clone(),
-            id: setter_notify_id,
-            service: service_id.clone(),
+        try!(adapt.add_channel(Channel {
             kind: ChannelKind::WebPushNotify,
+            supports_send: true,
+            ..Channel::empty(&setter_notify_id, &service_id, &id)
         }));
 
         add_getter!(getter_resource_id, "WebPushResource");

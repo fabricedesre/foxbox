@@ -60,8 +60,8 @@ pub trait AdapterManagerHandle: Send {
     /// cleanup before returning an error.
     fn remove_service(& self, service_id: &Id<ServiceId>) -> Result<(), Error>;
 
-    /// Add a setter to the system. Typically, this is called by the adapter when a new
-    /// service has been detected/configured. Some services may gain/lose getters at
+    /// Add a channel to the system. Typically, this is called by the adapter when a new
+    /// service has been detected/configured. Some services may gain/lose channels at
     /// runtime depending on their configuration.
     ///
     /// # Requirements
@@ -73,7 +73,7 @@ pub trait AdapterManagerHandle: Send {
     /// Returns an error if the adapter is not registered, the parent service is not
     /// registered, or a channel with the same identifier is already registered.
     /// In either cases, this method reverts all its changes.
-    fn add_getter(& self, setter: Channel) -> Result<(), Error>;
+    fn add_channel(& self, setter: Channel) -> Result<(), Error>;
 
     /// Remove a setter previously registered on the system. Typically, called by
     /// an adapter when a service is reconfigured to remove one of its getters.
@@ -83,32 +83,7 @@ pub trait AdapterManagerHandle: Send {
     /// This method returns an error if the setter is not registered or if the service
     /// is not registered. In either case, it attemps to clean as much as possible, even
     /// if the state is inconsistent.
-    fn remove_getter(& self, id: &Id<Channel>) -> Result<(), Error>;
-
-    /// Add a setter to the system. Typically, this is called by the adapter when a new
-    /// service has been detected/configured. Some services may gain/lose setters at
-    /// runtime depending on their configuration.
-    ///
-    /// # Requirements
-    ///
-    /// The adapter is in charge of making sure that identifiers persist across reboots.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the adapter is not registered, the parent service is not
-    /// registered, or a channel with the same identifier is already registered.
-    /// In either cases, this method reverts all its changes.
-    fn add_setter(& self, setter: Channel) -> Result<(), Error>;
-
-    /// Remove a setter previously registered on the system. Typically, called by
-    /// an adapter when a service is reconfigured to remove one of its setters.
-    ///
-    /// # Error
-    ///
-    /// This method returns an error if the setter is not registered or if the service
-    /// is not registered. In either case, it attemps to clean as much as possible, even
-    /// if the state is inconsistent.
-    fn remove_setter(& self, id: &Id<Channel>) -> Result<(), Error>;
+    fn remove_channel(& self, id: &Id<Channel>) -> Result<(), Error>;
 }
 
 pub enum WatchEvent {

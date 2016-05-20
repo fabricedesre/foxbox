@@ -21,7 +21,7 @@ use traits::Controller;
 use transformable_channels::mpsc::*;
 use self::api::*;
 use self::upnp_listener::IpCameraUpnpListener;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 const CUSTOM_PROPERTY_MANUFACTURER: &'static str = "manufacturer";
@@ -84,7 +84,7 @@ impl IPCameraAdapter {
         let service_id = create_service_id(udn);
 
         let adapter_id = Self::id();
-        let mut service = Service::empty(service_id.clone(), adapter_id.clone());
+        let mut service = Service::empty(&service_id, &adapter_id);
 
         service.properties.insert(CUSTOM_PROPERTY_MANUFACTURER.to_owned(),
                                            manufacturer.to_owned());
@@ -117,76 +117,62 @@ impl IPCameraAdapter {
               name);
 
         let getter_image_list_id = create_getter_id("image_list", udn);
-        try!(adapt.add_getter(Channel {
-            tags: HashSet::new(),
-            adapter: adapter_id.clone(),
-            id: getter_image_list_id.clone(),
-            service: service_id.clone(),
+        try!(adapt.add_channel(Channel {
+            supports_fetch: true,
             kind: ChannelKind::Extension {
                 vendor: Id::new("foxlink@mozilla.com"),
                 adapter: Id::new("IPCam Adapter"),
                 kind: Id::new("image_list"),
                 typ: Type::Json,
             },
+            ..Channel::empty(&getter_image_list_id, &service_id, &adapter_id)
         }));
 
         let getter_image_newest_id = create_getter_id("image_newest", udn);
-        try!(adapt.add_getter(Channel {
-            tags: HashSet::new(),
-            adapter: adapter_id.clone(),
-            id: getter_image_newest_id.clone(),
-            service: service_id.clone(),
+        try!(adapt.add_channel(Channel {
+            supports_fetch: true,
             kind: ChannelKind::Extension {
                 vendor: Id::new("foxlink@mozilla.com"),
                 adapter: Id::new("IPCam Adapter"),
                 kind: Id::new("latest image"),
                 typ: Type::Binary,
             },
+            ..Channel::empty(&getter_image_newest_id, &service_id, &adapter_id)
         }));
 
         let setter_snapshot_id = create_setter_id("snapshot", udn);
-        try!(adapt.add_setter(Channel {
-            tags: HashSet::new(),
-            adapter: adapter_id.clone(),
-            id: setter_snapshot_id.clone(),
-            service: service_id.clone(),
+        try!(adapt.add_channel(Channel {
+            supports_send: true,
             kind: ChannelKind::TakeSnapshot,
+            ..Channel::empty(&setter_snapshot_id, &service_id, &adapter_id)
         }));
 
         let getter_username_id = create_getter_id("username", udn);
-        try!(adapt.add_getter(Channel {
-            tags: HashSet::new(),
-            adapter: adapter_id.clone(),
-            id: getter_username_id.clone(),
-            service: service_id.clone(),
+        try!(adapt.add_channel(Channel {
+            supports_fetch: true,
             kind: ChannelKind::Username,
+            ..Channel::empty(&getter_username_id, &service_id, &adapter_id)
         }));
 
         let setter_username_id = create_setter_id("username", udn);
-        try!(adapt.add_setter(Channel {
-            tags: HashSet::new(),
-            adapter: adapter_id.clone(),
-            id: setter_username_id.clone(),
-            service: service_id.clone(),
+        try!(adapt.add_channel(Channel {
+            supports_send: true,
             kind: ChannelKind::Username,
+            ..Channel::empty(&setter_username_id, &service_id, &adapter_id)
         }));
 
         let getter_password_id = create_getter_id("password", udn);
-        try!(adapt.add_getter(Channel {
-            tags: HashSet::new(),
-            adapter: adapter_id.clone(),
-            id: getter_password_id.clone(),
-            service: service_id.clone(),
+        try!(adapt.add_channel(Channel {
+            supports_fetch: true,
             kind: ChannelKind::Password,
+            ..Channel::empty(&getter_password_id, &service_id, &adapter_id)
         }));
 
         let setter_password_id = create_setter_id("password", udn);
-        try!(adapt.add_setter(Channel {
-            tags: HashSet::new(),
-            adapter: adapter_id.clone(),
-            id: setter_password_id.clone(),
-            service: service_id.clone(),
+        try!(adapt.add_channel(Channel {
+            supports_send: true,
             kind: ChannelKind::Password,
+            ..Channel::empty(&setter_password_id, &service_id, &adapter_id)
         }));
 
         let mut serv = services.lock().unwrap();

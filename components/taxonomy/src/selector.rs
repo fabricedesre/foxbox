@@ -30,8 +30,19 @@ pub trait ServiceLike {
     fn id(&self) -> &Id<ServiceId>;
     fn adapter(&self) -> &Id<AdapterId>;
     fn with_tags<F>(&self, f: F) -> bool where F: Fn(&HashSet<Id<TagId>>) -> bool;
-    fn has_getters<F>(&self, f: F) -> bool where F: Fn(&Channel) -> bool;
-    fn has_setters<F>(&self, f: F) -> bool where F: Fn(&Channel) -> bool;
+    #[deprecated]
+    fn has_setters<F>(&self, f: F) -> bool where F: Fn(&Channel) -> bool {
+        self.has_channels(|chan| {
+            chan.supports_send && f(chan)
+        })
+    }
+    #[deprecated]
+    fn has_getters<F>(&self, f: F) -> bool where F: Fn(&Channel) -> bool {
+        self.has_channels(|chan| {
+            chan.supports_fetch && f(chan)
+        })
+    }
+    fn has_channels<F>(&self, f: F) -> bool where F: Fn(&Channel) -> bool;
 }
 
 impl ServiceLike for Service {
@@ -44,23 +55,14 @@ impl ServiceLike for Service {
     fn with_tags<F>(&self, f: F) -> bool where F: Fn(&HashSet<Id<TagId>>) -> bool {
         f(&self.tags)
     }
-    fn has_getters<F>(&self, f: F) -> bool where F: Fn(&Channel) -> bool {
-        for chan in self.getters.values() {
+    fn has_channels<F>(&self, f: F) -> bool where F: Fn(&Channel) -> bool {
+        for chan in self.channels.values() {
             if f(chan) {
                 return true;
             }
         }
         false
     }
-    fn has_setters<F>(&self, f: F) -> bool where F: Fn(&Channel) -> bool {
-        for chan in self.setters.values() {
-            if f(chan) {
-                return true;
-            }
-        }
-        false
-    }
-
 }
 
 /// A selector for one or more services.
@@ -336,9 +338,13 @@ pub struct ChannelSelector {
     ///  Restrict results to channels offered by a service that has all the tags in `tags`.
     pub service_tags: HashSet<Id<TagId>>,
 
-    /// If `Exatly(k)`, restrict results to channels that produce values
+    /// If `Exactly(k)`, restrict results to channels that produce values
     /// of kind `k`.
     pub kind: Exactly<ChannelKind>,
+
+    pub supports_send: Exactly<bool>,
+    pub supports_fetch: Exactly<bool>,
+    pub supports_watch: Exactly<bool>,
 
     /// Make sure that we can't instantiate from another crate.
     private: (),
@@ -387,6 +393,18 @@ impl Parser<ChannelSelector> for ChannelSelector {
                 result
             }
         });
+        let supports_send = try!(match path.push("supports_send", |path| Exactly::take_opt(path, source, "supports_send")) {
+            None => Ok(Exactly::Always),
+            Some(result) => result
+        });
+        let supports_fetch = try!(match path.push("supports_fetch", |path| Exactly::take_opt(path, source, "supports_fetch")) {
+            None => Ok(Exactly::Always),
+            Some(result) => result
+        });
+        let supports_watch = try!(match path.push("supports_watch", |path| Exactly::take_opt(path, source, "supports_watch")) {
+            None => Ok(Exactly::Always),
+            Some(result) => result
+        });
         if is_empty {
             Err(ParseError::empty_object(&path))
         } else {
@@ -396,6 +414,9 @@ impl Parser<ChannelSelector> for ChannelSelector {
                 tags: tags,
                 service_tags: service_tags,
                 kind: kind,
+                supports_send: supports_send,
+                supports_fetch: supports_fetch,
+                supports_watch: supports_watch,
                 private: ()
             })
         }
@@ -439,6 +460,27 @@ impl ChannelSelector {
         }
     }
 
+    pub fn with_supports_watch(self, value: Exactly<bool>) -> Self {
+        ChannelSelector {
+            supports_watch: self.supports_watch.and(value),
+            .. self
+        }
+    }
+
+    pub fn with_supports_fetch(self, value: Exactly<bool>) -> Self {
+        ChannelSelector {
+            supports_fetch: self.supports_fetch.and(value),
+            .. self
+        }
+    }
+
+    pub fn with_supports_send(self, value: Exactly<bool>) -> Self {
+        ChannelSelector {
+            supports_send: self.supports_send.and(value),
+            .. self
+        }
+    }
+
     ///  Restrict to channels offered by a service that has all the tags in `tags`.
     pub fn with_service_tags(self, tags: Vec<Id<TagId>>) -> Self {
         ChannelSelector {
@@ -455,6 +497,9 @@ impl ChannelSelector {
             tags: self.tags.union(&other.tags).cloned().collect(),
             service_tags: self.service_tags.union(&other.service_tags).cloned().collect(),
             kind: self.kind.and(other.kind),
+            supports_send: self.supports_send.and(other.supports_send),
+            supports_fetch: self.supports_fetch.and(other.supports_fetch),
+            supports_watch: self.supports_watch.and(other.supports_watch),
             private: (),
         }
     }
@@ -468,6 +513,15 @@ impl ChannelSelector {
             return false;
         }
         if !self.kind.matches(&channel.kind) {
+            return false;
+        }
+        if !self.supports_send.matches(&channel.supports_send) {
+            return false;
+        }
+        if !self.supports_watch.matches(&channel.supports_watch) {
+            return false;
+        }
+        if !self.supports_fetch.matches(&channel.supports_fetch) {
             return false;
         }
         if !has_selected_tags(&self.tags, &channel.tags) {

@@ -480,30 +480,16 @@ impl FakeEnv {
                 }
                 let _ = self.on_event.send(FakeEnvEvent::Done);
             },
-            AddGetters(vec) => {
-                for getter in vec {
-                    let result = self.manager.add_getter(getter);
+            AddChannels(vec) => {
+                for channel in vec {
+                    let result = self.manager.add_channel(channel);
                     self.report_error(result);
                 }
                 let _ = self.on_event.send(FakeEnvEvent::Done);
             },
-            RemoveGetters(vec) => {
-                for getter in vec {
-                    let result = self.manager.remove_getter(&getter);
-                    self.report_error(result);
-                }
-                let _ = self.on_event.send(FakeEnvEvent::Done);
-            },
-            AddSetters(vec) => {
-                for setter in vec {
-                    let result = self.manager.add_setter(setter);
-                    self.report_error(result);
-                }
-                let _ = self.on_event.send(FakeEnvEvent::Done);
-            },
-            RemoveSetters(vec) => {
-                for setter in vec {
-                    let result = self.manager.remove_setter(&setter);
+            RemoveChannels(vec) => {
+                for channel in vec {
+                    let result = self.manager.remove_channel(&channel);
                     self.report_error(result);
                 }
                 let _ = self.on_event.send(FakeEnvEvent::Done);
@@ -540,10 +526,8 @@ impl Deserialize for FakeEnv {
 pub enum Instruction {
     AddAdapters(Vec<String>),
     AddServices(Vec<Service>),
-    AddGetters(Vec<Channel>),
-    AddSetters(Vec<Channel>),
-    RemoveGetters(Vec<Id<Channel>>),
-    RemoveSetters(Vec<Id<Channel>>),
+    AddChannels(Vec<Channel>),
+    RemoveChannels(Vec<Id<Channel>>),
     InjectGetterValues(Vec<(Id<Channel>, Result<Value, Error>)>),
     InjectSetterErrors(Vec<(Id<Channel>, Option<Error>)>),
     TriggerTimersUntil(TimeStamp),

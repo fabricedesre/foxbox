@@ -9,7 +9,7 @@ use foxbox_taxonomy::values::{ Value };
 
 use transformable_channels::mpsc::*;
 
-use std::collections::{ HashMap, HashSet };
+use std::collections::HashMap;
 use std::sync::Arc;
 
 
@@ -88,19 +88,18 @@ impl Console {
     pub fn init(adapt: &Arc<AdapterManager>) -> Result<(), Error> {
         let service_console_id = Console::service_console_id();
         let setter_stdout_id = Console::setter_stdout_id();
+        let adapter_id = Console::id();
         let console = Arc::new(Console {
             setter_stdout_id: setter_stdout_id.clone()
         });
         try!(adapt.add_adapter(console));
-        let mut service = Service::empty(service_console_id.clone(), Console::id());
+        let mut service = Service::empty(&service_console_id, &adapter_id);
         service.properties.insert("model".to_owned(), "Mozilla console v1".to_owned());
         try!(adapt.add_service(service));
-        try!(adapt.add_setter(Channel {
-                tags: HashSet::new(),
-                adapter: Console::id(),
-                id: setter_stdout_id.clone(),
-                service: service_console_id.clone(),
-                kind: ChannelKind::Log,
+        try!(adapt.add_channel(Channel {
+            kind: ChannelKind::Log,
+            supports_send: true,
+            ..Channel::empty(&setter_stdout_id, &service_console_id, &adapter_id)
         }));
         Ok(())
     }

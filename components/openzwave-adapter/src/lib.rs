@@ -17,7 +17,7 @@ use transformable_channels::mpsc::ExtSender;
 
 use openzwave::{ ConfigPath, InitOptions, ZWaveManager, ZWaveNotification };
 use openzwave::{ CommandClass, ValueGenre, ValueType, ValueID };
-use openzwave::{ Node };
+use openzwave::{ Controller, Node };
 
 use std::error;
 use std::fmt;
@@ -26,7 +26,7 @@ use std::path::Path;
 use std::thread;
 use std::sync::mpsc;
 use std::sync::{ Arc, Mutex };
-use std::collections::{ HashMap, HashSet };
+use std::collections::HashMap;
 
 use id_map::IdMap;
 use watchers::Watchers;
@@ -173,6 +173,21 @@ fn set_ozw_vid_from_taxo_value(vid: &ValueID, value: Value) -> Result<(), TaxoEr
     result.map_err(|e| TaxoError::InternalError(InternalError::GenericError(format!("Error while setting a value: {}", e))))
 }
 
+fn start_including(ozw: &ZWaveManager, home_id: u32, value: &Value) -> Result<(), TaxoError> {
+    match *value {
+        Value::IsSecure(ref is_secure) => {
+            let is_secure_bool = *is_secure == IsSecure::Secure;
+            try!(
+                ozw.add_node(home_id, is_secure_bool)
+                    .map_err(|e| TaxoError::InternalError(InternalError::GenericError(format!("Error while including node on network {}: {}", home_id, e))))
+            );
+            info!("[OpenZWaveAdapter] Controller on network {} is awaiting an include in {} mode, please do the appropriate steps to include a device.", home_id, is_secure);
+            Ok(())
+        }
+        _ => Err(TaxoError::TypeError(TypeError { expected: Type::IsSecure, got: value.get_type() }))
+    }
+}
+
 type ValueCache = HashMap<TaxoId<Channel>, Value>;
 
 pub struct OpenzwaveAdapter {
@@ -186,6 +201,8 @@ pub struct OpenzwaveAdapter {
     setter_map: IdMap<Channel, ValueID>,
     watchers: Arc<Mutex<Watchers>>,
     value_cache: Arc<Mutex<ValueCache>>,
+    controller_map: IdMap<ServiceId, Controller>,
+    include_map: IdMap<Channel, Controller>,
 }
 
 fn ensure_directory<T: AsRef<Path> + ?Sized>(directory: &T) -> Result<(), Error> {
@@ -204,7 +221,7 @@ fn ensure_directory<T: AsRef<Path> + ?Sized>(directory: &T) -> Result<(), Error>
 }
 
 impl OpenzwaveAdapter {
-    pub fn init<T: AdapterManagerHandle + Send + Sync + 'static> (box_manager: &Arc<T>, user_path: &str, device: Option<String>) -> Result<(), Error> {
+    pub fn init<T: AdapterManagerHandle + Send + Sync + 'static>(box_manager: &Arc<T>, user_path: &str, device: Option<String>) -> Result<(), Error> {
 
         try!(ensure_directory(user_path));
 
@@ -241,10 +258,12 @@ impl OpenzwaveAdapter {
             setter_map: IdMap::new(),
             watchers: Arc::new(Mutex::new(Watchers::new())),
             value_cache: Arc::new(Mutex::new(HashMap::new())),
+            controller_map: IdMap::new(),
+            include_map: IdMap::new(),
         });
 
+        try!(box_manager.add_adapter(adapter.clone()));
         adapter.spawn_notification_thread(rx, box_manager);
-        try!(box_manager.add_adapter(adapter));
 
         info!("[OpenzwaveAdapter] Started.");
 
@@ -257,6 +276,9 @@ impl OpenzwaveAdapter {
         let mut node_map = self.node_map.clone();
         let mut getter_map = self.getter_map.clone();
         let mut setter_map = self.setter_map.clone();
+        let mut controller_map = self.controller_map.clone();
+        let mut include_map = self.include_map.clone();
+
         let watchers = self.watchers.clone();
         let value_cache = self.value_cache.clone();
 
@@ -264,14 +286,38 @@ impl OpenzwaveAdapter {
             for notification in rx {
                 //debug!("Received notification {:?}", notification);
                 match notification {
-                    ZWaveNotification::ControllerReady(_controller) => {}
+                    ZWaveNotification::ControllerReady(controller) => {
+                        let home_id = controller.get_home_id();
+                        let service_name = format!("OpenZWave-controller-{:08x}", home_id);
+                        let service_id = TaxoId::new(&service_name);
+                        controller_map.push(service_id.clone(), controller);
+
+                        let mut service = Service::empty(&service_id, &adapter_id);
+                        service.properties.insert(String::from("name"), format!("Service for controller {:08x}", home_id));
+
+                        box_manager.add_service(service).unwrap_or_else(|e| {
+                            error!("Couldn't add the service {}: {}", service_name, e);
+                        });
+
+                        let include_setter_name = format!("OpenZWave-controller-{:08x}-include", home_id);
+                        let include_setter_id = TaxoId::new(&include_setter_name);
+                        include_map.push(include_setter_id.clone(), controller);
+
+                        box_manager.add_channel(Channel {
+                            kind: ChannelKind::ZwaveInclude,
+                            supports_send: true,
+                            ..Channel::empty(&include_setter_id, &service_id, &adapter_id)
+                        }).unwrap_or_else(|e| {
+                            error!("Couldn't add the setter {}: {}", include_setter_id, e);
+                        });
+                    }
                     ZWaveNotification::NodeNew(_node)               => {}
                     ZWaveNotification::NodeAdded(node)              => {
                         let service_name = format!("OpenZWave-{:08x}-{:02x}", node.get_home_id(), node.get_id());
                         let service_id = TaxoId::new(&service_name);
                         node_map.push(service_id.clone(), node);
 
-                        let mut service = Service::empty(service_id.clone(), adapter_id.clone());
+                        let mut service = Service::empty(&service_id, &adapter_id);
                         service.properties.insert(String::from("name"), node.get_name());
                         service.properties.insert(String::from("product_name"), node.get_product_name());
                         service.properties.insert(String::from("manufacturer_name"), node.get_manufacturer_name());
@@ -304,12 +350,10 @@ impl OpenzwaveAdapter {
                         if has_getter {
                             let getter_id = TaxoId::<Channel>::new(&value_id);
                             getter_map.push(getter_id.clone(), vid);
-                            box_manager.add_getter(Channel {
-                                id: getter_id.clone(),
-                                service: node_id.clone(),
-                                adapter: adapter_id.clone(),
-                                tags: HashSet::new(),
+                            box_manager.add_channel(Channel {
                                 kind: kind.clone(),
+                                supports_fetch: true,
+                                ..Channel::empty(&getter_id, &node_id, &adapter_id)
                             }).unwrap_or_else(|e| {
                                 error!("Couldn't add the getter {}: {}", value_id, e);
                             });
@@ -318,12 +362,10 @@ impl OpenzwaveAdapter {
                         if has_setter {
                             let setter_id = TaxoId::<Channel>::new(&value_id);
                             setter_map.push(setter_id.clone(), vid);
-                            box_manager.add_setter(Channel {
-                                id: setter_id.clone(),
-                                service: node_id.clone(),
-                                adapter: adapter_id.clone(),
-                                tags: HashSet::new(),
-                                kind: kind,
+                            box_manager.add_channel(Channel {
+                                kind: kind.clone(),
+                                supports_send: true,
+                                ..Channel::empty(&setter_id, &node_id, &adapter_id)
                             }).unwrap_or_else(|e| {
                                 error!("Couldn't add the setter {}: {}", value_id, e);
                             });
@@ -431,7 +473,7 @@ impl taxonomy::adapter::Adapter for OpenzwaveAdapter {
 
                 ozw_vid_as_taxo_value(&ozw_vid)
             });
-            let value_result: Result<Option<Value>, TaxoError> = taxo_value.ok_or(TaxoError::InternalError(InternalError::NoSuchChannel(id.clone())));
+            let value_result: Result<Option<Value>, TaxoError> = taxo_value.ok_or(TaxoError::GetterDoesNotSupportPolling(id.clone()));
             (id, value_result)
         }).collect()
     }
@@ -440,6 +482,8 @@ impl taxonomy::adapter::Adapter for OpenzwaveAdapter {
         values.drain().map(|(id, value)| {
             if let Some(ozw_vid) = self.setter_map.find_ozw_from_taxo_id(&id) {
                 (id, set_ozw_vid_from_taxo_value(&ozw_vid, value))
+            } else if let Some(ozw_controller) = self.include_map.find_ozw_from_taxo_id(&id) {
+                (id, start_including(&self.ozw, ozw_controller.get_home_id(), &value))
             } else {
                 (id.clone(), Err(TaxoError::InternalError(InternalError::NoSuchChannel(id))))
             }
@@ -449,6 +493,10 @@ impl taxonomy::adapter::Adapter for OpenzwaveAdapter {
     fn register_watch(&self, mut values: Vec<(TaxoId<Channel>, Option<Value>, Box<ExtSender<WatchEvent>>)>) -> Vec<(TaxoId<Channel>, Result<Box<AdapterWatchGuard>, TaxoError>)> {
         debug!("[OpenzwaveAdapter::register_watch] Should register some watchers");
         values.drain(..).filter_map(|(id, range, sender)| {
+            if self.getter_map.find_ozw_from_taxo_id(&id).is_none() {
+                return Some((id.clone(), Err(TaxoError::GetterDoesNotSupportWatching(id))))
+            }
+
             let sender = Arc::new(Mutex::new(sender)); // Mutex is necessary because cb is not Sync.
             debug!("[OpenzwaveAdapter::register_watch] Should register a watcher for {:?} {:?}", id, range);
             let range = match range {

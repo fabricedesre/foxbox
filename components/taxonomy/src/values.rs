@@ -70,6 +70,9 @@ pub enum Type {
     /// A boolean locked/unlocked states. Used for door locks.
     DoorLocked,
 
+    /// A boolean secure/insecure states. Used for zwave pairing and zwave secure devices.
+    IsSecure,
+
     ///
     /// # Time
     ///
@@ -110,6 +113,7 @@ impl Parser<Type> for Type {
                 "OnOff" => Ok(OnOff),
                 "OpenClosed" => Ok(OpenClosed),
                 "DoorLocked" => Ok(DoorLocked),
+                "IsSecure" => Ok(IsSecure),
                 "Duration" => Ok(Duration),
                 "TimeStamp" => Ok(TimeStamp),
                 "Temperature" => Ok(Temperature),
@@ -136,6 +140,7 @@ impl ToJSON for Type {
             OnOff => "OnOff",
             OpenClosed => "OpenClosed",
             DoorLocked => "DoorLocked",
+            IsSecure => "IsSecure",
             Duration => "Duration",
             TimeStamp => "TimeStamp",
             Temperature => "Temperature",
@@ -162,7 +167,7 @@ impl Type {
         match *self {
             Duration | TimeStamp | Temperature | ExtNumeric | Color | ThinkerbellRule => false,
             WebPushNotify | Unit | String | Json | Binary | OnOff | OpenClosed |
-            DoorLocked | ExtBool => true,
+            IsSecure | DoorLocked | ExtBool => true,
             Range => false,
         }
     }
@@ -210,11 +215,11 @@ pub enum OnOff {
     /// use foxbox_taxonomy::values::*;
     /// use foxbox_taxonomy::parse::*;
     ///
-    /// let parsed = OnOff::from_str("\"On\"").unwrap();
-    /// assert_eq!(parsed, OnOff::On);
+    /// let parsed = OnOff::from_str("\"Off\"").unwrap();
+    /// assert_eq!(parsed, OnOff::Off);
     ///
-    /// let serialized: JSON = OnOff::On.to_json();
-    /// assert_eq!(serialized.as_string().unwrap(), "On");
+    /// let serialized: JSON = OnOff::Off.to_json();
+    /// assert_eq!(serialized.as_string().unwrap(), "Off");
     /// ```
     Off,
 }
@@ -569,6 +574,143 @@ impl Deserialize for DoorLocked {
                 _ => Err(())
             }
         }))
+    }
+}
+
+/// A secure/insecure state.
+///
+/// # JSON
+///
+/// This kind is represented by strings "Secure" | "Insecure".
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum IsSecure {
+    /// # JSON
+    ///
+    /// Represented by "Insecure".
+    ///
+    /// ```
+    /// use foxbox_taxonomy::values::*;
+    /// use foxbox_taxonomy::parse::*;
+    ///
+    /// let parsed = IsSecure::from_str("\"Insecure\"").unwrap();
+    /// assert_eq!(parsed, IsSecure::Insecure);
+    ///
+    /// let serialized: JSON = IsSecure::Insecure.to_json();
+    /// assert_eq!(serialized.as_string().unwrap(), "Insecure");
+    /// ```
+    Insecure,
+
+    /// # JSON
+    ///
+    /// Represented by "Secure".
+    ///
+    /// ```
+    /// use foxbox_taxonomy::values::*;
+    /// use foxbox_taxonomy::parse::*;
+    ///
+    /// let parsed = IsSecure::from_str("\"Secure\"").unwrap();
+    /// assert_eq!(parsed, IsSecure::Secure);
+    ///
+    /// let serialized: JSON = IsSecure::Secure.to_json();
+    /// assert_eq!(serialized.as_string().unwrap(), "Secure");
+    /// ```
+    Secure,
+}
+
+impl IsSecure {
+    fn as_bool(&self) -> bool {
+        match *self {
+            IsSecure::Insecure => false,
+            IsSecure::Secure => true,
+        }
+    }
+}
+
+impl Parser<IsSecure> for IsSecure {
+    fn description() -> String {
+        "IsSecure".to_string()
+    }
+    fn parse(path: Path, source: &mut JSON) -> Result<Self, ParseError> {
+        match source.as_string() {
+            Some("Insecure") => Ok(IsSecure::Insecure),
+            Some("Secure") => Ok(IsSecure::Secure),
+            Some(str) => Err(ParseError::unknown_constant(str, &path)),
+            None => Err(ParseError::type_error("IsSecure", &path, "string"))
+        }
+    }
+}
+
+impl ToJSON for IsSecure {
+    fn to_json(&self) -> JSON {
+        match *self {
+            IsSecure::Insecure => JSON::String("Insecure".to_owned()),
+            IsSecure::Secure => JSON::String("Secure".to_owned())
+        }
+    }
+}
+impl Into<Value> for IsSecure {
+    fn into(self) -> Value {
+        Value::IsSecure(self)
+    }
+}
+
+impl PartialOrd for IsSecure {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for IsSecure {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.as_bool().cmp(&other.as_bool())
+    }
+}
+
+///
+/// # (De)serialization
+///
+/// Values of this type are represented by strings "Insecure" | "Secure".
+///
+/// ```
+/// extern crate serde;
+/// extern crate serde_json;
+/// extern crate foxbox_taxonomy;
+///
+/// let insecure = serde_json::to_string(&foxbox_taxonomy::values::IsSecure::Insecure).unwrap();
+/// assert_eq!(insecure, "\"Insecure\"");
+///
+/// let insecure : foxbox_taxonomy::values::IsSecure = serde_json::from_str("\"Insecure\"").unwrap();
+/// assert_eq!(insecure, foxbox_taxonomy::values::IsSecure::Insecure);
+///
+/// let secure = serde_json::to_string(&foxbox_taxonomy::values::IsSecure::Secure).unwrap();
+/// assert_eq!(secure, "\"Secure\"");
+///
+/// let secure : foxbox_taxonomy::values::IsSecure = serde_json::from_str("\"Secure\"").unwrap();
+/// assert_eq!(secure, foxbox_taxonomy::values::IsSecure::Secure);
+/// ```
+impl Serialize for IsSecure {
+    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error> where S: Serializer {
+        match *self {
+            IsSecure::Insecure => "Insecure".serialize(serializer),
+            IsSecure::Secure => "Secure".serialize(serializer)
+        }
+    }
+}
+impl Deserialize for IsSecure {
+    fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error> where D: Deserializer {
+        deserializer.deserialize_string(TrivialEnumVisitor::new(|source| {
+            match source {
+                "Insecure" => Ok(IsSecure::Insecure),
+                "Secure" => Ok(IsSecure::Secure),
+                _ => Err(())
+            }
+        }))
+    }
+}
+
+impl fmt::Display for IsSecure {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", match *self { IsSecure::Insecure => "insecure", IsSecure::Secure => "secure" })
     }
 }
 
@@ -1158,6 +1300,40 @@ pub enum Value {
     /// ```
     DoorLocked(DoorLocked),
 
+    /// A secure/insecure value.
+    ///
+    /// # JSON
+    ///
+    /// Represented as `{"IsSecure": string}` where `string` is "Secure" or "Insecure".
+    ///
+    /// ```
+    /// extern crate foxbox_taxonomy;
+    ///
+    /// use foxbox_taxonomy::values::*;
+    /// use foxbox_taxonomy::parse::*;
+    ///
+    /// # fn main() {
+    ///
+    /// let source = "{
+    ///   \"IsSecure\": \"Secure\"
+    /// }";
+    ///
+    /// let parsed = Value::from_str(source).unwrap();
+    /// if let Value::IsSecure(IsSecure::Secure) = parsed {
+    ///   // ok
+    /// } else {
+    ///   panic!();
+    /// }
+    ///
+    /// let serialized: JSON = parsed.to_json();
+    /// if let JSON::Object(ref obj) = serialized {
+    ///   let serialized = obj.get("IsSecure").unwrap();
+    ///   assert_eq!(serialized.as_string().unwrap(), "Secure");
+    /// }
+    /// # }
+    /// ```
+    IsSecure(IsSecure),
+
     /// An absolute time and date.
     ///
     /// # JSON
@@ -1451,6 +1627,10 @@ lazy_static! {
             let value = try!(path.push("DoorLocked", |path| self::DoorLocked::parse(path, v)));
             Ok(DoorLocked(value))
         }));
+        map.insert("IsSecure", Box::new(|path, v| {
+            let value = try!(path.push("IsSecure", |path| self::IsSecure::parse(path, v)));
+            Ok(IsSecure(value))
+        }));
         map.insert("Duration", Box::new(|path, v| {
             let value = try!(path.push("Duration", |path| self::Duration::parse(path, v)));
             Ok(Duration(value))
@@ -1536,6 +1716,7 @@ impl ToJSON for Value {
             OnOff(ref val) => ("OnOff", val.to_json()),
             OpenClosed(ref val) => ("OpenClosed", val.to_json()),
             DoorLocked(ref val) => ("DoorLocked", val.to_json()),
+            IsSecure(ref val) => ("IsSecure", val.to_json()),
             Duration(ref val) => ("Duration", val.to_json()),
             TimeStamp(ref val) => ("TimeStamp", val.to_json()),
             Color(ref val) => ("Color", val.to_json()),
@@ -1562,6 +1743,7 @@ impl Value {
             Value::OnOff(_) => Type::OnOff,
             Value::OpenClosed(_) => Type::OpenClosed,
             Value::DoorLocked(_) => Type::DoorLocked,
+            Value::IsSecure(_) => Type::IsSecure,
             Value::String(_) => Type::String,
             Value::Duration(_) => Type::Duration,
             Value::TimeStamp(_) => Type::TimeStamp,
@@ -1611,6 +1793,9 @@ impl PartialOrd for Value {
 
             (&DoorLocked(ref a), &DoorLocked(ref b)) => a.partial_cmp(b),
             (&DoorLocked(_), _) => None,
+
+            (&IsSecure(ref a), &IsSecure(ref b)) => a.partial_cmp(b),
+            (&IsSecure(_), _) => None,
 
             (&Duration(ref a), &Duration(ref b)) => a.partial_cmp(b),
             (&Duration(_), _) => None,

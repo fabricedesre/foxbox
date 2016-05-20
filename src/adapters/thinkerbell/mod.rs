@@ -13,7 +13,7 @@ use foxbox_thinkerbell::run::ExecutionEvent;
 use timer;
 use transformable_channels::mpsc::*;
 
-use std::collections::{ HashMap, HashSet };
+use std::collections::HashMap;
 use std::fmt;
 use std::path::Path;
 use std::sync::{ Arc, Mutex };
@@ -302,43 +302,34 @@ impl ThinkerbellAdapter {
             setter_remove_id: Id::new(&format!("{}/remove", service_id.as_atom())),
         };
 
-        try!(self.adapter_manager.add_service(Service::empty(service_id.clone(), self.adapter_id.clone())));
+        try!(self.adapter_manager.add_service(Service::empty(&service_id, &self.adapter_id)));
 
-        try!(self.adapter_manager.add_getter(Channel {
-            id: rule.getter_is_enabled_id.clone(),
-            service: service_id.clone(),
-            adapter: self.adapter_id.clone(),
-            tags: HashSet::new(),
-            kind: ChannelKind::ThinkerbellRuleOn,
+        try!(self.adapter_manager.add_channel(Channel {
+             supports_fetch: true,
+             kind:  ChannelKind::ThinkerbellRuleOn,
+             ..Channel::empty(& rule.getter_is_enabled_id, &service_id, &self.adapter_id)
         }));
 
         // Add getter for script source
-        try!(self.adapter_manager.add_getter(Channel {
-            id: rule.getter_source_id.clone(),
-            service: service_id.clone(),
-            adapter: self.adapter_id.clone(),
-            tags: HashSet::new(),
-            kind: ChannelKind::ThinkerbellRuleSource,
+        try!(self.adapter_manager.add_channel(Channel {
+             supports_fetch: true,
+             kind:  ChannelKind::ThinkerbellRuleSource,
+             ..Channel::empty(& rule.getter_source_id, &service_id, &self.adapter_id)
         }));
 
         // Add setter for set_enabled
-        try!(self.adapter_manager.add_setter(Channel {
-            id: rule.setter_is_enabled_id.clone(),
-            service: service_id.clone(),
-            adapter: self.adapter_id.clone(),
-            tags: HashSet::new(),
-            kind: ChannelKind::ThinkerbellRuleOn,
+        try!(self.adapter_manager.add_channel(Channel {
+             supports_send: true,
+             kind:  ChannelKind::ThinkerbellRuleOn,
+             ..Channel::empty(& rule.setter_is_enabled_id, &service_id, &self.adapter_id)
         }));
 
         // Add setter for removing this rule.
-        try!(self.adapter_manager.add_setter(Channel {
-            id: rule.setter_remove_id.clone(),
-            service: service_id.clone(),
-            adapter: self.adapter_id.clone(),
-            tags: HashSet::new(),
-            kind: ChannelKind::RemoveThinkerbellRule,
+        try!(self.adapter_manager.add_channel(Channel {
+             supports_send: true,
+             kind:  ChannelKind::RemoveThinkerbellRule,
+             ..Channel::empty(&rule.setter_remove_id, &service_id, &self.adapter_id)
         }));
-
         info!("[thinkerbell@link.mozilla.org] Added Thinkerbell Rule for '{}'", &script_id.to_string());
 
         Ok(rule)
@@ -383,13 +374,11 @@ impl ThinkerbellAdapter {
 
         // Add the adapter and the root service (the one that exposes `AddThinkerbellRule` for adding new rules).
         try!(manager.add_adapter(Arc::new(adapter.clone())));
-        try!(manager.add_service(Service::empty(root_service_id.clone(), adapter_id.clone())));
-        try!(manager.add_setter(Channel {
-            id: setter_add_rule_id.clone(),
-            service: root_service_id.clone(),
-            adapter: adapter_id.clone(),
-            tags: HashSet::new(),
+        try!(manager.add_service(Service::empty(&root_service_id, &adapter_id)));
+        try!(manager.add_channel(Channel {
             kind: ChannelKind::AddThinkerbellRule,
+            supports_send: true,
+            ..Channel::empty(&setter_add_rule_id, &root_service_id, &adapter_id)
         }));
 
         thread::spawn(move || {

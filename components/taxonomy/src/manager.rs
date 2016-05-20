@@ -127,13 +127,13 @@ impl AdapterManagerHandle for AdapterManager {
     /// Returns an error if the adapter is not registered, the parent service is not
     /// registered, or a channel with the same identifier is already registered.
     /// In either cases, this method reverts all its changes.
-    fn add_getter(&self, getter: Channel) -> Result<(), Error> {
+    fn add_channel(&self, getter: Channel) -> Result<(), Error> {
         let request = {
             // Acquire and release lock asap.
-            try!(self.back_end.write().unwrap().add_getter(getter))
+            try!(self.back_end.write().unwrap().add_channel(getter))
         };
         if !request.is_empty() {
-            debug!(target: "Taxonomy-manager", "manager.add_getter => need to register watches");
+            debug!(target: "Taxonomy-manager", "manager.add_channel => need to register watches");
         }
         self.register_watches(request);
         Ok(())
@@ -147,45 +147,8 @@ impl AdapterManagerHandle for AdapterManager {
     /// This method returns an error if the setter is not registered or if the service
     /// is not registered. In either case, it attemps to clean as much as possible, even
     /// if the state is inconsistent.
-    fn remove_getter(&self, id: &Id<Channel>) -> Result<(), Error> {
-        self.back_end.write().unwrap().remove_getter(id)
-    }
-
-    /// Add a setter to the system. Typically, this is called by the adapter when a new
-    /// service has been detected/configured. Some services may gain/lose setters at
-    /// runtime depending on their configuration.
-    ///
-    /// # Requirements
-    ///
-    /// The adapter is in charge of making sure that identifiers persist across reboots.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the adapter is not registered, the parent service is not
-    /// registered, or a channel with the same identifier is already registered.
-    /// In either cases, this method reverts all its changes.
-    fn add_setter(&self, setter: Channel) -> Result<(), Error> {
-        let request = {
-            // Acquire and release lock asap.
-            try!(self.back_end.write().unwrap().add_setter(setter))
-        };
-        if !request.is_empty() {
-            debug!(target: "Taxonomy-manager", "manager.add_setter => need to register watches");
-        }
-        self.register_watches(request);
-        Ok(())
-    }
-
-    /// Remove a setter previously registered on the system. Typically, called by
-    /// an adapter when a service is reconfigured to remove one of its setters.
-    ///
-    /// # Error
-    ///
-    /// This method returns an error if the setter is not registered or if the service
-    /// is not registered. In either case, it attemps to clean as much as possible, even
-    /// if the state is inconsistent.
-    fn remove_setter(&self, id: &Id<Channel>) -> Result<(), Error> {
-        self.back_end.write().unwrap().remove_setter(id)
+    fn remove_channel(&self, id: &Id<Channel>) -> Result<(), Error> {
+        self.back_end.write().unwrap().remove_channel(id)
     }
 }
 
@@ -236,11 +199,8 @@ impl API for AdapterManager {
     }
 
     /// Get a list of channels matching some conditions
-    fn get_getter_channels(&self, selectors: Vec<ChannelSelector>) -> Vec<Channel> {
-        self.back_end.read().unwrap().get_getter_channels(selectors)
-    }
-    fn get_setter_channels(&self, selectors: Vec<ChannelSelector>) -> Vec<Channel> {
-        self.back_end.read().unwrap().get_setter_channels(selectors)
+    fn get_channels(&self, selectors: Vec<ChannelSelector>) -> Vec<Channel> {
+        self.back_end.read().unwrap().get_channels(selectors)
     }
 
     /// Label a set of channels with a set of tags.
@@ -256,24 +216,13 @@ impl API for AdapterManager {
     ///
     /// Note that this call is _not live_. In other words, if channels
     /// are added after the call, they will not be affected.
-    fn add_getter_tags(&self, selectors: Vec<ChannelSelector>, tags: Vec<Id<TagId>>) -> usize {
+    fn add_channel_tags(&self, selectors: Vec<ChannelSelector>, tags: Vec<Id<TagId>>) -> usize {
         let (request, result) = {
             // Acquire and release the write lock.
-            self.back_end.write().unwrap().add_getter_tags(selectors, tags)
+            self.back_end.write().unwrap().add_channel_tags(selectors, tags)
         };
         if !request.is_empty() {
             debug!(target: "Taxonomy-manager", "manager.add_getter_tags => need to register watches");
-        }
-        self.register_watches(request);
-        result
-    }
-    fn add_setter_tags(&self, selectors: Vec<ChannelSelector>, tags: Vec<Id<TagId>>) -> usize {
-        let (request, result) = {
-            // Acquire and release the write lock.
-            self.back_end.write().unwrap().add_setter_tags(selectors, tags)
-        };
-        if !request.is_empty() {
-            debug!(target: "Taxonomy-manager", "manager.add_setter_tags => need to register watches");
         }
         self.register_watches(request);
         result
@@ -292,11 +241,8 @@ impl API for AdapterManager {
     ///
     /// Note that this call is _not live_. In other words, if channels
     /// are added after the call, they will not be affected.
-    fn remove_getter_tags(&self, selectors: Vec<ChannelSelector>, tags: Vec<Id<TagId>>) -> usize {
-        self.back_end.write().unwrap().remove_getter_tags(selectors, tags)
-    }
-    fn remove_setter_tags(&self, selectors: Vec<ChannelSelector>, tags: Vec<Id<TagId>>) -> usize {
-        self.back_end.write().unwrap().remove_setter_tags(selectors, tags)
+    fn remove_channel_tags(&self, selectors: Vec<ChannelSelector>, tags: Vec<Id<TagId>>) -> usize {
+        self.back_end.write().unwrap().remove_channel_tags(selectors, tags)
     }
 
     /// Read the latest value from a set of channels

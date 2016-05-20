@@ -218,8 +218,14 @@ impl Handler for TaxonomyRouter {
 
         // Selectors queries.
         get_post_api!(get_services, ServiceSelector, ["services"]);
-        get_post_api!(get_getter_channels, ChannelSelector, ["channels", "getters"]);
-        get_post_api!(get_setter_channels, ChannelSelector, ["channels", "setters"]);
+        get_post_api!(get_channels, ChannelSelector, ["channels"]);
+
+        // FIXME: Deprecate and remove
+        // FIXME: Need to tweak selector
+        get_post_api!(get_channels, ChannelSelector, ["channels", "getters"]);
+        // FIXME: Deprecate and remove
+        // FIXME: Need to tweak selector
+        get_post_api!(get_channels, ChannelSelector, ["channels", "setters"]);
 
         // Fetching and getting values.
         // We can't use a GET http method here because the Fetch() DOM api
@@ -232,11 +238,21 @@ impl Handler for TaxonomyRouter {
                       services => Vec<ServiceSelector>,
                       tags => Vec<Id<TagId>>,
                       ["services", "tags"], Method::Post);
-        payload_api2!(add_getter_tags,
+        payload_api2!(add_channel_tags,
+                    channels => Vec<ChannelSelector>,
+                    tags => Vec<Id<TagId>>,
+                    ["channels", "tags"], Method::Post);
+
+
+      // FIXME: Deprecate and remove
+      // FIXME: Need to tweak selector
+        payload_api2!(add_channel_tags,
                       getters => Vec<ChannelSelector>,
                       tags => Vec<Id<TagId>>,
                       ["channels", "getters", "tags"], Method::Post);
-        payload_api2!(add_setter_tags,
+      // FIXME: Deprecate and remove
+      // FIXME: Need to tweak selector
+        payload_api2!(add_channel_tags,
                       setters => Vec<ChannelSelector>,
                       tags => Vec<Id<TagId>>,
                       ["channels", "setters", "tags"], Method::Post);
@@ -246,11 +262,21 @@ impl Handler for TaxonomyRouter {
                       services => Vec<ServiceSelector>,
                       tags => Vec<Id<TagId>>,
                       ["services", "tags"], Method::Delete);
-        payload_api2!(remove_getter_tags,
+        payload_api2!(remove_channel_tags,
+                       channels => Vec<ChannelSelector>,
+                       tags => Vec<Id<TagId>>,
+                       ["channels", "tags"], Method::Delete);
+
+          // FIXME: Deprecate and remove
+          // FIXME: Need to tweak selector
+        payload_api2!(remove_channel_tags,
                       getters => Vec<ChannelSelector>,
                       tags => Vec<Id<TagId>>,
                       ["channels", "getters", "tags"], Method::Delete);
-        payload_api2!(remove_setter_tags,
+
+          // FIXME: Deprecate and remove
+          // FIXME: Need to tweak selector
+        payload_api2!(remove_channel_tags,
                       setters => Vec<ChannelSelector>,
                       tags => Vec<Id<TagId>>,
                       ["channels", "setters", "tags"], Method::Delete);
@@ -313,7 +339,7 @@ describe! taxonomy_router {
                                     Headers::new(),
                                     &mount).unwrap();
         let body = response::extract_body_to_string(response);
-        let s = r#"[{"adapter":"clock@link.mozilla.org","getters":{"getter:interval.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","id":"getter:interval.clock@link.mozilla.org","kind":"CountEveryInterval","service":"service:clock@link.mozilla.org","tags":[]},"getter:timeofday.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","id":"getter:timeofday.clock@link.mozilla.org","kind":"CurrentTimeOfDay","service":"service:clock@link.mozilla.org","tags":[]},"getter:timestamp.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","id":"getter:timestamp.clock@link.mozilla.org","kind":"CurrentTime","service":"service:clock@link.mozilla.org","tags":[]}},"id":"service:clock@link.mozilla.org","properties":{"model":"Mozilla clock v1"},"setters":{},"tags":[]}]"#;
+        let s = r#"[{"adapter":"clock@link.mozilla.org","channels":{"getter:interval.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","id":"getter:interval.clock@link.mozilla.org","kind":"CountEveryInterval","service":"service:clock@link.mozilla.org","supports_fetch":false,"supports_send":false,"tags":[]},"getter:timeofday.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","id":"getter:timeofday.clock@link.mozilla.org","kind":"CurrentTimeOfDay","service":"service:clock@link.mozilla.org","supports_fetch":true,"supports_send":false,"tags":[]},"getter:timestamp.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","id":"getter:timestamp.clock@link.mozilla.org","kind":"CurrentTime","service":"service:clock@link.mozilla.org","supports_fetch":true,"supports_send":false,"tags":[]}},"id":"service:clock@link.mozilla.org","properties":{"model":"Mozilla clock v1"},"tags":[]}]"#;
 
         assert_eq!(body, s);
     }
@@ -324,7 +350,7 @@ describe! taxonomy_router {
                                     r#"[{"id":"service:clock@link.mozilla.org"}]"#,
                                     &mount).unwrap();
         let body = response::extract_body_to_string(response);
-        let s = r#"[{"adapter":"clock@link.mozilla.org","getters":{"getter:interval.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","id":"getter:interval.clock@link.mozilla.org","kind":"CountEveryInterval","service":"service:clock@link.mozilla.org","tags":[]},"getter:timeofday.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","id":"getter:timeofday.clock@link.mozilla.org","kind":"CurrentTimeOfDay","service":"service:clock@link.mozilla.org","tags":[]},"getter:timestamp.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","id":"getter:timestamp.clock@link.mozilla.org","kind":"CurrentTime","service":"service:clock@link.mozilla.org","tags":[]}},"id":"service:clock@link.mozilla.org","properties":{"model":"Mozilla clock v1"},"setters":{},"tags":[]}]"#;
+        let s = r#"[{"adapter":"clock@link.mozilla.org","channels":{"getter:interval.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","id":"getter:interval.clock@link.mozilla.org","kind":"CountEveryInterval","service":"service:clock@link.mozilla.org","supports_fetch":false,"supports_send":false,"tags":[]},"getter:timeofday.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","id":"getter:timeofday.clock@link.mozilla.org","kind":"CurrentTimeOfDay","service":"service:clock@link.mozilla.org","supports_fetch":true,"supports_send":false,"tags":[]},"getter:timestamp.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","id":"getter:timestamp.clock@link.mozilla.org","kind":"CurrentTime","service":"service:clock@link.mozilla.org","supports_fetch":true,"supports_send":false,"tags":[]}},"id":"service:clock@link.mozilla.org","properties":{"model":"Mozilla clock v1"},"tags":[]}]"#;
 
         assert_eq!(body, s);
     }
@@ -344,7 +370,7 @@ describe! binary_getter {
         use iron::headers::{ Authorization, Bearer, ContentLength, ContentType };
         use iron_test::{ request, response };
         use mount::Mount;
-        use std::collections::{ HashMap, HashSet };
+        use std::collections::HashMap;
         use std::sync::Arc;
         use stubs::controller::ControllerStub;
         use transformable_channels::mpsc::*;
@@ -413,18 +439,16 @@ describe! binary_getter {
                 try!(adapt.add_adapter(Arc::new(BinaryAdapter { })));
                 let service_id = service_id!("service@test");
                 let adapter_id = adapter_id!("adapter@test");
-                try!(adapt.add_service(Service::empty(service_id.clone(), adapter_id.clone())));
-                try!(adapt.add_getter(Channel {
-                    tags: HashSet::new(),
-                    adapter: adapter_id.clone(),
-                    id: Id::new("getter:binary@link.mozilla.org"),
-                    service: service_id.clone(),
+                try!(adapt.add_service(Service::empty(&service_id, &adapter_id)));
+                try!(adapt.add_channel(Channel {
+                    supports_fetch: true,
                     kind: ChannelKind::Extension {
                         vendor: Id::new(ADAPTER_VENDOR),
                         adapter: Id::new(ADAPTER_NAME),
                         kind: Id::new("binary_getter"),
                         typ: Type::Binary,
                     },
+                    ..Channel::empty(&Id::new("getter:binary@link.mozilla.org"), &service_id, &adapter_id)
                 }));
 
                 Ok(())

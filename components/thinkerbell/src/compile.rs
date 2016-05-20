@@ -21,6 +21,7 @@ use ast::{ Script, Rule, Statement, Match, Context, UncheckedCtx };
 use util::*;
 
 use foxbox_taxonomy::api::API;
+use foxbox_taxonomy::util::Exactly;
 use foxbox_taxonomy::values::Duration;
 
 use transformable_channels::mpsc::*;
@@ -167,7 +168,8 @@ impl<Env> Compiler<Env> where Env: ExecutableDevEnv {
         let source = match_.source
             .iter()
             .map(|input| input.clone()
-                 .with_kind(match_.kind.clone()))
+                 .with_kind(match_.kind.clone())
+                 .with_supports_watch(Exactly::Exactly(true)))
             .collect();
         Ok(Match {
             source: source,

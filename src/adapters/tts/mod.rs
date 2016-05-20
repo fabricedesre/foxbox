@@ -92,18 +92,16 @@ pub fn init(adapt: &Arc<AdapterManager>) -> Result<(), Error> {
     })));
     let service_id = service_id!("espeak@link.mozilla.org");
     let adapter_id = adapter_id!(ADAPTER_ID);
-    try!(adapt.add_service(Service::empty(service_id.clone(), adapter_id.clone())));
-    try!(adapt.add_setter(Channel {
-        tags: HashSet::new(),
-        adapter: adapter_id.clone(),
-        id: talk_setter_id.clone(),
-        service: service_id.clone(),
+    try!(adapt.add_service(Service::empty(&service_id, &adapter_id)));
+    try!(adapt.add_channel(Channel {
         kind: ChannelKind::Extension {
             vendor: Id::new(ADAPTER_VENDOR),
             adapter: Id::new(ADAPTER_NAME),
             kind: Id::new("Sentence"),
             typ: Type::String,
         },
+        supports_send: true,
+        .. Channel::empty(&talk_setter_id, &service_id, &adapter_id)
     }));
     Ok(())
 }

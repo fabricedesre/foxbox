@@ -8,7 +8,7 @@ use foxbox_taxonomy::services::*;
 
 use transformable_channels::mpsc::*;
 
-use std::collections::{ HashMap, HashSet };
+use std::collections::HashMap;
 use std::sync::{ Arc, Mutex };
 
 use chrono;
@@ -333,6 +333,7 @@ impl Clock {
         let getter_time_of_day_id = Clock::getter_time_of_day_id();
         let getter_interval_id = Clock::getter_interval_id();
         let service_clock_id = Clock::service_clock_id();
+        let adapter_id = Clock::id();
         let clock = Arc::new(Clock {
             timer: Mutex::new(timer::Timer::new()),
             getter_timestamp_id: getter_timestamp_id.clone(),
@@ -340,29 +341,25 @@ impl Clock {
             getter_interval_id: getter_interval_id.clone(),
         });
         try!(adapt.add_adapter(clock));
-        let mut service = Service::empty(Clock::service_clock_id(), Clock::id());
+        let mut service = Service::empty(&service_clock_id, &adapter_id);
         service.properties.insert("model".to_owned(), "Mozilla clock v1".to_owned());
         try!(adapt.add_service(service));
-        try!(adapt.add_getter(Channel {
-                tags: HashSet::new(),
-                adapter: Clock::id(),
-                id: getter_time_of_day_id,
-                service: service_clock_id.clone(),
-                kind: ChannelKind::CurrentTimeOfDay,
+        try!(adapt.add_channel(Channel {
+            supports_watch: true,
+            supports_fetch: true,
+            kind: ChannelKind::CurrentTimeOfDay,
+            ..Channel::empty(&getter_time_of_day_id, &service_clock_id, &adapter_id)
         }));
-        try!(adapt.add_getter(Channel {
-                tags: HashSet::new(),
-                adapter: Clock::id(),
-                id: getter_timestamp_id,
-                service: service_clock_id.clone(),
-                kind: ChannelKind::CurrentTime,
+        try!(adapt.add_channel(Channel {
+            supports_watch: true,
+            supports_fetch: true,
+            kind: ChannelKind::CurrentTime,
+            ..Channel::empty(&getter_timestamp_id, &service_clock_id, &adapter_id)
         }));
-        try!(adapt.add_getter(Channel {
-                tags: HashSet::new(),
-                adapter: Clock::id(),
-                id: getter_interval_id,
-                service: service_clock_id.clone(),
-                kind: ChannelKind::CountEveryInterval,
+        try!(adapt.add_channel(Channel {
+            supports_watch: true,
+            kind: ChannelKind::CountEveryInterval,
+            ..Channel::empty(&getter_interval_id, &service_clock_id, &adapter_id)
         }));
         Ok(())
     }

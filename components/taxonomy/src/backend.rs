@@ -31,11 +31,6 @@ macro_rules! log_debug_assert {
     };
 }
 
-enum IO {
-    Getter,
-    Setter
-}
-
 /// A request to a bunch of adapters.
 ///
 /// Whenever possible, the `AdapterManager` attempts to place calls to the Adapters
@@ -67,11 +62,8 @@ struct ServiceData {
     /// Creation time properties.
     properties: HashMap<String, String>,
 
-    /// Information on the getters. Used to build field `getters` of service.
-    getters: HashMap<Id<Channel>, Arc<SubCell<ChannelData>>>,
-
-    /// Information on the setters. Used to build field `getters` of service.
-    setters: HashMap<Id<Channel>, Arc<SubCell<ChannelData>>>,
+    /// Information on the channels. Used to build field `channels` of `Service`.
+    channels: HashMap<Id<Channel>, Arc<SubCell<ChannelData>>>,
 
     /// The adapter, as in `Service`.
     adapter: Id<AdapterId>,
@@ -88,8 +80,7 @@ impl ServiceData {
             id: service.id,
             adapter: service.adapter,
             properties: service.properties,
-            getters: HashMap::new(),
-            setters: HashMap::new(),
+            channels: HashMap::new(),
         }
     }
     fn as_service(&self) -> Service {
@@ -98,12 +89,9 @@ impl ServiceData {
             id: self.id.clone(),
             properties: self.properties.clone(),
             adapter: self.adapter.clone(),
-            getters: self.getters.iter().map(|(key, value)| {
+            channels: self.channels.iter().map(|(key, value)| {
                 (key.clone(), (**value).borrow().channel.clone())
             }).collect(),
-            setters: self.setters.iter().map(|(key, value)| {
-                (key.clone(), (**value).borrow().channel.clone())
-            }).collect()
         }
     }
 }
@@ -128,16 +116,8 @@ impl<'a> ServiceLike for ServiceView<'a> {
     fn with_tags<F>(&self, f: F) -> bool where F: Fn(&HashSet<Id<TagId>>) -> bool {
         f(&*self.data.tags.borrow())
     }
-    fn has_getters<F>(&self, f: F) -> bool where F: Fn(&Channel) -> bool {
-        for chan in self.data.getters.values() {
-            if f(&*chan.borrow()) {
-                return true;
-            }
-        }
-        false
-    }
-    fn has_setters<F>(&self, f: F) -> bool where F: Fn(&Channel) -> bool {
-        for chan in self.data.setters.values() {
+    fn has_channels<F>(&self, f: F) -> bool where F: Fn(&Channel) -> bool {
+        for chan in self.data.channels.values() {
             if f(&*chan.borrow()) {
                 return true;
             }
@@ -338,10 +318,7 @@ pub struct State {
     service_by_id: HashMap<Id<ServiceId>, Arc<SubCell<ServiceData>>>,
 
     /// Channels, indexed by their id.
-    getter_by_id: HashMap<Id<Channel>, Arc<SubCell<ChannelData>>>,
-
-    /// Channels, indexed by their id
-    setter_by_id: HashMap<Id<Channel>, Arc<SubCell<ChannelData>>>,
+    channel_by_id: HashMap<Id<Channel>, Arc<SubCell<ChannelData>>>,
 
     /// The set of watchers registered. Used both when we add/remove channels
     /// and a when a new value is available from a getter channel.
@@ -369,11 +346,8 @@ impl State {
                 (adapter, service)
             }
         };
-        for id in service.borrow().getters.keys() {
-            let _ignored = self.getter_by_id.remove(id);
-        }
-        for id in service.borrow().setters.keys() {
-            let _ignored = self.setter_by_id.remove(id);
+        for id in service.borrow().channels.keys() {
+            let _ignored = self.channel_by_id.remove(id);
         }
         Ok(adapter)
     }
@@ -497,16 +471,12 @@ impl State {
         }
     }
 
-    fn aux_channels_may_need_registration(&mut self, io: IO, channels: Vec<Id<Channel>>) -> WatchRequest {
+    fn aux_channels_may_need_registration(&mut self, channels: Vec<Id<Channel>>) -> WatchRequest {
         debug!(target: "Taxonomy-backend", "checking if channels need to be watched {:?}", channels);
         let adapter_by_id = &self.adapter_by_id;
         let mut per_adapter = HashMap::new();
         for id in channels {
-            let mut channel_data = match io {
-                IO::Getter => self.getter_by_id.get_mut(&id),
-                IO::Setter => self.setter_by_id.get_mut(&id),
-            };
-            match channel_data {
+            match self.channel_by_id.get_mut(&id) {
                 None => {
                     log_debug_assert!(false, "I have just added/modified channels {:?} but I can't \
                                             find it anymore", id);
@@ -536,6 +506,10 @@ impl State {
                             // Inform of topology change.
                             let on_event = &watcher.on_event;
                             let _ = on_event.lock().unwrap().send(WatchEvent::ChannelAdded(id.clone()));
+
+                            if !channel_data.supports_watch {
+                                continue;
+                            }
 
                             // Register to be informed of future changes.
                             Self::aux_start_channel_watch(&mut watcher.clone(),
@@ -572,8 +546,7 @@ impl State {
             liveness: liveness.clone(),
             adapter_by_id: HashMap::new(),
             service_by_id: HashMap::new(),
-            getter_by_id: HashMap::new(),
-            setter_by_id: HashMap::new(),
+            channel_by_id: HashMap::new(),
             watchers: Arc::new(Mutex::new(WatchMap::new(liveness))),
             db_path: db_path,
        }
@@ -632,7 +605,7 @@ impl State {
     /// - there is no adapter with id `service.adapter`.
     pub fn add_service(&mut self, service: Service) -> Result<(), Error> {
         // Make sure that there are no channels.
-        if !service.getters.is_empty() || !service.setters.is_empty() {
+        if !service.channels.is_empty() {
             return Err(Error::InternalError(InternalError::InvalidInitialService));
         }
         let service = ServiceData::new(&self.liveness, service);
@@ -704,91 +677,6 @@ impl State {
         }
     }
 
-    /// Add a getter to the system. Typically, this is called by the adapter when a new
-    /// service has been detected/configured. Some services may gain/lose getters at
-    /// runtime depending on their configuration.
-    ///
-    /// # Requirements
-    ///
-    /// The adapter is in charge of making sure that identifiers persist across reboots.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the adapter is not registered, the parent service is not
-    /// registered, or a channel with the same identifier is already registered.
-    /// In either cases, this method reverts all its changes.
-    pub fn add_getter(&mut self, mut getter: Channel) -> Result<WatchRequest, Error> {
-        // Add the database tags to this getter.
-        if let Some(ref path) = self.db_path {
-            let mut store = TagStorage::new(&path);
-            // Add all the tags for this channel.
-            if let Ok(all_tags) = store.get_tags_for(&getter.id) {
-                getter.insert_tags(&all_tags);
-            }
-        }
-
-        let id = getter.id.clone();
-        let getter_data;
-        {
-            let getter_by_id = &mut self.getter_by_id;
-            let service = match self.service_by_id.get_mut(&getter.service) {
-                None => return Err(Error::InternalError(InternalError::NoSuchService(getter.service.clone()))),
-                Some(service) => service
-            };
-            let mut service = &mut *service.borrow_mut();
-            if service.adapter != getter.adapter {
-                return Err(Error::InternalError(InternalError::ConflictingAdapter(service.adapter.clone(), getter.adapter.clone())));
-            }
-            let getters = &mut service.getters;
-            getter_data = Arc::new(SubCell::new(&self.liveness, ChannelData::new(getter, service.tags.clone())));
-
-            let insert_in_service = match InsertInMap::start(getters, vec![(id.clone(), getter_data.clone())]) {
-                Ok(transaction) => transaction,
-                Err(id) => return Err(Error::InternalError(InternalError::DuplicateChannel(id)))
-            };
-
-            let insert_in_getters = match InsertInMap::start(getter_by_id, vec![(id.clone(), getter_data)]) {
-                Ok(transaction) => transaction,
-                Err(id) => return Err(Error::InternalError(InternalError::DuplicateChannel(id)))
-            };
-
-            insert_in_service.commit();
-            insert_in_getters.commit();
-        }
-
-        Ok(self.aux_channels_may_need_registration(IO::Getter, vec![id]))
-    }
-
-
-
-    /// Remove a setter previously registered on the system. Typically, called by
-    /// an adapter when a service is reconfigured to remove one of its setters.
-    ///
-    /// # Error
-    ///
-    /// This method returns an error if the setter is not registered or if the service
-    /// is not registered. In either case, it attemps to clean as much as possible, even
-    /// if the state is inconsistent.
-    pub fn remove_getter(&mut self, id: &Id<Channel>) -> Result<(), Error> {
-        let getter = match self.getter_by_id.remove(id) {
-            None => return Err(Error::InternalError(InternalError::NoSuchChannel(id.clone()))),
-            Some(getter) => getter
-        };
-        Self::aux_channel_may_need_unregistration(&mut *getter.borrow_mut(), true);
-
-        let service_id = &getter.borrow().channel.service;
-        match self.service_by_id.get_mut(&service_id) {
-            None => Err(Error::InternalError(InternalError::NoSuchService(service_id.clone()))),
-            Some(service) => {
-                if service.borrow_mut().getters.remove(id).is_none() {
-                    Err(Error::InternalError(InternalError::NoSuchChannel(id.clone())))
-                } else {
-                    Ok(())
-                }
-            }
-        }
-    }
-
     /// Add a setter to the system. Typically, this is called by the adapter when a new
     /// service has been detected/configured. Some services may gain/lose setters at
     /// runtime depending on their configuration.
@@ -802,7 +690,7 @@ impl State {
     /// Returns an error if the adapter is not registered, the parent service is not
     /// registered, or a channel with the same identifier is already registered.
     /// In either cases, this method reverts all its changes.
-    pub fn add_setter(&mut self, mut setter: Channel) -> Result<WatchRequest, Error> {
+    pub fn add_channel(&mut self, mut setter: Channel) -> Result<WatchRequest, Error> {
         // Add the database tags to this setter.
         if let Some(ref path) = self.db_path {
             let mut store = TagStorage::new(&path);
@@ -824,21 +712,21 @@ impl State {
                 return Err(Error::InternalError(InternalError::ConflictingAdapter(service.adapter.clone(), setter.adapter)));
             }
 
-            let setters = &mut service.setters;
+            let channels = &mut service.channels;
             channel_data = Arc::new(SubCell::new(&self.liveness, ChannelData::new(setter, service.tags.clone())));
 
-            let insert_in_service = match InsertInMap::start(setters, vec![(id.clone(), channel_data.clone())]) {
+            let insert_in_service = match InsertInMap::start(channels, vec![(id.clone(), channel_data.clone())]) {
                 Ok(transaction) => transaction,
                 Err(id) => return Err(Error::InternalError(InternalError::DuplicateChannel(id)))
             };
-            let insert_in_setters = match InsertInMap::start(&mut self.setter_by_id, vec![(id.clone(), channel_data.clone())]) {
+            let insert_in_setters = match InsertInMap::start(&mut self.channel_by_id, vec![(id.clone(), channel_data.clone())]) {
                 Ok(transaction) => transaction,
                 Err(id) => return Err(Error::InternalError(InternalError::DuplicateChannel(id)))
             };
             insert_in_service.commit();
             insert_in_setters.commit();
         }
-        Ok(self.aux_channels_may_need_registration(IO::Setter, vec![id]))
+        Ok(self.aux_channels_may_need_registration(vec![id]))
     }
 
     /// Remove a setter previously registered on the system. Typically, called by
@@ -849,18 +737,18 @@ impl State {
     /// This method returns an error if the setter is not registered or if the service
     /// is not registered. In either case, it attemps to clean as much as possible, even
     /// if the state is inconsistent.
-    pub fn remove_setter(&mut self, id: &Id<Channel>) -> Result<(), Error> {
-        let setter = match self.setter_by_id.remove(id) {
+    pub fn remove_channel(&mut self, id: &Id<Channel>) -> Result<(), Error> {
+        let channel = match self.channel_by_id.remove(id) {
             None => return Err(Error::InternalError(InternalError::NoSuchChannel(id.clone()))),
-            Some(setter) => setter
+            Some(channel) => channel
         };
-        Self::aux_channel_may_need_unregistration(&mut *setter.borrow_mut(), true);
+        Self::aux_channel_may_need_unregistration(&mut *channel.borrow_mut(), true);
 
-        let service_id = &setter.borrow().channel.service;
+        let service_id = &channel.borrow().channel.service;
         match self.service_by_id.get_mut(&service_id) {
             None => Err(Error::InternalError(InternalError::NoSuchService(service_id.clone()))),
             Some(service) => {
-                if service.borrow_mut().setters.remove(id).is_none() {
+                if service.borrow_mut().channels.remove(id).is_none() {
                     Err(Error::InternalError(InternalError::NoSuchChannel(id.clone())))
                 } else {
                     Ok(())
@@ -918,24 +806,20 @@ impl State {
         result
     }
 
-    pub fn get_getter_channels(&self, selectors: Vec<ChannelSelector>) -> Vec<Channel>
+    pub fn get_channels(&self, selectors: Vec<ChannelSelector>) -> Vec<Channel>
     {
-        Self::aux_get_channels(selectors, &self.getter_by_id)
-    }
-    pub fn get_setter_channels(&self, selectors: Vec<ChannelSelector>) -> Vec<Channel>
-    {
-        Self::aux_get_channels(selectors, &self.setter_by_id)
+        Self::aux_get_channels(selectors, &self.channel_by_id)
     }
 
-    /// Add tags to a getter.
+    /// Add tags to a channel.
     /// As our in-memory representation stores the same getter both in the Service
-    /// and in `self.getters`, we need to update both.
-    pub fn add_getter_tags(&mut self, selectors: Vec<ChannelSelector>, tags: Vec<Id<TagId>>) -> (WatchRequest, usize) {
+    /// and in `self.channel`, we need to update both.
+    pub fn add_channel_tags(&mut self, selectors: Vec<ChannelSelector>, tags: Vec<Id<TagId>>) -> (WatchRequest, usize) {
         let mut size = 0;
         let mut channels = vec![];
         {
             let db_path = self.db_path.clone();
-            Self::with_channels_mut(selectors, &mut self.getter_by_id, |mut data| {
+            Self::with_channels_mut(selectors, &mut self.channel_by_id, |mut data| {
                 // This channel has changed, we may need to update watches and the tags database.
                 if data.insert_tags(&tags) {
                     if let Some(ref path) = db_path {
@@ -949,35 +833,13 @@ impl State {
                 size += 1;
             });
         }
-        (self.aux_channels_may_need_registration(IO::Getter, channels), size)
+        (self.aux_channels_may_need_registration(channels), size)
     }
 
-    pub fn add_setter_tags(&mut self, selectors: Vec<ChannelSelector>, tags: Vec<Id<TagId>>) -> (WatchRequest, usize) {
-        let mut size = 0;
-        let mut channels = vec![];
-        {
-            let db_path = self.db_path.clone();
-            Self::with_channels_mut(selectors, &mut self.setter_by_id, |mut data| {
-                // This channel has changed, we may need to update watches and the tags database.
-                if data.insert_tags(&tags) {
-                    if let Some(ref path) = db_path {
-                        let mut store = TagStorage::new(&path);
-                        store.add_tags(&data.id, &tags)
-                             .unwrap_or_else(|err| { error!("Storage add_tags error: {}", err); });
-                    }
-
-                    channels.push(data.id.clone());
-                }
-                size += 1;
-            });
-        }
-        (self.aux_channels_may_need_registration(IO::Setter, channels), size)
-    }
-
-    pub fn remove_getter_tags(&mut self, selectors: Vec<ChannelSelector>, tags: Vec<Id<TagId>>) -> usize {
+    pub fn remove_channel_tags(&mut self, selectors: Vec<ChannelSelector>, tags: Vec<Id<TagId>>) -> usize {
         let mut result = 0;
         let db_path = self.db_path.clone();
-        Self::with_channels_mut(selectors, &mut self.getter_by_id, |mut data| {
+        Self::with_channels_mut(selectors, &mut self.channel_by_id, |mut data| {
             if data.remove_tags(&tags) {
                 if let Some(ref path) = db_path {
                     let mut store = TagStorage::new(&path);
@@ -990,22 +852,6 @@ impl State {
         });
         result
     }
-    pub fn remove_setter_tags(&mut self, selectors: Vec<ChannelSelector>, tags: Vec<Id<TagId>>) -> usize {
-        let mut result = 0;
-        let db_path = self.db_path.clone();
-        Self::with_channels_mut(selectors, &mut self.setter_by_id, |mut data| {
-            if data.remove_tags(&tags) {
-                if let Some(ref path) = db_path {
-                    let mut store = TagStorage::new(&path);
-                    store.remove_tags(&data.id, &tags)
-                         .unwrap_or_else(|err| { error!("Storage remove_tags error: {}", err); });
-                }
-            }
-            Self::aux_channel_may_need_unregistration(&mut data, true);
-            result += 1;
-        });
-        result
-    }
 
     /// Read the latest value from a set of channels
     pub fn prepare_fetch_values(&self, selectors: Vec<ChannelSelector>) -> FetchRequest {
@@ -1013,7 +859,10 @@ impl State {
         // Once we have done this, we can release the lock.
         let mut per_adapter : FetchRequest = HashMap::new();
         let adapter_by_id = &self.adapter_by_id;
-        Self::with_channels(selectors, &self.getter_by_id, |data| {
+        Self::with_channels(selectors, &self.channel_by_id, |data| {
+            if !data.supports_fetch {
+                return;
+            }
             use std::collections::hash_map::Entry::*;
             let id = data.channel.id.clone();
             let typ = data.channel.kind.get_type();
@@ -1045,8 +894,11 @@ impl State {
         // First determine the channels and group them by adapter.
         let mut per_adapter = HashMap::new();
         for Targetted {select: selectors, payload: value} in keyvalues.drain(..) {
-            Self::with_channels(selectors, &self.setter_by_id, |data| {
+            Self::with_channels(selectors, &self.channel_by_id, |data| {
                 use std::collections::hash_map::Entry::*;
+                if !data.supports_send {
+                    return;
+                }
                 let id = data.channel.id.clone();
 
                 // Check that the values we are about to send have the correct type. If they
@@ -1165,8 +1017,11 @@ impl State {
             // Find out which channels already match the selectors and attach
             // the watcher immediately.
             let filter = &filter;
-            Self::with_channels_mut(selectors, &mut self.getter_by_id, |mut getter_data| {
-                Self::aux_start_channel_watch(&mut watcher, &mut getter_data, filter,
+            Self::with_channels_mut(selectors, &mut self.channel_by_id, |mut data| {
+                if !data.channel.supports_watch {
+                    return;
+                }
+                Self::aux_start_channel_watch(&mut watcher, &mut data, filter,
                     adapter_by_id, &mut per_adapter)
             });
         }
@@ -1198,13 +1053,13 @@ impl State {
         log_debug_assert!(watcher_data.is_dropped.load(Ordering::Relaxed), "The watcher should have been dropped by now.");
 
         // Remove the watcher from all getters.
-        for getter_id in watcher_data.guards.borrow().keys() {
-            let getter = match self.getter_by_id.get_mut(getter_id) {
+        for channel_id in watcher_data.guards.borrow().keys() {
+            let channel = match self.channel_by_id.get_mut(channel_id) {
                 None => continue, // Race condition between removing the getter and dropping the watcher.
-                Some(getter) => getter
+                Some(channel) => channel
             };
-            if getter.borrow_mut().watchers.remove(&watcher_data.key).is_none() {
-                debug_assert!(false, "Attempting to unregister a watcher that has already been removed from its getter {:?}, {:?}", key, getter_id);
+            if channel.borrow_mut().watchers.remove(&watcher_data.key).is_none() {
+                debug_assert!(false, "Attempting to unregister a watcher that has already been removed from its channel {:?}, {:?}", key, channel_id);
             }
         }
 
@@ -1321,8 +1176,7 @@ impl State {
         }
         self.adapter_by_id.clear();
         self.service_by_id.clear();
-        self.getter_by_id.clear();
-        self.setter_by_id.clear();
+        self.channel_by_id.clear();
         self.watchers.lock().unwrap().watchers.clear();
     }
 }

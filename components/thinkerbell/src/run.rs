@@ -258,9 +258,9 @@ impl<Env> ExecutionTask<Env> where Env: ExecutableDevEnv + Debug {
                 // (which we should eventually optimize, if we find
                 // out that we end up with large rulesets).
 
-                let getters = api.get_getter_channels(condition.source.clone());
+                let channels = api.get_channels(condition.source.clone());
                 info!("[Recipe '{}'] Initializing rule {} condition {}. Currently, it can listen to {} channels.", self.script.name,
-                    rule_index, condition_index, getters.len());
+                    rule_index, condition_index, channels.len());
 
                 let rule_index = rule_index.clone();
                 let condition_index = condition_index.clone();

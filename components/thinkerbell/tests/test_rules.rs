@@ -17,7 +17,7 @@ use foxbox_taxonomy::values::{ Duration, OnOff, Range, TimeStamp, Type, TypeErro
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::thread;
-use std::collections::{ HashMap, HashSet };
+use std::collections::HashMap;
 
 use transformable_channels::mpsc::*;
 
@@ -140,35 +140,25 @@ fn test_run() {
     rx_done.recv().unwrap();
 
     env.execute(Instruction::AddServices(vec![
-        Service {
-            id: service_id_1.clone(),
-            adapter: adapter_id_1.clone(),
-            getters: HashMap::new(),
-            setters: HashMap::new(),
-            tags: HashSet::new(),
-            properties: HashMap::new(),
+        Service::empty(&service_id_1, &adapter_id_1)
+    ]));
+    rx_done.recv().unwrap();
+
+    env.execute(Instruction::AddChannels(vec![
+        Channel {
+            kind: ChannelKind::LightOn,
+            supports_fetch: true,
+            supports_watch: true,
+            .. Channel::empty(&getter_id_1, &service_id_1, &adapter_id_1)
         }
     ]));
     rx_done.recv().unwrap();
 
-    env.execute(Instruction::AddGetters(vec![
+    env.execute(Instruction::AddChannels(vec![
         Channel {
-            id: getter_id_1.clone(),
-            adapter: adapter_id_1.clone(),
-            service: service_id_1.clone(),
-            tags: HashSet::new(),
             kind: ChannelKind::LightOn,
-        }
-    ]));
-    rx_done.recv().unwrap();
-
-    env.execute(Instruction::AddSetters(vec![
-        Channel {
-            id: setter_id_1.clone(),
-            adapter: adapter_id_1.clone(),
-            service: service_id_1.clone(),
-            tags: HashSet::new(),
-            kind: ChannelKind::LightOn,
+            supports_send: true,
+            .. Channel::empty(&setter_id_1, &service_id_1, &adapter_id_1)
         }
     ]));
     rx_done.recv().unwrap();
@@ -213,13 +203,12 @@ fn test_run() {
     assert_eq!(value, Value::OnOff(OnOff::Off));
 
     println!("* Adding a second getter doesn't break the world.");
-    env.execute(Instruction::AddGetters(vec![
+    env.execute(Instruction::AddChannels(vec![
         Channel {
-            id: getter_id_2.clone(),
-            adapter: adapter_id_1.clone(),
-            service: service_id_1.clone(),
-            tags: HashSet::new(),
             kind: ChannelKind::LightOn,
+            supports_fetch: true,
+            supports_watch: true,
+            .. Channel::empty(&getter_id_2, &service_id_1, &adapter_id_1)
         }
     ]));
     rx_done.recv().unwrap();
@@ -298,13 +287,11 @@ fn test_run() {
     assert_eq!(value, Value::OnOff(OnOff::Off));
 
     println!("* If we add a second setter, it also receives these sends.");
-    env.execute(Instruction::AddSetters(vec![
+    env.execute(Instruction::AddChannels(vec![
         Channel {
-            id: setter_id_2.clone(),
-            adapter: adapter_id_1.clone(),
-            service: service_id_1.clone(),
-            tags: HashSet::new(),
             kind: ChannelKind::LightOn,
+            supports_send: true,
+            .. Channel::empty(&setter_id_2, &service_id_1, &adapter_id_1)
         }
     ]));
     rx_done.recv().unwrap();
@@ -330,13 +317,11 @@ fn test_run() {
     rx_send.try_recv().unwrap_err();
 
     println!("* If we add a setter of a mismatched type, it does not receive these sends.");
-    env.execute(Instruction::AddSetters(vec![
+    env.execute(Instruction::AddChannels(vec![
         Channel {
-            id: setter_id_3.clone(),
-            adapter: adapter_id_1.clone(),
-            service: service_id_1.clone(),
-            tags: HashSet::new(),
             kind: ChannelKind::Ready,
+            supports_send: true,
+            .. Channel::empty(&setter_id_3, &service_id_1, &adapter_id_1)
         }
     ]));
     rx_done.recv().unwrap();
@@ -362,7 +347,7 @@ fn test_run() {
     rx_send.try_recv().unwrap_err();
 
     println!("* Removing a getter resets its condition_is_met to false.");
-    env.execute(Instruction::RemoveGetters(vec![
+    env.execute(Instruction::RemoveChannels(vec![
         getter_id_1.clone()
     ]));
     rx_done.recv().unwrap();
@@ -388,7 +373,7 @@ fn test_run() {
     rx_send.try_recv().unwrap_err();
 
     println!("* Removing a setter does not prevent the other setter from receiving.");
-    env.execute(Instruction::RemoveSetters(vec![
+    env.execute(Instruction::RemoveChannels(vec![
         setter_id_1.clone()
     ]));
     rx_done.recv().unwrap();
@@ -411,13 +396,11 @@ fn test_run() {
     rx_send.try_recv().unwrap_err();
 
     println!("* Even if a setter has errors, other setters will receive the send.");
-    env.execute(Instruction::AddSetters(vec![
+    env.execute(Instruction::AddChannels(vec![
         Channel {
-            id: setter_id_1.clone(),
-            adapter: adapter_id_1.clone(),
-            service: service_id_1.clone(),
-            tags: HashSet::new(),
             kind: ChannelKind::LightOn,
+            supports_send: true,
+            .. Channel::empty(&setter_id_1, &service_id_1, &adapter_id_1)
         }
     ]));
     rx_done.recv().unwrap();
@@ -541,35 +524,25 @@ fn test_run_with_delay() {
     rx_done.recv().unwrap();
 
     env.execute(Instruction::AddServices(vec![
-        Service {
-            id: service_id_1.clone(),
-            adapter: adapter_id_1.clone(),
-            getters: HashMap::new(),
-            setters: HashMap::new(),
-            tags: HashSet::new(),
-            properties: HashMap::new(),
+        Service::empty(&service_id_1, &adapter_id_1)
+    ]));
+    rx_done.recv().unwrap();
+
+    env.execute(Instruction::AddChannels(vec![
+        Channel {
+            kind: ChannelKind::LightOn,
+            supports_fetch: true,
+            supports_watch: true,
+            .. Channel::empty(&getter_id_1, &service_id_1, &adapter_id_1)
         }
     ]));
     rx_done.recv().unwrap();
 
-    env.execute(Instruction::AddGetters(vec![
+    env.execute(Instruction::AddChannels(vec![
         Channel {
-            id: getter_id_1.clone(),
-            adapter: adapter_id_1.clone(),
-            service: service_id_1.clone(),
-            tags: HashSet::new(),
             kind: ChannelKind::LightOn,
-        }
-    ]));
-    rx_done.recv().unwrap();
-
-    env.execute(Instruction::AddSetters(vec![
-        Channel {
-            id: setter_id_1.clone(),
-            adapter: adapter_id_1.clone(),
-            service: service_id_1.clone(),
-            tags: HashSet::new(),
-            kind: ChannelKind::LightOn,
+            supports_send: true,
+            .. Channel::empty(&setter_id_1, &service_id_1, &adapter_id_1)
         }
     ]));
     rx_done.recv().unwrap();
@@ -652,7 +625,7 @@ fn test_run_with_delay() {
     env.execute(Instruction::TriggerTimersUntil(TimeStamp::from(UTC::now() + ChronoDuration::seconds(2))));
     rx_done.recv().unwrap();
 
-    env.execute(Instruction::RemoveGetters(vec![
+    env.execute(Instruction::RemoveChannels(vec![
         getter_id_1.clone()
     ]));
     rx_done.recv().unwrap();
@@ -680,13 +653,12 @@ fn test_run_with_delay() {
     env.execute(Instruction::ResetTimers);
     rx_done.recv().unwrap();
 
-    env.execute(Instruction::AddGetters(vec![
+    env.execute(Instruction::AddChannels(vec![
         Channel {
-            id: getter_id_1.clone(),
-            adapter: adapter_id_1.clone(),
-            service: service_id_1.clone(),
-            tags: HashSet::new(),
             kind: ChannelKind::LightOn,
+            supports_fetch: true,
+            supports_watch: true,
+            .. Channel::empty(&getter_id_1, &service_id_1, &adapter_id_1)
         }
     ]));
     rx_done.recv().unwrap();
