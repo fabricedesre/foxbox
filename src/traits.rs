@@ -5,6 +5,7 @@
 use config_store::ConfigService;
 use core::marker::Reflect;
 use foxbox_users::UsersManager;
+use jsworkers::broker::SharedBroker;
 use profile_service::ProfileService;
 use serde_json;
 use std::io;
@@ -36,4 +37,5 @@ pub trait Controller : Send + Sync + Clone + Reflect + 'static {
     fn get_upnp_manager(&self) -> Arc<UpnpManager>;
     fn get_users_manager(&self) -> Arc<UsersManager>;
     fn get_profile(&self) -> &ProfileService;
+    fn get_jsworkers_broker(&self) -> SharedBroker;
 }

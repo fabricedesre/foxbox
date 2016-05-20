@@ -36,6 +36,7 @@ extern crate iron;
 extern crate iron_cors;
 #[cfg(test)]
 extern crate iron_test;
+extern crate jsworkers;
 extern crate libc;
 #[macro_use]
 extern crate log;
@@ -298,6 +299,9 @@ fn main() {
 
     registrar.start(args.flag_iface, &tunnel,
                     args.flag_port,  &controller);
+
+    /*Runtime::start("/home/fabrice/dev/builds/obj-jsworkers-mozilla-inbound/dist/bin/jsworkers",
+                   &ProfileService::new(ProfilePath::Default).path_for(""));*/
 
     controller.run(&SHUTDOWN_FLAG);
 

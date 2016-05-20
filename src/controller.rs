@@ -10,6 +10,7 @@ use config_store::ConfigService;
 use foxbox_taxonomy::manager::AdapterManager as TaxoManager;
 use foxbox_users::UsersManager;
 use http_server::HttpServer;
+use jsworkers::broker::{ MessageBroker, SharedBroker };
 use profile_service::{ ProfilePath, ProfileService };
 use std::collections::hash_map::HashMap;
 use std::io;
@@ -38,6 +39,7 @@ pub struct FoxBox {
     upnp: Arc<UpnpManager>,
     users_manager: Arc<UsersManager>,
     profile_service: Arc<ProfileService>,
+    jsworkers_broker: SharedBroker,
 }
 
 impl FoxBox {
@@ -65,7 +67,8 @@ impl FoxBox {
             config: config,
             upnp: Arc::new(UpnpManager::new()),
             users_manager: Arc::new(UsersManager::new(&profile_service.path_for("users_db.sqlite"))),
-            profile_service: Arc::new(profile_service)
+            profile_service: Arc::new(profile_service),
+            jsworkers_broker: Arc::new(Mutex::new(MessageBroker::new())),
         }
     }
 }
@@ -173,6 +176,10 @@ impl Controller for FoxBox {
 
     fn get_hostname(&self) -> String  {
         self.hostname.clone()
+    }
+
+    fn get_jsworkers_broker(&self) -> SharedBroker {
+        self.jsworkers_broker.clone()
     }
 }
 

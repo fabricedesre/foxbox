@@ -3,6 +3,17 @@ name = "jsworkers"
 version = "0.1.0"
 authors = ["Fabrice Desré <fabrice@desre.org>"]
 
+[replace]
+"iron:0.3.0" = { path = "../../iron-fork/" }
+
 [dependencies]
+foxbox_users = { git = "https://github.com/fxbox/users.git", rev = "d4e5277" }
 log = "^0.3"
 rusqlite = "0.6.0"
+url = "0.5.7"
+ws = { git = "https://github.com/JohanLorenzo/ws-rs.git" , branch = "0.4.6" }
+
+[dependencies.iron]
+version = "0.3.0"
+default-features = true
+features = ["ssl"]

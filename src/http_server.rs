@@ -11,6 +11,7 @@ use iron_cors::CORS;
 use iron::error::{ IronError };
 use iron::method::Method;
 use iron::status::Status;
+use jsworkers::router as jsworkers_router;
 use mount::Mount;
 use router::NoRoute;
 use static_router;
@@ -68,12 +69,15 @@ impl<T: Controller> HttpServer<T> {
         let taxonomy_chain = taxonomy_router::create(self.controller.clone(),
                                                       adapter_api);
 
+        let jsworkers_chain = jsworkers_router::create(&self.controller.get_jsworkers_broker());
+
         let users_manager = self.controller.get_users_manager();
         let mut mount = Mount::new();
         mount.mount("/", static_router::create(users_manager.clone()))
              .mount("/ping", Ping)
              .mount("/api/v1", taxonomy_chain)
-             .mount("/users", users_manager.get_router_chain());
+             .mount("/users", users_manager.get_router_chain())
+             .mount("/jsworkers/v1", jsworkers_chain);
 
         let mut chain = Chain::new(mount);
         chain.link_after(Custom404);

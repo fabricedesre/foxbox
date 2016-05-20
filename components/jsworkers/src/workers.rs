@@ -22,7 +22,7 @@ enum WorkerState {
 pub type Url = String; // FIXME: should be the url type from hyper.
 pub type User = u32;   // FIXME: should be the user type from foxbox_users.
 
-/// A Worker representation.
+/// A Worker representation, that we'll keep synchronized with the runtime.
 #[derive(Debug, PartialEq)]
 pub struct WorkerInfo {
     url: Url,
@@ -54,13 +54,14 @@ impl WorkerInfo {
     }
 }
 
+/// The entire set of workers.
 pub struct JsWorkers {
     db: Option<Connection>,
     workers: HashMap<String, WorkerInfo>,
 }
 
 impl JsWorkers {
-    pub fn new(file_name: &str) -> Self {
+    pub fn new(config_root: &str) -> Self {
         // TODO: Read the current set of workers from disk, creating the DB if it doesn't exist yet.
 
         JsWorkers {
