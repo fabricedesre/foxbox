@@ -10,7 +10,7 @@ use config_store::ConfigService;
 use foxbox_taxonomy::manager::AdapterManager as TaxoManager;
 use foxbox_users::UsersManager;
 use http_server::HttpServer;
-use jsworkers::broker::{ MessageBroker, SharedBroker };
+use jsworkers::broker::{ Message, MessageBroker, SharedBroker };
 use jsworkers::runtime::Runtime;
 use profile_service::{ ProfilePath, ProfileService };
 use std::collections::hash_map::HashMap;
@@ -110,6 +110,7 @@ impl Controller for FoxBox {
         debug!("Stopping controller");
         adapter_manager.stop();
         taxo_manager.stop();
+        broker.lock().unwrap().broadcast_message(Message::Shutdown);
     }
 
     fn adapter_started(&self, adapter: String) {

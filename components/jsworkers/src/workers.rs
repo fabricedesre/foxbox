@@ -59,7 +59,7 @@ impl WorkerInfo {
 pub struct JsWorkers {
     db: Option<Connection>,
     workers: HashMap<String, WorkerInfo>,
-    broker: SharedBroker,
+    broker: SharedBroker
 }
 
 impl JsWorkers {
@@ -147,7 +147,9 @@ impl JsWorkers {
 
 #[test]
 fn test_workers() {
-    let mut list = JsWorkers::new("");
+    use broker::MessageBroker;
+
+    let mut list = JsWorkers::new("", &MessageBroker::new_shared());
     let url = "http://example.com/worker.js".to_owned();
     let user1: User = 0;
     let user2: User = 1;

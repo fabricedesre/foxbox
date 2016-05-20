@@ -5,14 +5,26 @@
 //! A message broker that let you register as a named target to receive and send messages.
 
 use std::collections::HashMap;
+use std::fmt::{ Display, Formatter, Result as FmtResult };
 use std::result::Result;
-use std::sync::{Arc, Mutex};
+use std::sync::{ Arc, Mutex };
 use std::sync::mpsc::Sender;
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Message {
     AddWorker,
     RemoveWorker,
+    Shutdown,
+}
+
+impl Display for Message {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        match *self {
+            Message::AddWorker => write!(f, "{}", "AddWorker"),
+            Message::RemoveWorker => write!(f, "{}", "RemoveWorker"),
+            Message::Shutdown => write!(f, "{}", "Shutdown"),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -23,14 +35,16 @@ pub enum BrokerError {
 }
 
 pub struct MessageBroker {
-    actors: HashMap<String, Sender<Message>>,
+    actors: HashMap<String, Sender<Message>>
 }
 
 pub type SharedBroker = Arc<Mutex<MessageBroker>>;
 
 impl MessageBroker {
     pub fn new() -> Self {
-        MessageBroker { actors: HashMap::new() }
+        MessageBroker {
+            actors: HashMap::new(),
+        }
     }
 
     pub fn new_shared() -> SharedBroker {
@@ -67,6 +81,15 @@ impl MessageBroker {
             return Err(BrokerError::SendingError);
         }
     }
+
+    // TODO: figure out if we should return something else than void.
+    pub fn broadcast_message(&mut self, message: Message) {
+        let ref actors = self.actors;
+        for (target, actor) in actors {
+            debug!("Sending {} to {}", message.clone(), target);
+            actor.send(message.clone());
+        }
+    }
 }
 
 #[test]
@@ -97,6 +120,19 @@ fn test_broker() {
         });
         let msg = rx1.recv();
         assert_eq!(msg.unwrap(), Message::AddWorker);
+    }
+
+    // Check that we can broadcast a message.
+    {
+        let b = broker.clone();
+        thread::spawn(move || {
+            let mut guard = b.lock().unwrap();
+            guard.broadcast_message(Message::Shutdown);
+        });
+        let msg = rx1.recv();
+        assert_eq!(msg.unwrap(), Message::Shutdown);
+        let msg = rx2.recv();
+        assert_eq!(msg.unwrap(), Message::Shutdown);
     }
 
     // Remove the actors.
