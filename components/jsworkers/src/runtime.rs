@@ -6,6 +6,7 @@
 
 extern crate url;
 
+use broker::SharedBroker;
 use self::url::Url;
 use std::process::Command;
 use std::time::Duration;
@@ -21,7 +22,6 @@ struct RuntimeWsHandler {
 }
 
 impl RuntimeWsHandler {
-
     fn close_with_error(&mut self, reason: &'static str) -> Result<()> {
         self.out.close_with_reason(ws::CloseCode::Error, reason)
     }
@@ -64,13 +64,14 @@ impl Handler for RuntimeWsHandler {
 pub struct Runtime;
 
 impl Runtime {
-    pub fn start(runtime_path: &str, config_root: &str) {
+    pub fn start(runtime_path: &str, config_root: &str, broker: &SharedBroker) {
         info!("Starting jsworkers runtime {}", runtime_path);
         let path = runtime_path.to_string();
         let root = config_root.to_string();
         // Start the runtime thread.
+        let broker = broker.clone();
         let _ = Builder::new().name("JsWorkers_runtime".to_owned()).spawn(move || {
-            let workers = JsWorkers::new(&root);
+            let workers = JsWorkers::new(&root, &broker);
 
             // Starts the ws server.
             thread::Builder::new().name("JsWorkers_WsServer".to_owned()).spawn(move || {

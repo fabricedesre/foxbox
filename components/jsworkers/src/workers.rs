@@ -6,6 +6,7 @@ use rusqlite::Connection;
 use std::cell::Cell;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use broker::SharedBroker;
 
 fn escape<T>(string: &str) -> String {
     // http://www.sqlite.org/faq.html#q14
@@ -58,15 +59,17 @@ impl WorkerInfo {
 pub struct JsWorkers {
     db: Option<Connection>,
     workers: HashMap<String, WorkerInfo>,
+    broker: SharedBroker
 }
 
 impl JsWorkers {
-    pub fn new(config_root: &str) -> Self {
+    pub fn new(config_root: &str, broker: &SharedBroker) -> Self {
         // TODO: Read the current set of workers from disk, creating the DB if it doesn't exist yet.
 
         JsWorkers {
             workers: HashMap::new(),
             db: None,
+            broker: broker.clone(),
         }
     }
 

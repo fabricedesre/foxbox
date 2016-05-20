@@ -11,6 +11,7 @@ use foxbox_taxonomy::manager::AdapterManager as TaxoManager;
 use foxbox_users::UsersManager;
 use http_server::HttpServer;
 use jsworkers::broker::{ MessageBroker, SharedBroker };
+use jsworkers::runtime::Runtime;
 use profile_service::{ ProfilePath, ProfileService };
 use std::collections::hash_map::HashMap;
 use std::io;
@@ -95,6 +96,11 @@ impl Controller for FoxBox {
         WsServer::start(self.clone());
 
         self.upnp.search(None).unwrap();
+
+        let broker = MessageBroker::new_shared();
+        Runtime::start("/home/fabrice/dev/builds/obj-jsworkers-mozilla-inbound/dist/bin/jsworkers",
+                       &ProfileService::new(ProfilePath::Default).path_for(""),
+                       &broker);
 
         event_loop.run(&mut FoxBoxEventLoop {
             controller: self.clone(),

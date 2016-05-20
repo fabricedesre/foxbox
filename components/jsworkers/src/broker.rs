@@ -35,6 +35,10 @@ impl MessageBroker {
         }
     }
 
+    pub fn new_shared() -> SharedBroker {
+        Arc::new(Mutex::new(MessageBroker::new()))
+    }
+
     pub fn add_actor(&mut self, target: &str, sender: Sender<Message>) -> Result<(), BrokerError> {
         if self.actors.contains_key(target) {
             return Err(BrokerError::DuplicateTarget);
@@ -72,7 +76,7 @@ fn test_broker() {
     use std::sync::mpsc::channel;
     use std::thread;
 
-    let mut broker = Arc::new(Mutex::new(MessageBroker::new()));
+    let mut broker = MessageBroker::new_shared();
 
     // Create the receiver and sender for two channels.
     let (tx1, rx1) = channel::<Message>();

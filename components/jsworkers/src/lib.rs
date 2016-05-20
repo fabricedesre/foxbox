@@ -12,6 +12,6 @@ extern crate rusqlite;
 extern crate ws;
 
 pub mod broker;
-mod runtime;
+pub mod runtime;
 pub mod router;
 mod workers;
