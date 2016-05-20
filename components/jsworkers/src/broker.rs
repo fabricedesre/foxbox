@@ -84,10 +84,11 @@ impl MessageBroker {
 
     // TODO: figure out if we should return something else than void.
     pub fn broadcast_message(&mut self, message: Message) {
+        info!("Broadcasting {}", message.clone());
         let ref actors = self.actors;
         for (target, actor) in actors {
             debug!("Sending {} to {}", message.clone(), target);
-            actor.send(message.clone());
+            actor.send(message);
         }
     }
 }
