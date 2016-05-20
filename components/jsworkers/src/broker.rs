@@ -6,7 +6,7 @@
 
 use std::collections::HashMap;
 use std::result::Result;
-use std::sync::{ Arc, Mutex };
+use std::sync::{Arc, Mutex};
 use std::sync::mpsc::Sender;
 
 #[derive(Debug, PartialEq)]
@@ -23,16 +23,14 @@ pub enum BrokerError {
 }
 
 pub struct MessageBroker {
-    actors: HashMap<String, Sender<Message>>
+    actors: HashMap<String, Sender<Message>>,
 }
 
 pub type SharedBroker = Arc<Mutex<MessageBroker>>;
 
 impl MessageBroker {
     pub fn new() -> Self {
-        MessageBroker {
-            actors: HashMap::new(),
-        }
+        MessageBroker { actors: HashMap::new() }
     }
 
     pub fn new_shared() -> SharedBroker {

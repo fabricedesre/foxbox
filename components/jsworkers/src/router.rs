@@ -8,46 +8,42 @@
 
 use foxbox_users::SessionToken;
 
-use iron::{ Handler, headers, IronResult, Request, Response };
+use iron::{Handler, headers, IronResult, Request, Response};
 use iron::headers::ContentType;
 use iron::method::Method;
 use iron::prelude::Chain;
 use iron::request::Body;
 use iron::status::Status;
-use std::sync::{ Arc, Mutex };
+use std::sync::{Arc, Mutex};
 
-use broker::{ Message, SharedBroker };
+use broker::{Message, SharedBroker};
 
 pub struct Router {
-    broker: SharedBroker
+    broker: SharedBroker,
 }
 
 impl Router {
     pub fn new(broker: &SharedBroker) -> Self {
-        Router {
-            broker: broker.clone()
-        }
+        Router { broker: broker.clone() }
     }
 }
 
 impl Handler for Router {
     fn handle(&self, req: &mut Request) -> IronResult<Response> {
-        let user = match req.headers.clone().get::
-            <headers::Authorization<headers::Bearer>>() {
+        let user = match req.headers.clone().get::<headers::Authorization<headers::Bearer>>() {
             Some(&headers::Authorization(headers::Bearer { ref token })) => {
                 match SessionToken::from_string(token) {
                     Ok(token) => Some(token.claims.id),
-                    Err(_) => return Ok(Response::with(Status::Unauthorized))
+                    Err(_) => return Ok(Response::with(Status::Unauthorized)),
                 }
-            },
-            _ => None
+            }
+            _ => None,
         };
 
         info!("HTTP Request url is {}, user is {:?}", req.url, user);
 
         // Fallthrough, returning a 404.
-        Ok(Response::with((Status::NotFound,
-                           format!("Unknown url: {}", req.url))))
+        Ok(Response::with((Status::NotFound, format!("Unknown url: {}", req.url))))
     }
 }
 

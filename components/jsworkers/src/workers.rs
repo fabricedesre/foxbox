@@ -59,7 +59,7 @@ impl WorkerInfo {
 pub struct JsWorkers {
     db: Option<Connection>,
     workers: HashMap<String, WorkerInfo>,
-    broker: SharedBroker
+    broker: SharedBroker,
 }
 
 impl JsWorkers {

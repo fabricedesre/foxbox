@@ -14,7 +14,7 @@ use std::thread;
 use std::thread::Builder;
 use workers::JsWorkers;
 use ws;
-use ws::{ Handler, Sender, Result, Message, Handshake, CloseCode, Error };
+use ws::{Handler, Sender, Result, Message, Handshake, CloseCode, Error};
 use ws::listen;
 
 struct RuntimeWsHandler {
@@ -74,20 +74,19 @@ impl Runtime {
             let workers = JsWorkers::new(&root, &broker);
 
             // Starts the ws server.
-            thread::Builder::new().name("JsWorkers_WsServer".to_owned()).spawn(move || {
-                listen("localhost:2016", |out| {
-                    RuntimeWsHandler {
-                        out: out
-                    }
-                }).unwrap();
-            }).unwrap();
+            thread::Builder::new()
+                .name("JsWorkers_WsServer".to_owned())
+                .spawn(move || {
+                    listen("localhost:2016", |out| RuntimeWsHandler { out: out }).unwrap();
+                })
+                .unwrap();
 
             loop {
                 let output = Command::new(&path)
-                                     .arg("-ws")
-                                     .arg("ws://localhost:2016/runtime/")
-                                     .output()
-                                     .unwrap_or_else(|e| { panic!("failed to execute process: {}", e) });
+                    .arg("-ws")
+                    .arg("ws://localhost:2016/runtime/")
+                    .output()
+                    .unwrap_or_else(|e| panic!("failed to execute process: {}", e));
 
                 error!("Failed to run jsworkers runtime:\nstdout:\n{}\nstderr:\n{}",
                        String::from_utf8_lossy(&output.stdout),
