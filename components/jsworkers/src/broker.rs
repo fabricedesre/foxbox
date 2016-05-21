@@ -10,18 +10,31 @@ use std::result::Result;
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc::Sender;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum Message {
-    AddWorker,
-    RemoveWorker,
+    Start {
+        url: String,
+        user: i32,
+        tx: Sender<Message>,
+    },
+    Stop {
+        url: String,
+        user: i32,
+        tx: Sender<Message>,
+    },
+    List {
+        user: u32,
+        tx: Sender<Message>,
+    },
     Shutdown,
 }
 
 impl Display for Message {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         match *self {
-            Message::AddWorker => write!(f, "{}", "AddWorker"),
-            Message::RemoveWorker => write!(f, "{}", "RemoveWorker"),
+            Message::Start { ref url, user, ref tx } => write!(f, "{}", "Start"),
+            Message::Stop { ref url, user, ref tx } => write!(f, "{}", "Stop"),
+            Message::List { user, ref tx } => write!(f, "{}", "List"),
             Message::Shutdown => write!(f, "{}", "Shutdown"),
         }
     }
@@ -86,7 +99,7 @@ impl MessageBroker {
         let ref actors = self.actors;
         for (target, actor) in actors {
             debug!("Sending {} to {}", message.clone(), target);
-            actor.send(message);
+            actor.send(message.clone());
         }
     }
 }
@@ -115,10 +128,15 @@ fn test_broker() {
         let b = broker.clone();
         thread::spawn(move || {
             let mut guard = b.lock().unwrap();
-            guard.send_message("actor1", Message::AddWorker);
+            guard.send_message("actor1", Message::Shutdown);
         });
         let msg = rx1.recv();
-        assert_eq!(msg.unwrap(), Message::AddWorker);
+        match msg.unwrap() {
+            Message::Shutdown => {}
+            _ => {
+                panic!("Didn't get a Shutdown message");
+            }
+        }
     }
 
     // Check that we can broadcast a message.
@@ -129,9 +147,19 @@ fn test_broker() {
             guard.broadcast_message(Message::Shutdown);
         });
         let msg = rx1.recv();
-        assert_eq!(msg.unwrap(), Message::Shutdown);
+        match msg.unwrap() {
+            Message::Shutdown => {}
+            _ => {
+                panic!("Didn't get a Shutdown message");
+            }
+        }
         let msg = rx2.recv();
-        assert_eq!(msg.unwrap(), Message::Shutdown);
+        match msg.unwrap() {
+            Message::Shutdown => {}
+            _ => {
+                panic!("Didn't get a Shutdown message");
+            }
+        }
     }
 
     // Remove the actors.

@@ -20,8 +20,8 @@ enum WorkerState {
     Running,
 }
 
-pub type Url = String; // FIXME: should be the url type from hyper.
-pub type User = u32;   // FIXME: should be the user type from foxbox_users.
+type Url = String; // FIXME: should be the url type from hyper.
+type User = i32;   // FIXME: should be the user type from foxbox_users.
 
 /// A Worker representation, that we'll keep synchronized with the runtime.
 #[derive(Debug, PartialEq)]

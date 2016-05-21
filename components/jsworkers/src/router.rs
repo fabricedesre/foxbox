@@ -21,6 +21,7 @@
 ///   input: None
 ///   output: 200 [{ state: Running|Stopped, url: <worker_url>, ws: <websocket_url> }*]
 
+use broker::{Message, SharedBroker};
 use foxbox_users::SessionToken;
 
 use iron::{Handler, headers, IronResult, Request, Response};
@@ -29,9 +30,9 @@ use iron::method::Method;
 use iron::prelude::Chain;
 use iron::request::Body;
 use iron::status::Status;
-use std::sync::{Arc, Mutex};
 
-use broker::{Message, SharedBroker};
+use std::io::{Error as IOError, Read};
+use std::sync::mpsc::channel;
 
 pub struct Router {
     broker: SharedBroker,
@@ -40,6 +41,12 @@ pub struct Router {
 impl Router {
     pub fn new(broker: &SharedBroker) -> Self {
         Router { broker: broker.clone() }
+    }
+
+    fn read_body_to_string<'a, 'b: 'a>(body: &mut Body<'a, 'b>) -> Result<String, IOError> {
+        let mut s = String::new();
+        try!(body.read_to_string(&mut s));
+        Ok(s)
     }
 }
 
@@ -60,6 +67,24 @@ impl Handler for Router {
               user);
 
         if req.url.path == ["start"] && req.method == Method::Post {
+            // Sends a "start" message to the worker set and wait for the answer.
+            let (tx, rx) = channel::<Message>();
+            let source = itry!(Self::read_body_to_string(&mut req.body));
+            let message = Message::Start {
+                url: source,
+                user: user.unwrap_or(0),
+                tx: tx,
+            };
+
+            if self.broker.lock().unwrap().send_message("workers", message).is_err() {
+                return Ok(Response::with(Status::InternalServerError));
+            }
+
+            let res = rx.recv();
+            if res.is_err() {
+                return Ok(Response::with(Status::InternalServerError));
+            }
+
             return Ok(Response::with(Status::Ok));
         }
 
