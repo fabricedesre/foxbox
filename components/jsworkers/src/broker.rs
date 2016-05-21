@@ -5,9 +5,9 @@
 //! A message broker that let you register as a named target to receive and send messages.
 
 use std::collections::HashMap;
-use std::fmt::{ Display, Formatter, Result as FmtResult };
+use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::result::Result;
-use std::sync::{ Arc, Mutex };
+use std::sync::{Arc, Mutex};
 use std::sync::mpsc::Sender;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -35,16 +35,14 @@ pub enum BrokerError {
 }
 
 pub struct MessageBroker {
-    actors: HashMap<String, Sender<Message>>
+    actors: HashMap<String, Sender<Message>>,
 }
 
 pub type SharedBroker = Arc<Mutex<MessageBroker>>;
 
 impl MessageBroker {
     pub fn new() -> Self {
-        MessageBroker {
-            actors: HashMap::new(),
-        }
+        MessageBroker { actors: HashMap::new() }
     }
 
     pub fn new_shared() -> SharedBroker {

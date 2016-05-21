@@ -4,7 +4,22 @@
 
 //! The http router for the jsworkers runtime.
 
-// Endpoints are:
+/// All endpoints are authenticated. Valid urls are:
+///
+/// POST /start
+///   description: starts a new worker or let the client re-connect to an already created one.
+///   input: { url: <worker_url> }
+///   output: 200 { url: <worker_url>, ws: <websocket_url> }
+///
+/// POST /stop
+///   description: stops a worker.
+///   input: { url: <worker_url> }
+///   output: 200 { url: <worker_url>, ws: <websocket_url> }
+///
+/// GET /list
+///   description: returns the list of workers installed for this user.
+///   input: None
+///   output: 200 [{ state: Running|Stopped, url: <worker_url>, ws: <websocket_url> }*]
 
 use foxbox_users::SessionToken;
 
@@ -40,7 +55,21 @@ impl Handler for Router {
             _ => None,
         };
 
-        info!("HTTP Request url is {}, user is {:?}", req.url, user);
+        info!("HTTP Request path is {:?}, user is {:?}",
+              req.url.path,
+              user);
+
+        if req.url.path == ["start"] && req.method == Method::Post {
+            return Ok(Response::with(Status::Ok));
+        }
+
+        if req.url.path == ["stop"] {
+            return Ok(Response::with(Status::Ok));
+        }
+
+        if req.url.path == ["list"] {
+            return Ok(Response::with(Status::Ok));
+        }
 
         // Fallthrough, returning a 404.
         Ok(Response::with((Status::NotFound, format!("Unknown url: {}", req.url))))
