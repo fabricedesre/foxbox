@@ -12,7 +12,7 @@ use foxbox_taxonomy::manager::AdapterManager;
 use foxbox_taxonomy::api::{ Error, InternalError, User };
 use foxbox_taxonomy::services::{ AdapterId, Channel, ChannelKind, Id, Service, ServiceId };
 use foxbox_taxonomy::values::{ Type, Value };
-use std::collections::{ HashMap, HashSet };
+use std::collections::HashMap;
 use std::sync::Arc;
 use transformable_channels::mpsc::*;
 
