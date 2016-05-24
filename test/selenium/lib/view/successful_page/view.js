@@ -1,26 +1,23 @@
 'use strict';
 
-var SuccessfulPageAccessor = require('./accessors.js');
+const View = require('../view');
 
-function SuccessfulPageView(driver) {
-  this.driver = driver;
-  this.accessors = new SuccessfulPageAccessor(this.driver);
 
-  this.accessors.successMessageLocator; // Wait until message is displayed
+function SuccessfulPageView() {
+  View.apply(this, arguments);
+
+  this.accessor.successMessageElement; // Wait until message is displayed
 }
 
-SuccessfulPageView.prototype = {
+SuccessfulPageView.prototype = Object.assign({
   get loginMessage() {
-    return this.accessors.successMessageLocator.getText();
+    return this.accessor.successMessageElement.getText();
   },
 
   goToSignedIn() {
     return this.driver.navigate().to('http://localhost:3331')
-      .then(() => {
-        const SignedInView = require('../signed_in/view');
-        return new SignedInView(this.driver);
-      });
+      .then(() => this.instanciateNextView('signed_in'));
   }
-};
+}, View.prototype);
 
 module.exports = SuccessfulPageView;

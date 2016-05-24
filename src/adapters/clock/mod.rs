@@ -2,7 +2,7 @@
 //! timestamp or the current time of day.
 
 use foxbox_taxonomy::manager::*;
-use foxbox_taxonomy::api::{ Error, InternalError, User };
+use foxbox_taxonomy::api::{ Error, InternalError, Operation, User };
 use foxbox_taxonomy::values::{ Duration as ValDuration, Range, TimeStamp, Type, Value };
 use foxbox_taxonomy::services::*;
 
@@ -134,7 +134,7 @@ impl Clock {
             _ if *id == self.getter_time_of_day_id => self.aux_register_watch_timeofday(id, range, tx),
             _ if *id == self.getter_timestamp_id => self.aux_register_watch_timestamp(id, range, tx),
             _ if *id == self.getter_interval_id => self.aux_register_watch_interval(id, range, tx),
-            _ => Err(Error::GetterDoesNotSupportWatching(id.clone()))
+            _ => Err(Error::OperationNotSupported(Operation::Watch, id.clone()))
         }
     }
 

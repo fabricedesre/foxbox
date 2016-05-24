@@ -105,7 +105,7 @@ impl Parser<Type> for Type {
     fn description() -> String {
         "Type".to_owned()
     }
-    fn parse(path: Path, source: &mut JSON) -> Result<Self, ParseError> {
+    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
         use self::Type::*;
         match *source {
             JSON::String(ref string) => match &*string as &str {
@@ -237,7 +237,7 @@ impl Parser<OnOff> for OnOff {
     fn description() -> String {
         "OnOff".to_owned()
     }
-    fn parse(path: Path, source: &mut JSON) -> Result<Self, ParseError> {
+    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
         match source.as_string() {
             Some("On") => Ok(OnOff::On),
             Some("Off") => Ok(OnOff::Off),
@@ -368,7 +368,7 @@ impl Parser<OpenClosed> for OpenClosed {
     fn description() -> String {
         "OpenClosed".to_owned()
     }
-    fn parse(path: Path, source: &mut JSON) -> Result<Self, ParseError> {
+    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
         match source.as_string() {
             Some("Open") => Ok(OpenClosed::Open),
             Some("Closed") => Ok(OpenClosed::Closed),
@@ -499,7 +499,7 @@ impl Parser<DoorLocked> for DoorLocked {
     fn description() -> String {
         "DoorLocked".to_owned()
     }
-    fn parse(path: Path, source: &mut JSON) -> Result<Self, ParseError> {
+    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
         match source.as_string() {
             Some("Locked") => Ok(DoorLocked::Locked),
             Some("Unlocked") => Ok(DoorLocked::Unlocked),
@@ -630,7 +630,7 @@ impl Parser<IsSecure> for IsSecure {
     fn description() -> String {
         "IsSecure".to_string()
     }
-    fn parse(path: Path, source: &mut JSON) -> Result<Self, ParseError> {
+    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
         match source.as_string() {
             Some("Insecure") => Ok(IsSecure::Insecure),
             Some("Secure") => Ok(IsSecure::Secure),
@@ -788,7 +788,7 @@ impl Parser<Temperature> for Temperature {
     fn description() -> String {
         "Temperature".to_owned()
     }
-    fn parse(path: Path, source: &mut JSON) -> Result<Self, ParseError> {
+    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
         if !source.is_object() {
             return Err(ParseError::type_error("Temperature", &path, "object"));
         }
@@ -889,7 +889,7 @@ impl Parser<Color> for Color {
     fn description() -> String {
         "Color".to_owned()
     }
-    fn parse(path: Path, source: &mut JSON) -> Result<Self, ParseError> {
+    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
         let h = try!(path.push("h", |path| f64::take(path, source, "h")));
         let s = try!(path.push("s", |path| f64::take(path, source, "s")));
         let v = try!(path.push("v", |path| f64::take(path, source, "v")));
@@ -924,7 +924,7 @@ impl Parser<WebPushNotify> for WebPushNotify {
     fn description() -> String {
         "WebPushNotify".to_owned()
     }
-    fn parse(path: Path, source: &mut JSON) -> Result<Self, ParseError> {
+    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
         let resource = try!(path.push("resource", |path| String::take(path, source, "resource")));
         let message = try!(path.push("message", |path| String::take(path, source, "message")));
         Ok(WebPushNotify { resource: resource, message: message})
@@ -950,7 +950,7 @@ impl Parser<ThinkerbellRule> for ThinkerbellRule {
     fn description() -> String {
         "ThinkerbellRuleSource".to_owned()
     }
-    fn parse(path: Path, source: &mut JSON) -> Result<Self, ParseError> {
+    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
         let name = try!(path.push("name", |path| String::take(path, source, "name")));
         let script_source = try!(path.push("source", |path| String::take(path, source, "source")));
         Ok(ThinkerbellRule { name: name, source: script_source })
@@ -976,7 +976,7 @@ impl Parser<Json> for Json {
     fn description() -> String {
         "Json value".to_owned()
     }
-    fn parse(_: Path, source: &mut JSON) -> Result<Self, ParseError> {
+    fn parse(_: Path, source: &JSON) -> Result<Self, ParseError> {
         Ok(Json(source.clone()))
     }
 }
@@ -1021,7 +1021,7 @@ impl<T> Parser<ExtValue<T>> for ExtValue<T>
     fn description() -> String {
         format!("ExtValue<{}>", T::description())
     }
-    fn parse(path: Path, source: &mut JSON) -> Result<Self, ParseError> {
+    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
         let vendor = try!(path.push("vendor", |path| Id::take(path, source, "vendor")));
         let adapter = try!(path.push("adapter", |path| Id::take(path, source, "adapter")));
         let kind = try!(path.push("kind", |path| Id::take(path, source, "kind")));
@@ -1092,7 +1092,7 @@ impl Parser<Binary> for Binary {
     fn description() -> String {
         "Binary".to_owned()
     }
-    fn parse(path: Path, source: &mut JSON) -> Result<Self, ParseError> {
+    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
         let data = try!(path.push("data", |path| Vec::<u8>::take(path, source, "data")));
         let mimetype = try!(path.push("mimetype", |path| Id::take(path, source, "mimetype")));
         Ok(Binary {
@@ -1609,11 +1609,11 @@ pub enum Value {
 
 lazy_static! {
     static ref VALUE_PARSER:
-        HashMap<&'static str, Box<Fn(Path, &mut JSON) -> Result<Value, ParseError> + Sync>> =
+        HashMap<&'static str, Box<Fn(Path, &JSON) -> Result<Value, ParseError> + Sync>> =
     {
         use self::Value::*;
         use std::string::String as StdString;
-        let mut map : HashMap<&'static str, Box<Fn(Path, &mut JSON) -> Result<Value, ParseError> + Sync>> = HashMap::new();
+        let mut map : HashMap<&'static str, Box<Fn(Path, &JSON) -> Result<Value, ParseError> + Sync>> = HashMap::new();
         map.insert("Unit", Box::new(|_, _| Ok(Unit)));
         map.insert("OnOff", Box::new(|path, v| {
             let value = try!(path.push("OnOff", |path| self::OnOff::parse(path, v)));
@@ -1691,15 +1691,15 @@ impl Parser<Value> for Value {
     fn description() -> String {
         "Value".to_owned()
     }
-    fn parse(path: Path, source: &mut JSON) -> Result<Self, ParseError> {
+    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
         match *source {
             JSON::Null => Ok(Value::Unit),
             JSON::String(ref str) if &*str == "Unit" => Ok(Value::Unit),
-            JSON::Object(ref mut obj) if obj.len() == 1 => {
-                let mut vec : Vec<_> = obj.iter_mut().collect();
+            JSON::Object(ref obj) if obj.len() == 1 => {
+                let mut vec : Vec<_> = obj.iter().collect();
                 let (k, v) = vec.pop().unwrap(); // We checked the length just above.
-                match VALUE_PARSER.get(&k as &str) {
-                    None => Err(ParseError::type_error("Value", &path, &&*self::VALUE_KEYS)),
+                match VALUE_PARSER.get(k as &str) {
+                    None => Err(ParseError::type_error("Value", &path, &*self::VALUE_KEYS)),
                     Some(parser) => path.push(k, |path| parser(path, v))
                 }
             }
@@ -1886,7 +1886,7 @@ impl Parser<TimeStamp> for TimeStamp {
     fn description() -> String {
         "TimeStamp".to_owned()
     }
-    fn parse(path: Path, source: &mut JSON) -> Result<Self, ParseError> {
+    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
         if let JSON::String(ref str) = *source {
             if let Ok(dt) = DateTime::<UTC>::from_str(str) {
                 return Ok(TimeStamp(dt));
@@ -1993,20 +1993,20 @@ impl Parser<Range> for Range {
     fn description() -> String {
         "Range".to_owned()
     }
-    fn parse(path: Path, source: &mut JSON) -> Result<Self, ParseError> {
+    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
         use self::Range::*;
         match *source {
-            JSON::Object(ref mut obj) if obj.len() == 1 => {
-                if let Some(leq) = obj.get_mut("Leq") {
+            JSON::Object(ref obj) if obj.len() == 1 => {
+                if let Some(leq) = obj.get("Leq") {
                     return Ok(Leq(try!(path.push("Leq", |path| Value::parse(path, leq)))))
                 }
-                if let Some(geq) = obj.get_mut("Geq") {
+                if let Some(geq) = obj.get("Geq") {
                     return Ok(Geq(try!(path.push("Geq", |path| Value::parse(path, geq)))))
                 }
-                if let Some(eq) = obj.get_mut("Eq") {
+                if let Some(eq) = obj.get("Eq") {
                     return Ok(Eq(try!(path.push("eq", |path| Value::parse(path, eq)))))
                 }
-                if let Some(between) = obj.get_mut("BetweenEq") {
+                if let Some(between) = obj.get("BetweenEq") {
                     let mut bounds = try!(path.push("BetweenEq", |path| Vec::<Value>::parse(path, between)));
                     if bounds.len() == 2 {
                         let max = bounds.pop().unwrap();
@@ -2019,7 +2019,7 @@ impl Parser<Range> for Range {
                         return Err(ParseError::type_error("BetweenEq", &path, "an array of two values"))
                     }
                 }
-                if let Some(outof) = obj.get_mut("OutOfStrict") {
+                if let Some(outof) = obj.get("OutOfStrict") {
                     let mut bounds = try!(path.push("OutOfStrict", |path| Vec::<Value>::parse(path, outof)));
                     if bounds.len() == 2 {
                         let max = bounds.pop().unwrap();
@@ -2124,7 +2124,7 @@ impl Parser<Duration> for Duration {
     fn description() -> String {
         "Duration".to_owned()
     }
-    fn parse(path: Path, source: &mut JSON) -> Result<Self, ParseError> {
+    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
         let val = try!(f64::parse(path, source));
         Ok(Duration(ChronoDuration::milliseconds((val * 1000.) as i64)))
     }

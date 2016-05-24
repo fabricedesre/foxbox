@@ -9,7 +9,6 @@ use iron::{ Protocol, ServerFactory };
 use std::net::SocketAddr;
 use std::sync::Arc;
 use certificate_manager::CertificateManager;
-use ssl_context::SslContextProvider;
 
 pub struct SniServerFactory<S: Ssl + Clone + Send> {
     ssl: S

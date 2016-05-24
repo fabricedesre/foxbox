@@ -20,18 +20,17 @@ use foxbox_taxonomy::manager::*;
 use foxbox_taxonomy::services::*;
 use foxbox_taxonomy::values::{ Type, TypeError, Value, Json, WebPushNotify };
 
-use hyper::header::{ ContentEncoding, Encoding };
+use hyper::header::{ ContentEncoding, Encoding, Authorization };
 use hyper::Client;
 use hyper::client::Body;
 use rusqlite::{ self };
 use self::crypto::CryptoContext;
 use serde_json;
-use std::cmp::min;
+use std::cmp::max;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::thread;
 use traits::Controller;
-use transformable_channels::mpsc::*;
 
 header! { (Encryption, "Encryption") => [String] }
 header! { (EncryptionKey, "Encryption-Key") => [String] }
@@ -78,7 +77,7 @@ impl ResourceGetter {
 }
 
 impl Subscription {
-    fn notify(&self, crypto: &CryptoContext, message: &str) {
+    fn notify(&self, crypto: &CryptoContext, gcm_api_key: &str, message: &str) {
         // Make the record size at least the size of the encrypted message. We must
         // add 16 bytes for the encryption tag, 1 byte for padding and 1 byte to
         // ensure we don't end on a record boundary.
@@ -96,7 +95,7 @@ impl Subscription {
         // of payload body, which equates to 4080 octets of cleartext, so the "rs"
         // parameter can be omitted for messages that fit within this limit."
         //
-        let record_size = min(4096, message.len() + 18);
+        let record_size = max(4096, message.len() + 18);
         let enc = match crypto.encrypt(&self.public_key, message.to_owned(), &self.auth, record_size) {
             Some(x) => x,
             None => {
@@ -105,12 +104,33 @@ impl Subscription {
             }
         };
 
+        // If using Google's push service, we need to replace the given endpoint URI
+        // with one known to work with WebPush, as support has not yet rolled out to
+        // all of its servers.
+        //
+        // https://github.com/GoogleChrome/web-push-encryption/blob/dd8c58c62b1846c481ceb066c52da0d695c8415b/src/push.js#L69
+        let push_uri = self.push_uri.replace("https://android.googleapis.com/gcm/send",
+                                             "https://gcm-http.googleapis.com/gcm");
+
         let has_auth = self.auth.is_some();
         let public_key = crypto.get_public_key(has_auth);
         let client = Client::new();
-        let mut req = client.post(&self.push_uri)
+        let mut req = client.post(&push_uri)
             .header(Encryption(format!("keyid=p256dh;salt={};rs={}", enc.salt, record_size)))
             .body(Body::BufBody(&enc.output, enc.output.len()));
+
+        // If using Google's push service, we need to provide an Authorization header
+        // which provides an API key permitting us to send push notifications. This
+        // should be provided in foxbox.conf as webpush/gcm_api_key in base64.
+        //
+        // https://github.com/GoogleChrome/web-push-encryption/blob/dd8c58c62b1846c481ceb066c52da0d695c8415b/src/push.js#L84
+        if push_uri != self.push_uri {
+            if gcm_api_key.is_empty() {
+                warn!("cannot notify subscription {}, GCM API key missing from foxbox.conf", push_uri);
+                return;
+            }
+            req = req.header(Authorization(format!("key={}", gcm_api_key)));
+        }
 
         req = if has_auth {
             req.header(ContentEncoding(vec![Encoding::EncodingExt(String::from("aesgcm"))]))
@@ -141,10 +161,10 @@ impl Subscription {
         // TODO: Add a retry mechanism if 429 Too Many Requests returned by push service
         let rsp = match req.send() {
             Ok(x) => x,
-            Err(e) => { warn!("notify subscription {} failed: {:?}", self.push_uri, e); return; }
+            Err(e) => { warn!("notify subscription {} failed: {:?}", push_uri, e); return; }
         };
 
-        info!("notified subscription {} (status {:?})", self.push_uri, rsp.status);
+        info!("notified subscription {} (status {:?})", push_uri, rsp.status);
     }
 }
 
@@ -297,13 +317,6 @@ impl<C: Controller> Adapter for WebPush<C> {
             (id.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(id))))
         }).collect()
     }
-
-    fn register_watch(&self, mut watch: Vec<WatchTarget>) -> WatchResult
-    {
-        watch.drain(..).map(|(id, _, _)| {
-            (id.clone(), Err(Error::GetterDoesNotSupportWatching(id)))
-        }).collect()
-    }
 }
 
 impl<C: Controller> WebPush<C> {
@@ -425,9 +438,12 @@ impl<C: Controller> WebPush<C> {
         } else {
             let json = json!({resource: setter.resource, message: setter.message});
             let crypto = self.crypto.clone();
+            let gcm_api_key = self.controller.get_config().get_or_set_default(
+                "webpush", "gcm_api_key", "");
+
             thread::spawn(move || {
                 for sub in subscriptions {
-                    sub.notify(&crypto, &json);
+                    sub.notify(&crypto, &gcm_api_key, &json);
                 }
             });
         }

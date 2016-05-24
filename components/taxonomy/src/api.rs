@@ -13,10 +13,11 @@
 //!
 //!
 
+use io::*;
 use services::*;
 use selector::*;
 pub use util::{ ResultMap, TargetMap, Targetted };
-use values::{ Value, TypeError };
+use values::{ Value, Type, TypeError };
 
 use transformable_channels::mpsc::*;
 
@@ -26,15 +27,30 @@ use std::error::Error as std_error;
 use serde::ser::Serialize;
 use serde_json::value::Serializer;
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum Operation {
+    Fetch,
+    Send,
+    Watch
+}
+impl fmt::Display for Operation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use self::Operation::*;
+        match *self {
+            Fetch => f.write_str("Fetch"),
+            Send => f.write_str("Send"),
+            Watch => f.write_str("Watch"),
+        }
+    }
+}
+
+
 /// An error that arose during interaction with either a device, an adapter or the
 /// adapter manager
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Error {
-    /// Attempting to fetch a value from a Channel that doesn't support this operation.
-    GetterDoesNotSupportPolling(Id<Channel>),
-
-    /// Attempting to watch a value from a Channel that doesn't support this operation.
-    GetterDoesNotSupportWatching(Id<Channel>),
+    /// Attempting to execute a value from a Channel that doesn't support this operation.
+    OperationNotSupported(Operation, Id<Channel>),
 
     /// Attempting to watch all values from a Channel that requires a filter.
     /// For instance, some Channel may be updated 60 times per second. Attempting to
@@ -51,6 +67,9 @@ pub enum Error {
     /// An error internal to the foxbox or an adapter. Normally, these errors should never
     /// arise from the high-level API.
     InternalError(InternalError),
+
+    // An error happened while attempting to parse a value.
+    ParseError(ParseError),
 }
 
 impl ToJSON for Error {
@@ -69,12 +88,12 @@ impl ToJSON for Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Error::GetterDoesNotSupportPolling(ref getter) |
-            Error::GetterDoesNotSupportWatching(ref getter) |
+            Error::OperationNotSupported(ref operation, ref channel) => write!(f, "{}: {} {}", self.description(), operation, channel),
             Error::GetterRequiresThresholdForWatching(ref getter) => write!(f, "{}: {}", self.description(), getter),
             Error::TypeError(ref err) => write!(f, "{}: {}", self.description(), err),
             Error::InvalidValue(ref value) => write!(f, "{}: {:?}",self.description(), value),
             Error::InternalError(ref err) => write!(f, "{}: {:?}", self.description(), err), // TODO implement Display for InternalError as well
+            Error::ParseError(ref err) => write!(f, "{}: {:?}", self.description(), err), // TODO implement Display for ParseError as well
         }
     }
 }
@@ -82,12 +101,12 @@ impl fmt::Display for Error {
 impl error::Error for Error {
     fn description(&self) -> &str {
         match *self {
-            Error::GetterDoesNotSupportPolling(_) => "Attempting to fetch a value from a Channel that doesn't support this operation",
-            Error::GetterDoesNotSupportWatching(_) => "Attempting to watch a value from a Channel that doesn't support this operation",
+            Error::OperationNotSupported(_, _) => "Attempting to perform a call to a Channel that does not support such calls",
             Error::GetterRequiresThresholdForWatching(_) => "Attempting to watch all value from a Channel that requires a filter",
             Error::TypeError(_) => "Attempting to send a value with a wrong type",
             Error::InvalidValue(_) => "Attempting to send an invalid value",
-            Error::InternalError(_) => "Internal Error" // TODO implement Error for InternalError as well
+            Error::InternalError(_) => "Internal Error", // TODO implement Error for InternalError as well
+            Error::ParseError(ref err) => err.description()
         }
     }
 
@@ -115,6 +134,8 @@ pub enum InternalError {
     /// Attempting to register an adapter with an id that is already used.
     DuplicateAdapter(Id<AdapterId>),
 
+    WrongChannel(Id<Channel>),
+
     /// Attempting to register a channel with an adapter that doesn't match that of its service.
     ConflictingAdapter(Id<AdapterId>, Id<AdapterId>),
 
@@ -135,20 +156,24 @@ pub enum WatchEvent {
     /// is available. Otherwise, never fired.
     EnterRange {
         /// The channel that sent the value.
-        from: Id<Channel>,
+        channel: Id<Channel>,
 
         /// The actual value.
-        value: Value
+        value: Payload,
+
+        type_: Type,
     },
 
     /// If a range was specified when we registered for watching, `ExitRange` is fired whenever
     /// we exit this range. Otherwise, never fired.
     ExitRange {
         /// The channel that sent the value.
-        from: Id<Channel>,
+        channel: Id<Channel>,
 
         /// The actual value.
-        value: Value
+        value: Payload,
+
+        type_: Type,
     },
 
     /// The set of devices being watched has changed, typically either
@@ -161,10 +186,7 @@ pub enum WatchEvent {
     /// added. Payload is the id of the device that was added.
     ChannelAdded(Id<Channel>),
 
-    /// One of the channels encountered an error during initialization.
-    /// This channel will not be watched, but other channels will remain
-    /// watched.
-    InitializationError {
+    Error {
         channel: Id<Channel>,
         error: Error
     },
@@ -184,28 +206,26 @@ fn test_user_partialeq() {
     assert_eq!(User::Id(1), User::Id(1));
 }
 
-impl<K> Parser<Targetted<K, Value>> for Targetted<K, Value> where K: Parser<K> + Clone {
+impl<K> Parser<Targetted<K, Payload>> for Targetted<K, Payload> where K: Parser<K> + Clone {
     fn description() -> String {
         format!("Targetted<{}, Value>", K::description())
     }
-    fn parse(path: Path, source: &mut JSON) -> Result<Self, ParseError> {
+    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
         if source.is_object() {
             // Default format: an object {select, value}.
             let select = try!(path.push("select", |path| Vec::<K>::take(path, source, "select")));
-            let payload = try!(path.push("value", |path| Value::take(path, source, "value")));
+            let payload = try!(path.push("value", |path| Payload::take(path, source, "value")));
             Ok(Targetted {
                 select: select,
                 payload: payload
             })
-        } else if let JSON::Array(ref mut array) = *source {
+        } else if let JSON::Array(ref array) = *source {
             // Fallback format: an array of two values.
             if array.len() != 2 {
                 return Err(ParseError::type_error(&Self::description() as &str, &path, "an array of length 2"))
             }
-            let mut right = array.pop().unwrap(); // We just checked that length == 2
-            let mut left = array.pop().unwrap(); // We just checked that length == 2
-            let select = try!(path.push_index(0, |path| Vec::<K>::parse(path, &mut left)));
-            let payload = try!(path.push_index(1, |path| Value::parse(path, &mut right)));
+            let select = try!(path.push_index(0, |path| Vec::<K>::parse(path, &array[0])));
+            let payload = try!(path.push_index(1, |path| Payload::parse(path, &array[1])));
             Ok(Targetted {
                 select: select,
                 payload: payload
@@ -216,27 +236,29 @@ impl<K> Parser<Targetted<K, Value>> for Targetted<K, Value> where K: Parser<K> +
     }
 }
 
-impl<K> Parser<Targetted<K, Exactly<Value>>> for Targetted<K, Exactly<Value>> where K: Parser<K> + Clone {
+impl<K> Parser<Targetted<K, Exactly<(Payload, Type)>>> for Targetted<K, Exactly<(Payload, Type)>> where K: Parser<K> + Clone {
     fn description() -> String {
-        format!("Targetted<{}, Value>", K::description())
+        format!("Targetted<{}, range>", K::description())
     }
-    fn parse(path: Path, source: &mut JSON) -> Result<Self, ParseError> {
+    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
         let select = try!(path.push("select", |path| Vec::<K>::take(path, source, "select")));
         if let Some(&JSON::String(ref str)) = source.find("range") {
-            if &str as &str == "Never" {
+            if str == "Never" {
                 return Ok(Targetted {
                     select: select,
                     payload: Exactly::Never
                 })
             }
         }
-        let payload = match path.push("range", |path| Exactly::<Value>::take_opt(path, source, "range")) {
-            Some(result) => try!(result),
-            None => Exactly::Always
+        let result = match path.push("range", |path| Exactly::<Payload>::take_opt(path, source, "range")) {
+            Some(Ok(Exactly::Exactly(payload))) => Exactly::Exactly((payload, Type::Range)),
+            Some(Ok(Exactly::Always)) | None => Exactly::Always,
+            Some(Ok(Exactly::Never)) => Exactly::Never,
+            Some(Err(err)) => return Err(err),
         };
         Ok(Targetted {
             select: select,
-            payload: payload
+            payload: result
         })
     }
 }
@@ -548,7 +570,7 @@ pub trait API: Send {
     /// ## Success
     ///
     /// The results, per getter.
-    fn fetch_values(&self, Vec<ChannelSelector>, user: User) -> ResultMap<Id<Channel>, Option<Value>, Error>;
+    fn fetch_values(&self, Vec<ChannelSelector>, user: User) -> ResultMap<Id<Channel>, Option<(Payload, Type)>, Error>;
 
     /// Send a bunch of values to a set of channels.
     ///
@@ -571,6 +593,7 @@ pub trait API: Send {
     /// # extern crate foxbox_taxonomy;
     /// # use foxbox_taxonomy::selector::*;
     /// # use foxbox_taxonomy::api::*;
+    /// # use foxbox_taxonomy::io::*;
     /// # use foxbox_taxonomy::values::*;
     ///
     /// # fn main() {
@@ -582,7 +605,7 @@ pub trait API: Send {
     ///   "value": {"OnOff": "On"}
     /// }"#;
     ///
-    /// # TargetMap::<ChannelSelector, Value>::from_str(&source).unwrap();
+    /// # TargetMap::<ChannelSelector, Payload>::from_str(&source).unwrap();
     ///
     /// // The following argument will send `On` to two setters and `Unit` to everything
     /// // that supports `Ready`.
@@ -595,7 +618,7 @@ pub trait API: Send {
     ///   "value": {"Unit": null}
     /// }]"#;
     ///
-    /// # TargetMap::<ChannelSelector, Value>::from_str(&source).unwrap();
+    /// # TargetMap::<ChannelSelector, Payload>::from_str(&source).unwrap();
     ///
     /// # }
     /// ```
@@ -608,7 +631,7 @@ pub trait API: Send {
     /// ## Success
     ///
     /// The results, per setter.
-    fn send_values(&self, TargetMap<ChannelSelector, Value>, user: User) -> ResultMap<Id<Channel>, (), Error>;
+    fn send_values(&self, TargetMap<ChannelSelector, Payload>, user: User) -> ResultMap<Id<Channel>, (), Error>;
 
     /// Watch for changes from channels.
     ///
@@ -634,7 +657,7 @@ pub trait API: Send {
     /// # `WebSocket` API
     ///
     /// `/api/v1/channels/watch`
-    fn watch_values(& self, watch: TargetMap<ChannelSelector, Exactly<Value>>,
+    fn watch_values(& self, watch: TargetMap<ChannelSelector, Exactly<(Payload, Type)>>,
             on_event: Box<ExtSender<WatchEvent>>) -> Self::WatchGuard;
 
     /// A value that causes a disconnection once it is dropped.

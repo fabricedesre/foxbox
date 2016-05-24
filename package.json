@@ -25,6 +25,7 @@
   "homepage": "https://github.com/fxbox/foxbox",
   "devDependencies": {
     "body-parser": "^1.15.0",
+    "callsite": "^1.0.0",
     "chai": "^3.5.0",
     "chakram": "^1.2.2",
     "config-js": "^1.1.9",

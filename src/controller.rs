@@ -104,7 +104,7 @@ impl Controller for FoxBox {
 
         event_loop.run(&mut FoxBoxEventLoop {
             controller: self.clone(),
-            shutdown_flag: &shutdown_flag
+            shutdown_flag: shutdown_flag
         }).unwrap();
 
         debug!("Stopping controller");

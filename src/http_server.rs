@@ -91,12 +91,10 @@ impl<T: Controller> HttpServer<T> {
             // Taxonomy router paths. Keep in sync with taxonomy_router.rs
             (vec![Method::Get, Method::Post], "api/v1/services".to_owned()),
             (vec![Method::Post, Method::Delete], "api/v1/services/tags".to_owned()),
-            (vec![Method::Get, Method::Post], "api/v1/channels/getters".to_owned()),
-            (vec![Method::Get, Method::Post], "api/v1/channels/setters".to_owned()),
+            (vec![Method::Get, Method::Post], "api/v1/channels".to_owned()),
             (vec![Method::Put], "api/v1/channels/get".to_owned()),
             (vec![Method::Put], "api/v1/channels/set".to_owned()),
-            (vec![Method::Post, Method::Delete], "api/v1/channels/getters/tags".to_owned()),
-            (vec![Method::Post, Method::Delete], "api/v1/channels/setters/tags".to_owned())
+            (vec![Method::Post, Method::Delete], "api/v1/channels/tags".to_owned())
         ]);
         chain.link_after(cors);
 

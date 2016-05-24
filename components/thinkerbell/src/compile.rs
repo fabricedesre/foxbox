@@ -158,13 +158,6 @@ impl<Env> Compiler<Env> where Env: ExecutableDevEnv {
         if match_.source.len() == 0 {
             return Err(Error::SourceError(SourceError::NoMatchSource));
         }
-        let typ = match match_.range.get_type() {
-            Err(_) => return Err(Error::TypeError(TypeError::InvalidRange)),
-            Ok(typ) => typ
-        };
-        if match_.kind.get_type() != typ {
-            return Err(Error::TypeError(TypeError::KindAndRangeDoNotAgree));
-        }
         let source = match_.source
             .iter()
             .map(|input| input.clone()
@@ -184,9 +177,6 @@ impl<Env> Compiler<Env> where Env: ExecutableDevEnv {
     {
         if statement.destination.len() == 0 {
             return Err(Error::SourceError(SourceError::NoStatementDestination));
-        }
-        if statement.kind.get_type() != statement.value.get_type() {
-            return Err(Error::TypeError(TypeError::KindAndValueDoNotAgree));
         }
         let destination = statement.destination
             .iter()

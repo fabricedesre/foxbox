@@ -3,7 +3,6 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // Assumes Unix
-use std::io::prelude::*;
 use std::process::{ Child, Command };
 use std::io::Result;
 use url::{ SchemeData, Url };

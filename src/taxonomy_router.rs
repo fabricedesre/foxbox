@@ -6,7 +6,8 @@ extern crate serde_json;
 
 use foxbox_taxonomy::manager::*;
 use foxbox_taxonomy::api::{ API, Error, TargetMap, User };
-use foxbox_taxonomy::values::{ Binary, Value };
+use foxbox_taxonomy::io::*;
+use foxbox_taxonomy::values::{ Binary, Type, Value };
 use foxbox_taxonomy::selector::*;
 use foxbox_taxonomy::services::*;
 
@@ -30,7 +31,7 @@ pub struct TaxonomyRouter {
     api: Arc<AdapterManager>
 }
 
-type GetterResultMap = ResultMap<Id<Channel>, Option<Value>, Error>;
+type GetterResultMap = ResultMap<Id<Channel>, Option<(Payload, Type)>, Error>;
 
 impl TaxonomyRouter {
     pub fn new(adapter_api: &Arc<AdapterManager>) -> Self {
@@ -84,13 +85,16 @@ impl TaxonomyRouter {
         }
 
         for map_value in map.values() {
-            if let Ok(ref opt_res) = *map_value  {
-                if let  Some(ref value) = *opt_res {
-                    if let Value::Binary(ref data) = *value {
+            if let Ok(Some((ref payload, Type::Binary))) = *map_value {
+                match payload.to_value(&Type::Binary) {
+                    Ok(Value::Binary(ref data)) => {
                         return Some(Binary {
                             mimetype: (*data).mimetype.clone(),
                             data: (*data).data.clone()
                         });
+                    }
+                    other => {
+                        warn!("get_binary could not convert data labelled as Type::Binary to Value::Binary {:?}", other);
                     }
                 }
             }
@@ -170,14 +174,16 @@ impl Handler for TaxonomyRouter {
         macro_rules! payload_api {
             ($call:ident, $param:ty, $path:expr, $method:expr, $action:ident) => (
                 if path == $path && req.method == $method {
-                    type Selectors = $param;
+                    type Arg = $param;
                     return {
                         let api = &self.api;
                         let source = itry!(Self::read_body_to_string(&mut req.body));
                         match Path::new().push_str("body",
-                            |path| Selectors::from_str_at(path, &source as &str))
+                            |path| Arg::from_str_at(path, &source as &str))
                         {
-                            Ok(arg) => $action!(api, arg, $call),
+                            Ok(arg) => {
+                                $action!(api, arg, $call)
+                            },
                             Err(err) => self.build_parse_error(&err)
                         }
                     }
@@ -194,17 +200,17 @@ impl Handler for TaxonomyRouter {
                     type Param2 = $param2;
                     return {
                         let source = itry!(Self::read_body_to_string(&mut req.body));
-                        let mut json = match serde_json::de::from_str(&source as &str) {
+                        let json = match serde_json::de::from_str(&source as &str) {
                             Err(err) => return self.build_parse_error(&ParseError::json(err)),
                             Ok(args) => args
                         };
                         let arg_1 = match Path::new().push_str(&format!("body.{}", stringify!($name1)),
-                            |path| Param1::take(path, &mut json, stringify!($name1))) {
+                            |path| Param1::take(path, &json, stringify!($name1))) {
                             Err(err) => return self.build_parse_error(&err),
                             Ok(val) => val
                         };
                         let arg_2 = match Path::new().push_str(&format!("body.{}", stringify!($name2)),
-                            |path| Param2::take(path, &mut json, stringify!($name2))) {
+                            |path| Param2::take(path, &json, stringify!($name2))) {
                             Err(err) => return self.build_parse_error(&err),
                             Ok(val) => val
                         };
@@ -220,18 +226,11 @@ impl Handler for TaxonomyRouter {
         get_post_api!(get_services, ServiceSelector, ["services"]);
         get_post_api!(get_channels, ChannelSelector, ["channels"]);
 
-        // FIXME: Deprecate and remove
-        // FIXME: Need to tweak selector
-        get_post_api!(get_channels, ChannelSelector, ["channels", "getters"]);
-        // FIXME: Deprecate and remove
-        // FIXME: Need to tweak selector
-        get_post_api!(get_channels, ChannelSelector, ["channels", "setters"]);
-
         // Fetching and getting values.
         // We can't use a GET http method here because the Fetch() DOM api
         // doesn't allow bodies with GET and HEAD requests.
         payload_api!(fetch_values, Vec<ChannelSelector>, ["channels", "get"], Method::Put, binary);
-        payload_api!(send_values, TargetMap<ChannelSelector, Value>, ["channels", "set"], Method::Put, simple);
+        payload_api!(send_values, TargetMap<ChannelSelector, Payload>, ["channels", "set"], Method::Put, simple);
 
         // Adding tags.
         payload_api2!(add_service_tags,
@@ -243,20 +242,6 @@ impl Handler for TaxonomyRouter {
                     tags => Vec<Id<TagId>>,
                     ["channels", "tags"], Method::Post);
 
-
-      // FIXME: Deprecate and remove
-      // FIXME: Need to tweak selector
-        payload_api2!(add_channel_tags,
-                      getters => Vec<ChannelSelector>,
-                      tags => Vec<Id<TagId>>,
-                      ["channels", "getters", "tags"], Method::Post);
-      // FIXME: Deprecate and remove
-      // FIXME: Need to tweak selector
-        payload_api2!(add_channel_tags,
-                      setters => Vec<ChannelSelector>,
-                      tags => Vec<Id<TagId>>,
-                      ["channels", "setters", "tags"], Method::Post);
-
         // Removing tags.
         payload_api2!(remove_service_tags,
                       services => Vec<ServiceSelector>,
@@ -266,20 +251,6 @@ impl Handler for TaxonomyRouter {
                        channels => Vec<ChannelSelector>,
                        tags => Vec<Id<TagId>>,
                        ["channels", "tags"], Method::Delete);
-
-          // FIXME: Deprecate and remove
-          // FIXME: Need to tweak selector
-        payload_api2!(remove_channel_tags,
-                      getters => Vec<ChannelSelector>,
-                      tags => Vec<Id<TagId>>,
-                      ["channels", "getters", "tags"], Method::Delete);
-
-          // FIXME: Deprecate and remove
-          // FIXME: Need to tweak selector
-        payload_api2!(remove_channel_tags,
-                      setters => Vec<ChannelSelector>,
-                      tags => Vec<Id<TagId>>,
-                      ["channels", "setters", "tags"], Method::Delete);
 
         // Fallthrough, returning a 404.
         Ok(Response::with((Status::NotFound,
@@ -297,12 +268,10 @@ pub fn create<T>(controller: T, adapter_api: &Arc<AdapterManager>) -> Chain
         vec![
             AuthEndpoint(vec![Method::Get, Method::Post], "services".to_owned()),
             AuthEndpoint(vec![Method::Post, Method::Delete], "services/tags".to_owned()),
-            AuthEndpoint(vec![Method::Get, Method::Post], "channels/getters".to_owned()),
-            AuthEndpoint(vec![Method::Get, Method::Post], "channels/setters".to_owned()),
+            AuthEndpoint(vec![Method::Get, Method::Post], "channels".to_owned()),
             AuthEndpoint(vec![Method::Get], "channels/get".to_owned()),
             AuthEndpoint(vec![Method::Put], "channels/set".to_owned()),
-            AuthEndpoint(vec![Method::Post, Method::Delete], "channels/getters/tags".to_owned()),
-            AuthEndpoint(vec![Method::Post, Method::Delete], "channels/setters/tags".to_owned())
+            AuthEndpoint(vec![Method::Post, Method::Delete], "channels/tags".to_owned())
         ]
     } else {
         vec![]
@@ -354,6 +323,17 @@ describe! taxonomy_router {
 
         assert_eq!(body, s);
     }
+
+    it "should return the list of channels from a POST request" {
+        let response = request::post("http://localhost:3000/api/v1/channels",
+                                     Headers::new(),
+                                     r#"[{"id":"getter:interval.clock@link.mozilla.org"}]"#,
+                                     &mount).unwrap();
+        let body = response::extract_body_to_string(response);
+        let s = r#"[{"adapter":"clock@link.mozilla.org","id":"getter:interval.clock@link.mozilla.org","kind":"CountEveryInterval","service":"service:clock@link.mozilla.org","supports_fetch":false,"supports_send":false,"tags":[]}]"#;
+
+        assert_eq!(body, s);
+    }
 }
 
 #[cfg(test)]
@@ -362,7 +342,7 @@ describe! binary_getter {
         extern crate serde_json;
 
         use foxbox_taxonomy::adapter::*;
-        use foxbox_taxonomy::api::{ Error, InternalError, User };
+        use foxbox_taxonomy::api::{ Error, InternalError, Operation, User };
         use foxbox_taxonomy::manager::AdapterManager;
         use foxbox_taxonomy::services::*;
         use foxbox_taxonomy::values::{ Type, Value, Binary };
@@ -429,7 +409,7 @@ describe! binary_getter {
             fn register_watch(&self, mut watch: Vec<WatchTarget>) -> WatchResult
             {
                 watch.drain(..).map(|(id, _, _)| {
-                    (id.clone(), Err(Error::GetterDoesNotSupportWatching(id)))
+                    (id.clone(), Err(Error::OperationNotSupported(Operation::Watch, id)))
                 }).collect()
             }
         }

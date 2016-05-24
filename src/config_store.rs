@@ -113,7 +113,7 @@ impl ConfigStore {
 
         let _ = self.save_lock.lock().unwrap();
         match File::create(update_path)
-            .map(|mut file| file.write_all(&conf_as_json.as_bytes()))
+            .map(|mut file| file.write_all(conf_as_json.as_bytes()))
             .and_then(|_| { fs::copy(&update_path, &file_path) })
             .and_then(|_| { fs::remove_file(&update_path) }) {
                 Ok(_) => debug!("Wrote configuration file {}", self.file_name),

@@ -1,40 +1,37 @@
 'use strict';
 
-var SignInAccessor = require('./accessors.js');
-var View = require('../view');
+const View = require('../view');
+const PASSWORDS = require('../../passwords.json');
 
-function SignInView(driver) {
-  [].push.call(arguments, SignInAccessor);
+
+function SignInView() {
   View.apply(this, arguments);
 }
 
-SignInView.prototype = {
-  successLogin: function(password) {
-    password = password !== undefined ? password : 12345678;
+SignInView.prototype = Object.assign({
+  successLogin(password) {
+    password = password !== undefined ? password : PASSWORDS.valid;
     return this._submitPassword(password)
-    .then(() => {
-      const SignedInView = require('../signed_in/view.js');
-      return new SignedInView(this.driver);
-    });
+      .then(() => this.instanciateNextView('signed_in'));
   },
 
-  failureLogin: function(password) {
+  failureLogin(password) {
     return this._submitPassword(password)
-    .then(() => this.alertMessage());
+      .then(() => this.alertMessage());
   },
 
-  _submitPassword: function(password) {
-    return this.accessors.password.sendKeys(password)
-    .then(() => this.accessors.submitButton.click());
+  _submitPassword(password) {
+    return this.accessor.passwordField.sendKeys(password)
+      .then(() => this.accessor.submitButton.click());
   },
 
-  alertMessage: function() {
+  alertMessage() {
     return this.driver.switchTo().alert().getText();
   },
 
-  dismissAlert: function() {
+  dismissAlert() {
     return this.driver.switchTo().alert().accept();
   },
-};
+}, View.prototype);
 
 module.exports = SignInView;

@@ -11,6 +11,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use serde_json::error;
+use serde::de::{ Deserialize, Deserializer };
 use serde::ser::{ Serialize, Serializer };
 use serde_json;
 pub use serde_json::value::Value as JSON;
@@ -94,7 +95,7 @@ impl Default for Path {
 }
 
 /// An error during parsing.
-#[derive(Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum ParseError {
     JSON(JSONError),
     MissingField {
@@ -169,6 +170,18 @@ impl ParseError {
 #[derive(Debug)]
 pub struct JSONError(error::Error);
 
+impl Clone for JSONError {
+    fn clone(&self) -> JSONError {
+        unimplemented!()
+    }
+}
+
+impl Deserialize for JSONError{
+    fn deserialize<D>(_: &mut D) -> Result<Self, D::Error>
+        where D: Deserializer {
+        Err(D::Error::custom("Cannot deserialize JSONError"))
+    }
+}
 impl Serialize for JSONError {
     fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
         where S: Serializer
@@ -189,15 +202,15 @@ pub trait Parser<T: Sized> {
     fn from_str_at(path: Path, source: &str) -> Result<T, ParseError> {
         match serde_json::from_str(source) {
             Err(err) => Err(ParseError::json(err)),
-            Ok(mut json) => Self::parse(path, &mut json)
+            Ok(json) => Self::parse(path, &json)
         }
     }
 
     /// Parse a single value from JSON, consuming as much as necessary from JSON.
-    fn parse(path: Path, source: &mut JSON) -> Result<T, ParseError>;
+    fn parse(path: Path, source: &JSON) -> Result<T, ParseError>;
 
     /// Parse a field from JSON, consuming it.
-    fn take(path: Path, source: &mut JSON, field_name: &str) -> Result<T, ParseError> {
+    fn take(path: Path, source: &JSON, field_name: &str) -> Result<T, ParseError> {
         match Self::take_opt(path.clone(), source, field_name) {
             Some(result) => result,
             None => Err(ParseError::missing_field(field_name, &path))
@@ -205,10 +218,10 @@ pub trait Parser<T: Sized> {
     }
 
     /// Parse a field from JSON, consuming it.
-    fn take_opt(path: Path, source: &mut JSON, field_name: &str) -> Option<Result<T, ParseError>> {
-        if let JSON::Object(ref mut obj) = *source {
-            if let Some(mut v) = obj.remove(field_name) {
-                Some(Self::parse(path, &mut v))
+    fn take_opt(path: Path, source: &JSON, field_name: &str) -> Option<Result<T, ParseError>> {
+        if let JSON::Object(ref obj) = *source {
+            if let Some(v) = obj.get(field_name) {
+                Some(Self::parse(path, v))
             } else {
                 None
             }
@@ -218,13 +231,13 @@ pub trait Parser<T: Sized> {
     }
 
     /// Parse a field containing an array from JSON, consuming the field.
-    fn take_vec_opt(path: Path, source: &mut JSON, field_name: &str) -> Option<Result<Vec<T>, ParseError>>
+    fn take_vec_opt(path: Path, source: &JSON, field_name: &str) -> Option<Result<Vec<T>, ParseError>>
     {
-        if let JSON::Object(ref mut obj) = *source {
-            if let Some(ref mut json) = obj.remove(field_name) {
-                if let JSON::Array(ref mut vec) = *json {
+        if let JSON::Object(ref obj) = *source {
+            if let Some(json) = obj.get(field_name) {
+                if let JSON::Array(ref vec) = *json {
                     let mut result = Vec::with_capacity(vec.len());
-                    for (json, i) in vec.iter_mut().zip(0..) {
+                    for (json, i) in vec.iter().zip(0..) {
                         match path.push_index(i, |path| Self::parse(path, json)) {
                             Err(error) => return Some(Err(error)),
                             Ok(parsed) => result.push(parsed)
@@ -242,7 +255,7 @@ pub trait Parser<T: Sized> {
         }
     }
 
-    fn take_vec(path: Path, source: &mut JSON, field_name: &str) -> Result<Vec<T>, ParseError> {
+    fn take_vec(path: Path, source: &JSON, field_name: &str) -> Result<Vec<T>, ParseError> {
         match Self::take_vec_opt(path.clone(), source, field_name) {
             Some(result) => result,
             None => Err(ParseError::missing_field(field_name, &path))
@@ -254,7 +267,7 @@ impl Parser<f64> for f64 {
     fn description() -> String {
         "Number".to_owned()
     }
-    fn parse(path: Path, source: &mut JSON) -> Result<Self, ParseError> {
+    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
         match *source {
             JSON::I64(val) => Ok(val as f64),
             JSON::F64(val) => Ok(val),
@@ -268,7 +281,7 @@ impl Parser<bool> for bool {
     fn description() -> String {
         "bool".to_owned()
     }
-    fn parse(path: Path, source: &mut JSON) -> Result<Self, ParseError> {
+    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
         match *source {
             JSON::Bool(ref b) => Ok(*b),
             JSON::U64(0) | JSON::I64(0) => Ok(false),
@@ -284,7 +297,7 @@ impl Parser<u8> for u8 {
     fn description() -> String {
         "byte".to_owned()
     }
-    fn parse(path: Path, source: &mut JSON) -> Result<Self, ParseError> {
+    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
         match source.as_u64() {
             None => Err(ParseError::type_error("as byte", &path, "positive integer")),
             Some(ref val) if *val > u8::max_value() as u64 =>
@@ -298,12 +311,12 @@ impl<T> Parser<Vec<T>> for Vec<T> where T: Parser<T> {
     fn description() -> String {
         format!("Array<{}>", T::description())
     }
-    fn parse(path: Path, source: &mut JSON) -> Result<Self, ParseError> {
+    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
         // Otherwise, parse as an actual array.
         match *source {
-            JSON::Array(ref mut array) => {
+            JSON::Array(ref array) => {
                 let mut result = Vec::with_capacity(array.len());
-                for (source, i) in array.iter_mut ().zip(0..) {
+                for (source, i) in array.iter().zip(0..) {
                     let value = try!(path.push_index(i, |path| T::parse(path, source)));
                     result.push(value)
                 }
@@ -327,7 +340,7 @@ impl<T, U> Parser<(T, U)> for (T, U) where T: Parser<T>, U: Parser<U> {
     fn description() -> String {
         format!("({}, {})", T::description(), U::description())
     }
-    fn parse(path: Path, source: &mut JSON) -> Result<Self, ParseError> {
+    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
         match *source {
             JSON::Array(ref mut array) if array.len() == 2 => {
                 let mut right = array.pop().unwrap(); // We just checked that length == 2
@@ -345,7 +358,7 @@ impl Parser<String> for String {
     fn description() -> String {
         "String".to_owned()
     }
-    fn parse(path: Path, source: &mut JSON) -> Result<Self, ParseError> {
+    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
         match source.as_string() {
             Some(str) => Ok(str.to_owned()),
             None => Err(ParseError::type_error("string", &path, "string"))
@@ -358,7 +371,7 @@ impl<T> Parser<Arc<T>> for Arc<T> where T: Parser<T> {
     fn description() -> String {
         T::description()
     }
-    fn parse(path: Path, source: &mut JSON) -> Result<Self, ParseError> {
+    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
         Ok(Arc::new(try!(T::parse(path, source))))
     }
 }
@@ -465,7 +478,7 @@ impl ToJSON for () {
 
 /*
 impl<T> Parser<T> for T where T: Deserialize {
-    fn parse(_: Path, source: &mut JSON) -> Result<T, ParseError> {
+    fn parse(_: Path, source: &JSON) -> Result<T, ParseError> {
         use serde_json;
         serde_json::from_value(source.clone()).map_err(ParseError::json)
     }

@@ -47,7 +47,7 @@ impl UpnpListener for IpCameraUpnpListener {
 
         let model_name = try_get!(service.description, "/root/device/modelName");
         let known_models = ["DCS-5010L", "DCS-5020L", "DCS-5025L", "Link-IpCamera"];
-        let model_name_str: &str = &model_name;
+        let model_name_str: &str = model_name;
         if !known_models.contains(&model_name_str) {
             return false;
         }
@@ -70,7 +70,7 @@ impl UpnpListener for IpCameraUpnpListener {
         let manufacturer = try_get!(service.description, "/root/device/manufacturer");
 
         IPCameraAdapter::init_service(&self.manager, self.services.clone(), &self.config,
-                                      &udn, &url, &name, &manufacturer, &model_name).unwrap();
+                                      &udn, url, &name, manufacturer, model_name).unwrap();
         true
     }
 }

@@ -3,7 +3,6 @@
 use adapter::*;
 
 use api::{ Error, User };
-use selector::*;
 use services::*;
 use values::*;
 
@@ -49,7 +48,7 @@ type SyncMap<K, V> = Arc<Mutex<HashMap<K, V>>>;
 
 struct WatcherState {
     filter: Option<Box<Range>>,
-    on_event: Box<ExtSender<WatchEvent>>,
+    on_event: Box<ExtSender<WatchEvent<Value>>>,
     is_met: RefCell<bool>, /* is_met*/
     is_dropped: Arc<AtomicBool>, /* is_dropped */
 }

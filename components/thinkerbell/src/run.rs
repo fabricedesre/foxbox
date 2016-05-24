@@ -7,9 +7,10 @@ use compile;
 
 use foxbox_taxonomy::api;
 use foxbox_taxonomy::api::{ API, Error as APIError, Targetted, User, WatchEvent };
+use foxbox_taxonomy::io::*;
 use foxbox_taxonomy::services::Channel;
 use foxbox_taxonomy::util::{ Exactly, Id };
-use foxbox_taxonomy::values::{ Duration, Value };
+use foxbox_taxonomy::values::{ Duration, Type, Value };
 
 use transformable_channels::mpsc::*;
 
@@ -264,11 +265,12 @@ impl<Env> ExecutionTask<Env> where Env: ExecutableDevEnv + Debug {
 
                 let rule_index = rule_index.clone();
                 let condition_index = condition_index.clone();
+                let payload_and_type = (Payload::from_value_auto(&Value::Range(Box::new(condition.range.clone()))), Type::Range);
                 witnesses.push(
                     api.watch_values(
                         vec![Targetted {
                             select: condition.source.clone(),
-                            payload: Exactly::Exactly(Value::Range(Box::new(condition.range.clone())))
+                            payload: Exactly::Exactly(payload_and_type)
                         }],
                         Box::new(self.tx.map(move |event| {
                             ExecutionOp::Update {
@@ -308,7 +310,7 @@ impl<Env> ExecutionTask<Env> where Env: ExecutableDevEnv + Debug {
                 }
                 ExecutionOp::Update { event, rule_index, condition_index } => {
                     match event {
-                        WatchEvent::InitializationError {
+                        WatchEvent::Error {
                             channel,
                             error
                         } => {
@@ -334,7 +336,7 @@ impl<Env> ExecutionTask<Env> where Env: ExecutableDevEnv + Debug {
                             debug!("[Recipe '{}'] Added getter {}.", self.script.name, id);
                             // An getter was added. Nothing to do.
                         }
-                        WatchEvent::EnterRange { from: id, value } => {
+                        WatchEvent::EnterRange { channel: id, value, .. } => {
                             debug!("[Recipe '{}'] Getter {} has entered the range for rule {}, condition {}: {:?}", self.script.name, id, rule_index, condition_index, value);
                             // We have entered a range. If there is a
                             // timer, start it, otherwise update conditions.
@@ -370,7 +372,7 @@ impl<Env> ExecutionTask<Env> where Env: ExecutableDevEnv + Debug {
                                 condition_index: condition_index,
                             });
                         }
-                        WatchEvent::ExitRange { from: id, value } => {
+                        WatchEvent::ExitRange { channel: id, value, .. } => {
                             debug!("[Recipe '{}'] Getter {} has left the range for rule {}, condition {}: {:?}", self.script.name, id, rule_index, condition_index, value);
                             if per_rule[rule_index].ongoing_timer.is_some() {
                                 debug!("[Recipe '{}'] I need to cancel the timer for rule {}, condition {}", self.script.name, id, rule_index);

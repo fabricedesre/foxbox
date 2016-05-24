@@ -10,6 +10,7 @@ use foxbox_thinkerbell::run::*;
 use foxbox_thinkerbell::ast::*;
 
 use foxbox_taxonomy::api::{ Error as APIError, User };
+use foxbox_taxonomy::io::*;
 use foxbox_taxonomy::selector::*;
 use foxbox_taxonomy::services::*;
 use foxbox_taxonomy::values::{ Duration, OnOff, Range, TimeStamp, Type, TypeError as APITypeError , Value };
@@ -78,6 +79,8 @@ fn test_run() {
     let env = FakeEnv::new(tx_env);
     let mut exec = Execution::<FakeEnv>::new();
 
+    let data_off = Payload::from_value(&Value::OnOff(OnOff::Off), &Type::OnOff).unwrap();
+
     println!("* Spawning thread.");
     thread::spawn(move || {
         for msg in rx {
@@ -113,7 +116,7 @@ fn test_run() {
                         destination: vec![
                             ChannelSelector::new()
                         ],
-                        value: Value::OnOff(OnOff::Off),
+                        value: data_off,
                         kind: ChannelKind::LightOn,
                         phantom: PhantomData,
                     }
@@ -460,6 +463,8 @@ fn test_run_with_delay() {
     let env = FakeEnv::new(tx_env);
     let mut exec = Execution::<FakeEnv>::new();
 
+    let data_off = Payload::from_value(&Value::OnOff(OnOff::Off), &Type::OnOff).unwrap();
+
     thread::spawn(move || {
         for msg in rx {
             if let Event::Env(FakeEnvEvent::Done) = msg {
@@ -497,7 +502,7 @@ fn test_run_with_delay() {
                         destination: vec![
                             ChannelSelector::new()
                         ],
-                        value: Value::OnOff(OnOff::Off),
+                        value: data_off,
                         kind: ChannelKind::LightOn,
                         phantom: PhantomData,
                     }

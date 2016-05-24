@@ -68,36 +68,38 @@ Prepper.makeSuite('Control lights locally',function(){
     var hue = 200;
     var invalidSat = 1.5;  // range = [0,1]
     var bri = 0.5;
-    
+
     // send various values within valid range
     var payload = {'select': {'id': lights[0]}, 
       'value': { 'Color': {'h':hue,'s':invalidSat,'v':bri} } };
 
     return chakram.put(Prepper.foxboxManager.setterURL,payload)
     .then(function(cmdResponse) {
-      expect(cmdResponse).to.have.status(400);
-      expect(cmdResponse.body).equals(
-        'TypeError { name: "s", at: "body.value.Color.Color",' +
-         ' expected: "a number in [0, 1]" }');
+      expect(cmdResponse).to.have.status(200);
+      expect(cmdResponse.body[lights[0]].Error.ParseError.TypeError.expected)
+        .equals("a number in [0, 1]");
+      expect(cmdResponse.body[lights[0]].Error.ParseError.TypeError.name)
+        .equals("s");
     });
-  }); 
+  });
 
   it('Send invalid brightness value', function() {   
     lights[1] = lights[1].replace('getter:power','setter:color');
     var hue = 200;
     var sat = 0.5;  // range = [0,1]
-    var invalidBri = 1.5;  // Value should be less than or equal to 1 
-    
+    var invalidBri = 1.5;  // Value should be less than or equal to 1
+
     // send various values within valid range
     var payload = {'select': {'id': lights[1]}, 
       'value': { 'Color': {'h':hue,'s':sat,'v':invalidBri} } };
 
     return chakram.put(Prepper.foxboxManager.setterURL,payload)
     .then(function(cmdResponse) {
-      expect(cmdResponse).to.have.status(400);
-      expect(cmdResponse.body).equals(
-        'TypeError { name: "v", at: "body.value.Color.Color",' + 
-        ' expected: "a number in [0, 1]" }');
+      expect(cmdResponse).to.have.status(200);
+      expect(cmdResponse.body[lights[1]].Error.ParseError.TypeError.expected)
+        .equals("a number in [0, 1]");
+      expect(cmdResponse.body[lights[1]].Error.ParseError.TypeError.name)
+        .equals("v");
     });
-  }); 
+  });
 });

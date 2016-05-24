@@ -8,7 +8,7 @@ use transformable_channels::mpsc::ExtSender;
 use std::collections::HashMap;
 use std::sync::{ Arc, Mutex, Weak };
 
-pub type SyncSender = Mutex<Box<ExtSender<WatchEvent>>>;
+pub type SyncSender = Mutex<Box<ExtSender<WatchEvent<Value>>>>;
 type WatchersMap = HashMap<usize, Arc<SyncSender>>;
 type RangedWeakSender = (Option<Box<Range>>, Weak<SyncSender>);
 pub type RangedSyncSender = (Option<Box<Range>>, Arc<SyncSender>);

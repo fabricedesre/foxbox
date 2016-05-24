@@ -4,6 +4,7 @@
 //! objects. Rather, they will use module `parse` to parse a script
 //! and module `run` to execute it.
 
+use foxbox_taxonomy::io::*;
 use foxbox_taxonomy::selector::*;
 use foxbox_taxonomy::services::*;
 use foxbox_taxonomy::values::*;
@@ -25,7 +26,7 @@ impl Parser<Script<UncheckedCtx>> for Script<UncheckedCtx> {
     fn description() -> String {
         "Script".to_owned()
     }
-    fn parse(path: Path, source: &mut JSON) -> Result<Self, ParseError> {
+    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
         let name =  try!(path.push("name", |path| String::take(path, source, "name")));
         let rules = try!(path.push("rules", |path| Rule::take_vec(path, source, "rules")));
         Ok(Script {
@@ -90,7 +91,7 @@ impl Parser<Rule<UncheckedCtx>> for Rule<UncheckedCtx> {
         "Rule".to_owned()
     }
 
-    fn parse(path: Path, source: &mut JSON) -> Result<Self, ParseError> {
+    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
         let conditions = try!(path.push("conditions",
             |path| Match::take_vec(path, source, "conditions"))
         );
@@ -177,7 +178,7 @@ impl Parser<Match<UncheckedCtx>> for Match<UncheckedCtx> {
         "Match".to_owned()
     }
 
-    fn parse(path: Path, source: &mut JSON) -> Result<Self, ParseError> {
+    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
         let sources = try!(path.push("source",
             |path| ChannelSelector::take_vec(path, source, "source"))
         );
@@ -187,7 +188,7 @@ impl Parser<Match<UncheckedCtx>> for Match<UncheckedCtx> {
         let range = try!(path.push("range",
             |path| Range::take(path, source, "range"))
         );
-        let duration = match path.push("range",
+        let duration = match path.push("duration",
             |path| Duration::take(path, source, "duration"))
         {
             Err(ParseError::MissingField {..}) => None,
@@ -218,6 +219,7 @@ impl Parser<Match<UncheckedCtx>> for Match<UncheckedCtx> {
 /// extern crate foxbox_taxonomy;
 ///
 /// use foxbox_thinkerbell::ast::*;
+/// use foxbox_taxonomy::io::*;
 /// use foxbox_taxonomy::values::*;
 /// use foxbox_taxonomy::services::*;
 /// use foxbox_taxonomy::parse::*;
@@ -230,7 +232,7 @@ impl Parser<Match<UncheckedCtx>> for Match<UncheckedCtx> {
 /// }"#;
 ///
 /// let statement = Statement::<UncheckedCtx>::from_str(&source).unwrap();
-/// assert_eq!(statement.value, Value::OnOff(OnOff::Off));
+/// assert_eq!(statement.value, Payload::from_value_auto(&Value::OnOff(OnOff::Off)));
 /// assert_eq!(statement.kind, ChannelKind::LightOn);
 /// # }
 /// ```
@@ -244,7 +246,7 @@ pub struct Statement<Ctx> where Ctx: Context {
     /// Data to send to the resource. During compilation, we check
     /// that the type of `value` is compatible with that of
     /// `destination`.
-    pub value: Value,
+    pub value: Payload,
 
     /// The kind of channel expected from `destination`, e.g. "close
     /// the door", "set the temperature", etc. During compilation, we
@@ -259,7 +261,7 @@ impl Parser<Statement<UncheckedCtx>> for Statement<UncheckedCtx> {
         "Parser".to_owned()
     }
 
-    fn parse(path: Path, source: &mut JSON) -> Result<Self, ParseError> {
+    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
         let destination = try!(path.push("destination",
             |path| ChannelSelector::take_vec(path, source, "destination"))
         );
@@ -267,7 +269,7 @@ impl Parser<Statement<UncheckedCtx>> for Statement<UncheckedCtx> {
             |path| ChannelKind::take(path, source, "kind"))
         );
         let value = try!(path.push("value",
-            |path| Value::take(path, source, "value"))
+            |path| Payload::take(path, source, "value"))
         );
         Ok(Statement {
             destination: destination,

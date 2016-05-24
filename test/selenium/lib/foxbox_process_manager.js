@@ -21,7 +21,7 @@ FoxboxManager.PORT = 3331;
 FoxboxManager.HOST_URL = format('http://localhost:%d/', FoxboxManager.PORT);
 
 FoxboxManager.prototype = {
-  start: function() {
+  start() {
     return new Promise(resolve => {
       this._foxboxInstance = spawn('./target/debug/foxbox', [
         '--disable-tls',
@@ -33,7 +33,7 @@ FoxboxManager.prototype = {
     });
   },
 
-  kill: function() {
+  kill() {
     return new Promise(resolve => {
       this._foxboxInstance.kill('SIGINT');
 
@@ -41,7 +41,7 @@ FoxboxManager.prototype = {
     });
   },
 
-  cleanData: function() {
+  cleanData() {
     return this._deleteAllProfileButCertificates();
   },
 
@@ -49,7 +49,7 @@ FoxboxManager.prototype = {
    * As a consequence, tests don't fail because many foxboxes are detected on
    * github.io.
    */
-  _deleteAllProfileButCertificates: function() {
+  _deleteAllProfileButCertificates() {
     return new Promise(resolve => {
       find.file(/^((?!\.pem).)*$/, PROFILE_PATH, files => {
         var promises = files.map(file => new Promise(res => {

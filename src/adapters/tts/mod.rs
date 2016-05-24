@@ -14,7 +14,6 @@ use foxbox_taxonomy::services::{ AdapterId, Channel, ChannelKind, Id, Service, S
 use foxbox_taxonomy::values::{ Type, Value };
 use std::collections::HashMap;
 use std::sync::Arc;
-use transformable_channels::mpsc::*;
 
 pub mod engine;
 pub use self::engine::TtsEngine;
@@ -67,13 +66,6 @@ impl<T: TtsEngine> Adapter for TtsAdapter<T> {
                 }
             }
             (id.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(id))))
-        }).collect()
-    }
-
-    fn register_watch(&self, mut watch: Vec<WatchTarget>) -> WatchResult
-    {
-        watch.drain(..).map(|(id, _, _)| {
-            (id.clone(), Err(Error::GetterDoesNotSupportWatching(id)))
         }).collect()
     }
 }

@@ -9,7 +9,7 @@ dist: trusty
 language: rust
 rust:
   # Make sure to also update the nightly version for the arm_cross_compile branch of the matrix.
-  - nightly-2016-05-07
+  - nightly-2016-05-22
   - nightly
 
 matrix:
@@ -18,7 +18,7 @@ matrix:
     - rust: nightly
   include:
     - os: linux
-      rust: nightly-2016-05-07
+      rust: nightly-2016-05-22
       env: BUILD_ENV=-arm_cross_compile
     - os: linux
       rust: nightly

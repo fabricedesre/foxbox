@@ -8,10 +8,11 @@ pub use adapter::*;
 use api;
 use api::{ API, Error, TargetMap, User };
 use backend::*;
+use io::*;
 use selector::*;
 use services::*;
 use util::is_sync;
-use values::{ TypeError, Value };
+use values::Type;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -247,7 +248,7 @@ impl API for AdapterManager {
 
     /// Read the latest value from a set of channels
     fn fetch_values(&self, selectors: Vec<ChannelSelector>, user: User) ->
-        ResultMap<Id<Channel>, Option<Value>, Error>
+        ResultMap<Id<Channel>, Option<(Payload, Type)>, Error>
     {
         // First, prepare the request.
         let mut request;
@@ -257,35 +258,17 @@ impl API for AdapterManager {
         }
         // Now fetch the values
         let mut results = HashMap::new();
-        for (_, (adapter, mut getters)) in request.drain() {
-            let (getters, mut types) : (Vec<_>, Vec<_>) = getters.drain().unzip();
-            let mut got = adapter
-                .fetch_values(getters, user.clone());
+        for (_, (adapter, mut channels)) in request.drain() {
+            let channels = channels.drain().collect();
+            let got = adapter.fetch_values(channels, user.clone());
 
-            let checked = got.drain()
-                .zip(types.drain(..))
-                .map(|(result, typ)| {
-                    if let (id, Ok(Some(value))) = result {
-                        if value.get_type() == typ {
-                            (id, Ok(Some(value)))
-                        } else {
-                            (id, Err(Error::TypeError(TypeError {
-                                expected: typ,
-                                got: value.get_type()
-                            })))
-                        }
-                    } else {
-                        result
-                    }
-                });
-
-            results.extend(checked);
+            results.extend(got);
         }
         results
     }
 
     /// Send a bunch of values to a set of channels
-    fn send_values(&self, keyvalues: TargetMap<ChannelSelector, Value>, user: User) ->
+    fn send_values(&self, keyvalues: TargetMap<ChannelSelector, Payload>, user: User) ->
         ResultMap<Id<Channel>, (), Error>
     {
         // First, prepare the request.
@@ -297,17 +280,16 @@ impl API for AdapterManager {
 
         // Dispatch to adapter
         let mut results = HashMap::new();
-        for (_, (adapter, (request, failures))) in prepared.drain() {
+        for (_, (adapter, request)) in prepared.drain() {
             let got = adapter.send_values(request, user.clone());
             results.extend(got);
-            results.extend(failures);
         }
 
         results
     }
 
     /// Watch for any change
-    fn watch_values(&self, watch: TargetMap<ChannelSelector, Exactly<Value>>,
+    fn watch_values(&self, watch: TargetMap<ChannelSelector, Exactly<(Payload, Type)>>,
         on_event: Box<ExtSender<api::WatchEvent>>) -> Self::WatchGuard
     {
         let (request, watch_key, is_dropped) =

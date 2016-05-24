@@ -1,23 +1,19 @@
 'use strict';
 
-var View = require('../view');
-var MainAccessors = require('./accessors');
+const View = require('../view');
 
 
 function MainView() {
-  [].push.call(arguments, MainAccessors);
   View.apply(this, arguments);
 
-  this.accessors.connectToFoxBoxButton;
+  this.accessor.connectToFoxBoxButton;
 }
 
 MainView.prototype = Object.assign({
 
   connectToFoxBox: function() {
-    return this.accessors.connectToFoxBoxButton.click().then(() => {
-     var SetUpView = require('../sign_up/view');
-     return new SetUpView(this.driver);
-    });
+    return this.accessor.connectToFoxBoxButton.click()
+      .then(() => this.instanciateNextView('set_up'));
   }
 
 }, View.prototype);

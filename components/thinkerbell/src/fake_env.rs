@@ -38,7 +38,7 @@ struct TestSharedAdapterBackend {
     timers: BinaryHeap<Timer>,
     trigger_timers_until: Option<DateTime<UTC>>,
 
-    watchers: HashMap<usize, (Id<Channel>, Option<Box<Range>>, Box<ExtSender<WatchEvent>>)>,
+    watchers: HashMap<usize, (Id<Channel>, Option<Box<Range>>, Box<ExtSender<WatchEvent<Value>>>)>,
 }
 
 impl TestSharedAdapterBackend {
@@ -83,7 +83,7 @@ impl TestSharedAdapterBackend {
         }).collect()
     }
 
-    fn register_watch(&mut self, mut source: Vec<(Id<Channel>, Option<Value>, Box<ExtSender<WatchEvent>>)>) ->
+    fn register_watch(&mut self, mut source: Vec<(Id<Channel>, Option<Value>, Box<ExtSender<WatchEvent<Value>>>)>) ->
             Vec<(Id<Channel>, Result<usize, Error>)>
     {
         let results = source.drain(..).filter_map(|(id, range, tx)| {
@@ -320,7 +320,7 @@ impl Adapter for TestAdapter {
     /// If no `Range` option is set, the watcher expects to receive `EnterRange` events whenever
     /// a new value is available on the device. The adapter may decide to reject the request if
     /// this is clearly not the expected usage for a device, or to throttle it.
-    fn register_watch(&self, source: Vec<(Id<Channel>, Option<Value>, Box<ExtSender<WatchEvent>>)>) ->
+    fn register_watch(&self, source: Vec<(Id<Channel>, Option<Value>, Box<ExtSender<WatchEvent<Value>>>)>) ->
             Vec<(Id<Channel>, Result<Box<AdapterWatchGuard>, Error>)>
     {
         let (tx, rx) = channel();
@@ -545,7 +545,7 @@ enum AdapterOp {
         tx: Box<ExtSender<ResultMap<Id<Channel>, (), Error>>>
     },
     Watch {
-        source: Vec<(Id<Channel>, Option<Value>, Box<ExtSender<WatchEvent>>)>,
+        source: Vec<(Id<Channel>, Option<Value>, Box<ExtSender<WatchEvent<Value>>>)>,
         tx: Box<ExtSender<Vec<(Id<Channel>, Result<usize, Error>)>>>
     },
     AddTimer(Timer),

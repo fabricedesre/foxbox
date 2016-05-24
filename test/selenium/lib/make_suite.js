@@ -18,35 +18,35 @@ Suite.prototype = {
     describe(this.description, function() {
       this.timeout(30000);
 
-      before(() => {
+      before(function() {
         return self.foxboxProcessManager.start()
-        .then(() => self.app.init());
+          .then(() => self.app.init());
       });
 
       subSuite(self.app);
 
-      after(() => {
+      after(function() {
         return self.app.stop()
-        .then(() => self.foxboxProcessManager.kill())
-        .then(() => self.foxboxProcessManager.cleanData());
+          .then(() => self.foxboxProcessManager.kill())
+          .then(() => self.foxboxProcessManager.cleanData());
       });
     });
   },
 
   browserCleanUp() {
     return this.app.clear()
-    // init() should run even if clear() failed. This is useful at the initial
-    // start up, when there is nothing to clear
-    .then(() => this.app.init(),
-          () => this.app.init());
+      // init() should run even if clear() failed. This is useful at the initial
+      // start up, when there is nothing to clear
+      .then(() => this.app.init(),
+        () => this.app.init());
   },
 
   restartFromScratch() {
     return this.app.clear()
-    .then(() => this.foxboxProcessManager.kill())
-    .then(() => this.foxboxProcessManager.cleanData())
-    .then(() => this.foxboxProcessManager.start())
-    .then(() => this.app.init());
+      .then(() => this.foxboxProcessManager.kill())
+      .then(() => this.foxboxProcessManager.cleanData())
+      .then(() => this.foxboxProcessManager.start())
+      .then(() => this.app.init());
   }
 };
 

@@ -133,13 +133,6 @@ impl Adapter for ThinkerbellAdapter {
             })
             .collect()
     }
-
-    fn register_watch(&self, mut watch: Vec<WatchTarget>) -> WatchResult
-    {
-        watch.drain(..).map(|(id, _, _)| {
-            (id.clone(), Err(Error::GetterDoesNotSupportWatching(id)))
-        }).collect()
-    }
 }
 
 /// `ThinkerbellAdapter`'s main loop handles messages of these types.

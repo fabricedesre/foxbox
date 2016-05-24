@@ -11,7 +11,7 @@ mod watchers;
 use taxonomy::util::Id as TaxoId;
 use taxonomy::services::{ AdapterId, ServiceId, Service, Channel, ChannelKind };
 use taxonomy::values::*;
-use taxonomy::api::{ ResultMap, Error as TaxoError, InternalError, User };
+use taxonomy::api::{ Operation, ResultMap, Error as TaxoError, InternalError, User };
 use taxonomy::adapter::{ AdapterManagerHandle, AdapterWatchGuard, WatchEvent };
 use transformable_channels::mpsc::ExtSender;
 
@@ -473,7 +473,7 @@ impl taxonomy::adapter::Adapter for OpenzwaveAdapter {
 
                 ozw_vid_as_taxo_value(&ozw_vid)
             });
-            let value_result: Result<Option<Value>, TaxoError> = taxo_value.ok_or(TaxoError::GetterDoesNotSupportPolling(id.clone()));
+            let value_result: Result<Option<Value>, TaxoError> = taxo_value.ok_or(TaxoError::OperationNotSupported(Operation::Fetch, id.clone()));
             (id, value_result)
         }).collect()
     }
@@ -490,11 +490,11 @@ impl taxonomy::adapter::Adapter for OpenzwaveAdapter {
         }).collect()
     }
 
-    fn register_watch(&self, mut values: Vec<(TaxoId<Channel>, Option<Value>, Box<ExtSender<WatchEvent>>)>) -> Vec<(TaxoId<Channel>, Result<Box<AdapterWatchGuard>, TaxoError>)> {
+    fn register_watch(&self, mut values: Vec<(TaxoId<Channel>, Option<Value>, Box<ExtSender<WatchEvent<Value>>>)>) -> Vec<(TaxoId<Channel>, Result<Box<AdapterWatchGuard>, TaxoError>)> {
         debug!("[OpenzwaveAdapter::register_watch] Should register some watchers");
         values.drain(..).filter_map(|(id, range, sender)| {
             if self.getter_map.find_ozw_from_taxo_id(&id).is_none() {
-                return Some((id.clone(), Err(TaxoError::GetterDoesNotSupportWatching(id))))
+                return Some((id.clone(), Err(TaxoError::OperationNotSupported(Operation::Watch, id))))
             }
 
             let sender = Arc::new(Mutex::new(sender)); // Mutex is necessary because cb is not Sync.

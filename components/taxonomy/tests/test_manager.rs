@@ -4,6 +4,7 @@ extern crate transformable_channels;
 #[macro_use]
 extern crate assert_matches;
 
+use foxbox_taxonomy::io::*;
 use foxbox_taxonomy::manager::*;
 use foxbox_taxonomy::fake_adapter::*;
 use foxbox_taxonomy::api::{ API, Error, InternalError, TargetMap, Targetted, User, WatchEvent as Event };
@@ -22,6 +23,40 @@ use std::thread;
 // having to rewrite the tests.
 fn target_map<K, T>(mut source: Vec<(Vec<K>, T)>) -> TargetMap<K, T> where K: Clone, T: Clone {
     source.drain(..).map(|(v, t)| Targetted::new(v, t)).collect()
+}
+
+trait Transform<T> {
+    fn transform(&self) -> T;
+}
+
+impl Transform<Value> for (Payload, Type) {
+    fn transform(&self) -> Value {
+        self.0.to_value(&self.1).unwrap()
+    }
+}
+
+impl Transform<(Payload, Type)> for Value {
+    fn transform(&self) -> (Payload, Type) {
+        let type_ = self.get_type();
+        let payload = Payload::from_value(self, &type_).unwrap();
+        (payload, type_)
+    }
+}
+
+impl<'a> Transform<Option<Result<Option<Value>, Error>>> for Option<&'a Result<Option<(Payload, Type)>, Error>> {
+    fn transform(&self) -> Option<Result<Option<Value>, Error>> {
+        match *self {
+            None => None,
+            Some(&Err(ref err)) => Some(Err(err.clone())),
+            Some(&Ok(None)) => Some(Ok(None)),
+            Some(&Ok(Some((ref payload, ref type_)))) => {
+                match payload.to_value(type_) {
+                    Err(err) => Some(Err(err)),
+                    Ok(ok) => Some(Ok(Some(ok)))
+                }
+            }
+        }
+    }
 }
 
 pub fn get_db_environment() -> PathBuf {
@@ -969,20 +1004,20 @@ fn test_fetch() {
         tweak_1(Tweak::InjectGetterValue(getter_id_1_2.clone(), Ok(Some(Value::OnOff(OnOff::Off)))));
         let data = manager.fetch_values(vec![ChannelSelector::new()], User::None);
         assert_eq!(data.len(), 4);
-        match data.get(&getter_id_1_1) {
-            Some(&Ok(Some(Value::OnOff(OnOff::On)))) => {},
+        match data.get(&getter_id_1_1).transform() {
+            Some(Ok(Some(Value::OnOff(OnOff::On)))) => {},
             other => panic!("Unexpected result, {:?}", other)
         }
-        match data.get(&getter_id_1_2) {
-            Some(&Ok(Some(Value::OnOff(OnOff::Off)))) => {},
+        match data.get(&getter_id_1_2).transform() {
+            Some(Ok(Some(Value::OnOff(OnOff::Off)))) => {},
             other => panic!("Unexpected result, {:?}", other)
         }
-        match data.get(&getter_id_1_3) {
-            Some(&Ok(None)) => {},
+        match data.get(&getter_id_1_3).transform() {
+            Some(Ok(None)) => {},
             other => panic!("Unexpected result, {:?}", other)
         }
-        match data.get(&getter_id_2) {
-            Some(&Ok(None)) => {},
+        match data.get(&getter_id_2).transform() {
+            Some(Ok(None)) => {},
             other => panic!("Unexpected result, {:?}", other)
         }
 
@@ -990,20 +1025,20 @@ fn test_fetch() {
         tweak_1(Tweak::InjectGetterValue(getter_id_1_1.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(getter_id_1_1.clone())))));
         let data = manager.fetch_values(vec![ChannelSelector::new()], User::None);
         assert_eq!(data.len(), 4);
-        match data.get(&getter_id_1_1) {
-            Some(&Err(Error::InternalError(InternalError::NoSuchChannel(ref id)))) if *id == getter_id_1_1 => {},
+        match data.get(&getter_id_1_1).transform() {
+            Some(Err(Error::InternalError(InternalError::NoSuchChannel(ref id)))) if *id == getter_id_1_1 => {},
             other => panic!("Unexpected result, {:?}", other)
         }
-        match data.get(&getter_id_1_2) {
-            Some(&Ok(Some(Value::OnOff(OnOff::Off)))) => {},
+        match data.get(&getter_id_1_2).transform() {
+            Some(Ok(Some(Value::OnOff(OnOff::Off)))) => {},
             other => panic!("Unexpected result, {:?}", other)
         }
-        match data.get(&getter_id_1_3) {
-            Some(&Ok(None)) => {},
+        match data.get(&getter_id_1_3).transform() {
+            Some(Ok(None)) => {},
             other => panic!("Unexpected result, {:?}", other)
         }
-        match data.get(&getter_id_2) {
-            Some(&Ok(None)) => {},
+        match data.get(&getter_id_2).transform() {
+            Some(Ok(None)) => {},
             other => panic!("Unexpected result, {:?}", other)
         }
 
@@ -1011,23 +1046,23 @@ fn test_fetch() {
         tweak_1(Tweak::InjectGetterValue(getter_id_1_1.clone(), Ok(Some(Value::OpenClosed(OpenClosed::Open)))));
         let data = manager.fetch_values(vec![ChannelSelector::new()], User::None);
         assert_eq!(data.len(), 4);
-        match data.get(&getter_id_1_1) {
-            Some(&Err(Error::TypeError(TypeError {
+        match data.get(&getter_id_1_1).transform() {
+            Some(Err(Error::TypeError(TypeError {
                 got: Type::OpenClosed,
                 expected: Type::OnOff,
             }))) => {},
             other => panic!("Unexpected result, {:?}", other)
         }
-        match data.get(&getter_id_1_2) {
-            Some(&Ok(Some(Value::OnOff(OnOff::Off)))) => {},
+        match data.get(&getter_id_1_2).transform() {
+            Some(Ok(Some(Value::OnOff(OnOff::Off)))) => {},
             other => panic!("Unexpected result, {:?}", other)
         }
-        match data.get(&getter_id_1_3) {
-            Some(&Ok(None)) => {},
+        match data.get(&getter_id_1_3).transform() {
+            Some(Ok(None)) => {},
             other => panic!("Unexpected result, {:?}", other)
         }
-        match data.get(&getter_id_2) {
-            Some(&Ok(None)) => {},
+        match data.get(&getter_id_2).transform() {
+            Some(Ok(None)) => {},
             other => panic!("Unexpected result, {:?}", other)
         }
 
@@ -1099,8 +1134,11 @@ fn test_send() {
         let rx_adapter_1 = adapter_1.take_rx();
         let rx_adapter_2 = adapter_2.take_rx();
 
+        let data_on = Payload::from_value(&Value::OnOff(OnOff::On), &Type::OnOff).unwrap();
+        let data_closed = Payload::from_value(&Value::OpenClosed(OpenClosed::Closed), &Type::OpenClosed).unwrap();
+
         println!("* Without adapters, sending values to a selector that has no channels returns an empty vector.");
-        let data = manager.send_values(target_map(vec![(vec![ChannelSelector::new()], Value::OnOff(OnOff::On))]), User::None);
+        let data = manager.send_values(target_map(vec![(vec![ChannelSelector::new()], data_on.clone())]), User::None);
 
         assert_eq!(data.len(), 0);
 
@@ -1109,7 +1147,7 @@ fn test_send() {
         manager.add_adapter(Arc::new(adapter_2)).unwrap();
         manager.add_service(service_1.clone()).unwrap();
         manager.add_service(service_2.clone()).unwrap();
-        let data = manager.send_values(target_map(vec![(vec![ChannelSelector::new()], Value::OnOff(OnOff::On))]), User::None);
+        let data = manager.send_values(target_map(vec![(vec![ChannelSelector::new()], data_on.clone())]), User::None);
         assert_eq!(data.len(), 0);
 
         println!("* Sending well-typed values to channels succeeds if the adapter succeeds.");
@@ -1118,7 +1156,7 @@ fn test_send() {
         manager.add_channel(setter_1_3.clone()).unwrap();
         manager.add_channel(setter_2.clone()).unwrap();
 
-        let data = manager.send_values(target_map(vec![(vec![ChannelSelector::new()], Value::OnOff(OnOff::On))]), User::None);
+        let data = manager.send_values(target_map(vec![(vec![ChannelSelector::new()], data_on.clone())]), User::None);
         assert_eq!(data.len(), 4);
         for result in data.values() {
             if let Ok(()) = *result {
@@ -1153,10 +1191,10 @@ fn test_send() {
                 ChannelSelector::new().with_id(setter_id_1_1.clone()),
                 ChannelSelector::new().with_id(setter_id_1_2.clone()),
                 ChannelSelector::new().with_id(setter_id_2.clone()),
-            ], Value::OpenClosed(OpenClosed::Closed)),
+            ], data_closed.clone()),
             (vec![
                 ChannelSelector::new().with_id(setter_id_1_3.clone()).clone()
-            ], Value::OnOff(OnOff::On))
+            ], data_on.clone())
         ]), User::None);
         assert_eq!(data.len(), 4);
         for id in vec![&setter_id_1_1, &setter_id_1_2, &setter_id_2] {
@@ -1165,12 +1203,12 @@ fn test_send() {
                     got: Type::OpenClosed,
                     expected: Type::OnOff
                 }))) => {},
-                other => panic!("Unexpected result for {:?}: {:?}", id, other)
+                other => panic!("Unexpected result for {}: {:?}", id, other)
             }
         }
         match data.get(&setter_id_1_3) {
             Some(&Ok(())) => {},
-            other => panic!("Unexpected result for {:?}: {:?}", setter_id_1_3, other)
+            other => panic!("Unexpected result for {}: {:?}", setter_id_1_3, other)
         }
 
         println!("* All the well-typed values should have been received.");
@@ -1186,19 +1224,19 @@ fn test_send() {
         println!("* Sending values that cause channel errors will propagate the errors.");
         tweak_1(Tweak::InjectSetterError(setter_id_1_1.clone(), Some(Error::InternalError(InternalError::InvalidInitialService))));
 
-        let data = manager.send_values(target_map(vec![(vec![ChannelSelector::new()], Value::OnOff(OnOff::On))]), User::None);
+        let data = manager.send_values(target_map(vec![(vec![ChannelSelector::new()], data_on.clone())]), User::None);
         assert_eq!(data.len(), 4);
         for id in vec![&setter_id_2, &setter_id_1_2, &setter_id_2] {
             match data.get(id) {
                 Some(&Ok(())) => {},
-                other => panic!("Unexpected result for {:?}: {:?}", id, other)
+                other => panic!("Unexpected result for {}: {:?}", id, other)
             }
         }
 
         for id in vec![&setter_id_1_1] {
             match data.get(id) {
                 Some(&Err(Error::InternalError(InternalError::InvalidInitialService))) => {},
-                other => panic!("Unexpected result for {:?}: {:?}", id, other)
+                other => panic!("Unexpected result for {}: {:?}", id, other)
             }
         }
 
@@ -1361,9 +1399,10 @@ fn test_watch() {
         let events : HashMap<_, _> = (0..2).map(|_| {
             match rx_watch.recv().unwrap() {
                 Event::EnterRange {
-                    from,
-                    value
-                } => (from, value),
+                    channel,
+                    value,
+                    type_
+                } => (channel, (value, type_).transform()),
                 other => panic!("Unexpected event {:?}", other)
             }
         }).collect();
@@ -1385,7 +1424,7 @@ fn test_watch() {
                 ChannelSelector::new()
                     .with_tags(vec![tag_1.clone()])
             ],
-            Exactly::Exactly(Value::Range(Box::new(Range::Eq(Value::OnOff(OnOff::On)))))
+            Exactly::Exactly(Value::Range(Box::new(Range::Eq(Value::OnOff(OnOff::On)))).transform())
         )]), Box::new(tx_watch_2)));
 
         println!("* Value changes are observed on both watchers");
@@ -1397,14 +1436,14 @@ fn test_watch() {
 
         let mut events : HashMap<_, _> = (0..4).map(|_| {
             match rx_watch.recv().unwrap() {
-                Event::EnterRange { from, value } => (from, value),
+                Event::EnterRange { channel, value, type_ } => (channel, (value, type_).transform() ),
                 other => panic!("Unexpected event {:?}", other)
             }
         }).collect();
 
         match rx_watch_2.recv().unwrap() {
-            Event::EnterRange { from, value } => {
-                events.insert(from, value);
+            Event::EnterRange { channel, value, type_ } => {
+                events.insert(channel, (value, type_).transform());
             }
             other => panic!("Unexpected event {:?}", other)
         }
@@ -1416,11 +1455,11 @@ fn test_watch() {
 
         tweak_2(Tweak::InjectGetterValue(getter_id_2.clone(), Ok(Some(Value::OnOff(OnOff::Off)))));
         match rx_watch_2.recv().unwrap() {
-            Event::ExitRange { ref from, .. } if *from == getter_id_2 => { }
+            Event::ExitRange { ref channel, .. } if *channel == getter_id_2 => { }
             other => panic!("Unexpected event {:?}", other)
         }
         match rx_watch.recv().unwrap() {
-            Event::EnterRange { ref from, .. } if *from == getter_id_2 => { }
+            Event::EnterRange { ref channel, .. } if *channel == getter_id_2 => { }
             other => panic!("Unexpected event {:?}", other)
         }
         assert_matches!(rx_watch.try_recv(), Err(_));
@@ -1438,7 +1477,7 @@ fn test_watch() {
 
         let events : HashSet<_> = (0..2).map(|_| {
                 match rx_watch_2.recv().unwrap() {
-                    Event::EnterRange { from, .. } => from,
+                    Event::EnterRange { channel, .. } => channel,
                     other => panic!("Unexpected event {:?}", other)
                 }
         }).collect();
@@ -1464,7 +1503,7 @@ fn test_watch() {
             ChannelSelector::new().with_id(getter_id_2.clone()),
         ], vec![tag_1.clone()]), 2);
         match rx_watch_2.recv().unwrap() {
-            Event::ChannelAdded(ref id) if *id == getter_id_1_1 => { }
+            Event::ChannelAdded(ref channel) if *channel == getter_id_1_1 => { }
             other => panic!("Unexpected event {:?}", other)
         }
         assert_matches!(rx_watch_2.try_recv(), Err(_));
@@ -1487,12 +1526,10 @@ fn test_watch() {
         assert_matches!(rx_watch_2.try_recv(), Err(_));
 
         if clear {
-            println!("* Clearing does not break the manager.
-");
+            println!("* Clearing does not break the manager.");
             manager.stop();
         } else {
-            println!("* Not clearing does not break the manager.
-");
+            println!("* Not clearing does not break the manager.");
         }
     }
 

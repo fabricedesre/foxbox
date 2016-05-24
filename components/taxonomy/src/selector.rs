@@ -138,7 +138,7 @@ impl Parser<ServiceSelector> for ServiceSelector {
     fn description() -> String {
         "ServiceSelector".to_owned()
     }
-    fn parse(path: Path, source: &mut JSON) -> Result<Self, ParseError> {
+    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
         let mut is_empty = true;
         let id = try!(match path.push("id", |path| Exactly::take_opt(path, source, "id")) {
             None => Ok(Exactly::Always),
@@ -354,7 +354,7 @@ impl Parser<ChannelSelector> for ChannelSelector {
     fn description() -> String {
         "ChannelSelector".to_owned()
     }
-    fn parse(path: Path, source: &mut JSON) -> Result<Self, ParseError> {
+    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
         let mut is_empty = true;
         let id = try!(match path.push("id", |path| Exactly::take_opt(path, source, "id")) {
             None => Ok(Exactly::Always),

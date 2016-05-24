@@ -60,13 +60,13 @@ impl IpCamera {
             snapshot_dir: format!("{}/{}", root_snapshot_dir, udn),
             config: config.clone(),
             upnp_name: upnp_name.to_owned(),
-            image_list_id: create_getter_id("image_list", &udn),
-            image_newest_id: create_getter_id("image_newest", &udn),
-            snapshot_id: create_setter_id("snapshot", &udn),
-            get_username_id: create_getter_id("username", &udn),
-            set_username_id: create_setter_id("username", &udn),
-            get_password_id: create_getter_id("password", &udn),
-            set_password_id: create_setter_id("password", &udn),
+            image_list_id: create_getter_id("image_list", udn),
+            image_newest_id: create_getter_id("image_newest", udn),
+            snapshot_id: create_setter_id("snapshot", udn),
+            get_username_id: create_getter_id("username", udn),
+            set_username_id: create_setter_id("username", udn),
+            get_password_id: create_getter_id("password", udn),
+            set_password_id: create_setter_id("password", udn),
         };
         // Create a directory to store snapshots for this camera.
         if let Err(err) = fs::create_dir_all(&camera.snapshot_dir) {
@@ -410,4 +410,3 @@ describe! ip_camera {
         camera.take_snapshot().unwrap();
     }
 }
-

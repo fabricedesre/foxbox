@@ -7,8 +7,6 @@ use foxbox_taxonomy::manager::*;
 use foxbox_taxonomy::services::*;
 use foxbox_taxonomy::values::{ Value };
 
-use transformable_channels::mpsc::*;
-
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -73,13 +71,6 @@ impl Adapter for Console {
                 (id, result)
             })
             .collect()
-    }
-
-    fn register_watch(&self, mut watch: Vec<WatchTarget>) -> WatchResult
-    {
-        watch.drain(..).map(|(id, _, _)| {
-            (id.clone(), Err(Error::GetterDoesNotSupportWatching(id)))
-        }).collect()
     }
 }
 

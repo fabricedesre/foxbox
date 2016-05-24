@@ -7,15 +7,15 @@ var suiteBuilder = new SuiteBuilder('Github.io webapp', HOST_URL);
 
 suiteBuilder.build((app) => {
 
-  describe('open the web app', () => {
+  describe('open the web app', function() {
 
     var webAppMainPage;
 
-    beforeEach(() => {
-      webAppMainPage = app.getAppMainView();
+    beforeEach(function() {
+      webAppMainPage = app.appMainView;
     });
 
-    it('should log in from web app', () => {
+    it('should log in from web app', function() {
       return webAppMainPage.connectToFoxBox().then((setUpView) => {
         setUpView.successSignUpFromApp();
       });

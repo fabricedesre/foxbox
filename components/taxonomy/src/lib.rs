@@ -60,3 +60,6 @@ pub mod tag_storage;
 /// Implementation of a fake adapter, controlled entirely programmatically. Designed to be used
 /// as a component of tests.
 pub mod fake_adapter;
+
+/// Serialization and deserialization.
+pub mod io;
