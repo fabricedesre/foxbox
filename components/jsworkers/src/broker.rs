@@ -10,22 +10,22 @@ use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::result::Result;
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc::Sender;
-use workers::WorkerInfo;
+use workers::{Url, User, WorkerInfo};
 
 #[derive(Clone, Debug)]
 pub enum Message {
     Start {
-        url: String,
-        user: i32,
+        url: Url,
+        user: User,
         tx: Sender<Message>,
     },
     Stop {
-        url: String,
-        user: i32,
+        url: Url,
+        user: User,
         tx: Sender<Message>,
     },
     GetList {
-        user: i32,
+        user: User,
         tx: Sender<Message>,
     },
     List {
