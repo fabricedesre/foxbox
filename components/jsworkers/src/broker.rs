@@ -4,11 +4,13 @@
 
 //! A message broker that let you register as a named target to receive and send messages.
 
+use serde::{Serialize, Serializer};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::result::Result;
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc::Sender;
+use workers::WorkerInfo;
 
 #[derive(Clone, Debug)]
 pub enum Message {
@@ -22,11 +24,26 @@ pub enum Message {
         user: i32,
         tx: Sender<Message>,
     },
-    List {
-        user: u32,
+    GetList {
+        user: i32,
         tx: Sender<Message>,
     },
+    List {
+        list: Vec<WorkerInfo>,
+    },
     Shutdown,
+}
+
+impl Serialize for Message {
+    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error> where S: Serializer {
+        match *self {
+            Message::Start { ref url, user, ref tx } => serializer.serialize_str("Start"),
+            Message::Stop { ref url, user, ref tx } => serializer.serialize_str("Stop"),
+            Message::GetList { user, ref tx } => serializer.serialize_str("GetList"),
+            Message::List { ref list } => list.serialize(serializer),
+            Message::Shutdown => serializer.serialize_str("Shutdown"),
+        }
+    }
 }
 
 impl Display for Message {
@@ -34,7 +51,8 @@ impl Display for Message {
         match *self {
             Message::Start { ref url, user, ref tx } => write!(f, "{}", "Start"),
             Message::Stop { ref url, user, ref tx } => write!(f, "{}", "Stop"),
-            Message::List { user, ref tx } => write!(f, "{}", "List"),
+            Message::GetList { user, ref tx } => write!(f, "{}", "GetList"),
+            Message::List { ref list } => write!(f, "{}", "List"),
             Message::Shutdown => write!(f, "{}", "Shutdown"),
         }
     }
@@ -55,15 +73,18 @@ pub type SharedBroker = Arc<Mutex<MessageBroker>>;
 
 impl MessageBroker {
     pub fn new() -> Self {
+        debug!("MessageBroker::new()");
         MessageBroker { actors: HashMap::new() }
     }
 
     pub fn new_shared() -> SharedBroker {
+        debug!("MessageBroker::new_shared()");
         Arc::new(Mutex::new(MessageBroker::new()))
     }
 
     pub fn add_actor(&mut self, target: &str, sender: Sender<Message>) -> Result<(), BrokerError> {
         if self.actors.contains_key(target) {
+            error!("MessageBroker::add_actor: `{}` is not a known target", target);
             return Err(BrokerError::DuplicateTarget);
         }
 
@@ -73,6 +94,7 @@ impl MessageBroker {
 
     pub fn remove_actor(&mut self, target: &str) -> Result<(), BrokerError> {
         if !self.actors.contains_key(target) {
+            error!("MessageBroker::remove_actor: `{}` is not a known target", target);
             return Err(BrokerError::NoSuchTarget);
         }
 
@@ -82,13 +104,15 @@ impl MessageBroker {
 
     pub fn send_message(&mut self, target: &str, message: Message) -> Result<(), BrokerError> {
         if !self.actors.contains_key(target) {
+            error!("MessageBroker::send_message: `{}` is not a known target", target);
             return Err(BrokerError::NoSuchTarget);
         }
 
-        let res = self.actors.get(target).unwrap().send(message);
+        let res = self.actors.get(target).unwrap().send(message.clone());
         if let Ok(_) = res {
             return Ok(());
         } else {
+            error!("MessageBroker::send_message: error sending `{}` to `{}`", message, target);
             return Err(BrokerError::SendingError);
         }
     }

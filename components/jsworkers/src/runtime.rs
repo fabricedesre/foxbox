@@ -6,9 +6,10 @@
 
 extern crate url;
 
-use broker::SharedBroker;
+use broker::{ Message as BrokerMessage, SharedBroker };
 use self::url::Url;
 use std::process::Command;
+use std::sync::mpsc::channel;
 use std::time::Duration;
 use std::thread;
 use std::thread::Builder;
@@ -71,9 +72,34 @@ impl Runtime {
         // Start the runtime thread.
         let broker = broker.clone();
         let _ = Builder::new().name("JsWorkers_runtime".to_owned()).spawn(move || {
-            let workers = JsWorkers::new(&root, &broker);
+            let mut workers = JsWorkers::new(&root, &broker);
 
-            // Starts the ws server.
+            // Set up our broker listener and a thread to process messages on it.
+            let (tx, rx) = channel::<BrokerMessage>();
+            broker.lock().unwrap().add_actor("workers", tx);
+            thread::Builder::new()
+                .name("JsWorkers_Actor".to_owned())
+                .spawn(move || {
+                    loop {
+                        let res = rx.recv().unwrap();
+                        match res {
+                            BrokerMessage::Start { ref url, user, ref tx } => { },
+                            BrokerMessage::Stop { ref url, user, ref tx } => { },
+                            BrokerMessage::GetList { user, ref tx } => {
+                                let user_workers = workers.get_workers_for(user);
+                                let infos = BrokerMessage::List {
+                                    list: user_workers
+                                };
+                                tx.send(infos).unwrap();
+                            },
+                            BrokerMessage::Shutdown => break,
+                            _ => { info!("Unexpected message in JsWorkers_Actor thread {}", res); }
+                        }
+                    }
+                })
+                .unwrap();
+
+            // Start the ws server.
             thread::Builder::new()
                 .name("JsWorkers_WsServer".to_owned())
                 .spawn(move || {

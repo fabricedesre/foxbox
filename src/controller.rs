@@ -69,7 +69,7 @@ impl FoxBox {
             upnp: Arc::new(UpnpManager::new()),
             users_manager: Arc::new(UsersManager::new(&profile_service.path_for("users_db.sqlite"))),
             profile_service: Arc::new(profile_service),
-            jsworkers_broker: Arc::new(Mutex::new(MessageBroker::new())),
+            jsworkers_broker: MessageBroker::new_shared(),
         }
     }
 }
@@ -97,7 +97,7 @@ impl Controller for FoxBox {
 
         self.upnp.search(None).unwrap();
 
-        let broker = MessageBroker::new_shared();
+        let broker = self.get_jsworkers_broker();
         Runtime::start("/home/fabrice/dev/builds/obj-jsworkers-mozilla-inbound/dist/bin/jsworkers",
                        &ProfileService::new(ProfilePath::Default).path_for(""),
                        &broker);
