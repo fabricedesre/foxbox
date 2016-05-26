@@ -24,7 +24,9 @@ enum WorkerState {
 }
 
 impl Serialize for WorkerState {
-    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error> where S: Serializer {
+    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
+        where S: Serializer
+    {
         match *self {
             WorkerState::Stopped => serializer.serialize_str("Stopped"),
             WorkerState::Running => serializer.serialize_str("Running"),
@@ -44,7 +46,9 @@ pub struct WorkerInfo {
 }
 
 impl Serialize for WorkerInfo {
-    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error> where S: Serializer {
+    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
+        where S: Serializer
+    {
         #[derive(Serialize)]
         struct SerializableInfo {
             url: Url,
@@ -54,7 +58,7 @@ impl Serialize for WorkerInfo {
         let info = SerializableInfo {
             url: self.url.clone(),
             user: self.user,
-            state: self.state.get()
+            state: self.state.get(),
         };
         info.serialize(serializer)
     }
@@ -273,7 +277,8 @@ fn test_workers() {
 
     all = list.get_workers_for(user2);
     let serialized = serde_json::to_string(&all).unwrap();
-    assert_eq!(serialized, r#"[{"url":"http://example.com/worker.js","user":1,"state":"Stopped"}]"#);
+    assert_eq!(serialized,
+               r#"[{"url":"http://example.com/worker.js","user":1,"state":"Stopped"}]"#);
 
     // ... and remove them, out of order.
     list.remove_worker(user2, url.clone()).unwrap();

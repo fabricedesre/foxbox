@@ -29,15 +29,19 @@ impl<T> MessageBroker<T> {
         MessageBroker { actors: HashMap::new() }
     }
 
-    pub fn new_shared() -> SharedBroker<T> where T: Send {
+    pub fn new_shared() -> SharedBroker<T>
+        where T: Send
+    {
         debug!("MessageBroker::new_shared()");
         Arc::new(Mutex::new(MessageBroker::new()))
     }
 
     pub fn add_actor(&mut self, target: &str, sender: Sender<T>) -> Result<(), BrokerError>
-    where T: Send {
+        where T: Send
+    {
         if self.actors.contains_key(target) {
-            error!("MessageBroker::add_actor: `{}` is not a known target", target);
+            error!("MessageBroker::add_actor: `{}` is not a known target",
+                   target);
             return Err(BrokerError::DuplicateTarget);
         }
 
@@ -47,7 +51,8 @@ impl<T> MessageBroker<T> {
 
     pub fn remove_actor(&mut self, target: &str) -> Result<(), BrokerError> {
         if !self.actors.contains_key(target) {
-            error!("MessageBroker::remove_actor: `{}` is not a known target", target);
+            error!("MessageBroker::remove_actor: `{}` is not a known target",
+                   target);
             return Err(BrokerError::NoSuchTarget);
         }
 
@@ -56,9 +61,11 @@ impl<T> MessageBroker<T> {
     }
 
     pub fn send_message(&mut self, target: &str, message: T) -> Result<(), BrokerError>
-    where T: Send + Clone + Debug {
+        where T: Send + Clone + Debug
+    {
         if !self.actors.contains_key(target) {
-            error!("MessageBroker::send_message: `{}` is not a known target", target);
+            error!("MessageBroker::send_message: `{}` is not a known target",
+                   target);
             return Err(BrokerError::NoSuchTarget);
         }
 
@@ -66,14 +73,17 @@ impl<T> MessageBroker<T> {
         if let Ok(_) = res {
             return Ok(());
         } else {
-            error!("MessageBroker::send_message: error sending `{:?}` to `{}`", message, target);
+            error!("MessageBroker::send_message: error sending `{:?}` to `{}`",
+                   message,
+                   target);
             return Err(BrokerError::SendingError);
         }
     }
 
     // TODO: figure out if we should return something else than void.
     pub fn broadcast_message(&mut self, message: T)
-    where T: Send + Clone + Debug {
+        where T: Send + Clone + Debug
+    {
         info!("Broadcasting {:?}", message.clone());
         let ref actors = self.actors;
         for (target, actor) in actors {

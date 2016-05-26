@@ -64,7 +64,9 @@ impl Handler for RuntimeWsHandler {
             _ => return self.close_with_error("Invalid path"),
         };
 
-        info!("Opening jsworkers ws: url is {}, resource is {}", url, resource);
+        info!("Opening jsworkers ws: url is {}, resource is {}",
+              url,
+              resource);
 
         if resource == "/runtime/" {
             self.mode.set(ClientType::Runtime);
@@ -126,21 +128,21 @@ impl Runtime {
                     loop {
                         let res = rx.recv().unwrap();
                         match res {
-                            BrokerMessage::Start { ref url, user, ref tx } => { },
-                            BrokerMessage::Stop { ref url, user, ref tx } => { },
+                            BrokerMessage::Start { ref url, user, ref tx } => {}
+                            BrokerMessage::Stop { ref url, user, ref tx } => {}
                             BrokerMessage::GetList { user, ref tx } => {
                                 let user_workers = workers.get_workers_for(user);
-                                let infos = BrokerMessage::List {
-                                    list: user_workers
-                                };
+                                let infos = BrokerMessage::List { list: user_workers };
                                 tx.send(infos).unwrap();
-                            },
+                            }
                             BrokerMessage::Shutdown => break,
                             BrokerMessage::StopAll => {
                                 // This message happens when the runtime itself shuts down.
                                 workers.stop_all();
                             }
-                            _ => { info!("Unexpected message in JsWorkers_Actor thread {:?}", res); }
+                            _ => {
+                                info!("Unexpected message in JsWorkers_Actor thread {:?}", res);
+                            }
                         }
                     }
                 })
@@ -150,11 +152,14 @@ impl Runtime {
             thread::Builder::new()
                 .name("JsWorkers_WsServer".to_owned())
                 .spawn(move || {
-                    listen("localhost:2016", |out| RuntimeWsHandler {
-                        out: out,
-                        broker: broker.clone(),
-                        mode: Cell::new(ClientType::Unknown),
-                    }).unwrap();
+                    listen("localhost:2016", |out| {
+                            RuntimeWsHandler {
+                                out: out,
+                                broker: broker.clone(),
+                                mode: Cell::new(ClientType::Unknown),
+                            }
+                        })
+                        .unwrap();
                 })
                 .unwrap();
 
