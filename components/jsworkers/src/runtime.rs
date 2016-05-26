@@ -140,7 +140,7 @@ impl Runtime {
                                 // This message happens when the runtime itself shuts down.
                                 workers.stop_all();
                             }
-                            _ => { info!("Unexpected message in JsWorkers_Actor thread {}", res); }
+                            _ => { info!("Unexpected message in JsWorkers_Actor thread {:?}", res); }
                         }
                     }
                 })

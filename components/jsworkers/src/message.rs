@@ -2,58 +2,39 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use workers::{Url, User, WorkerInfo};
+/// Enum to describe all the messages exchanged by the jsworker system.
 
-use serde::{Serialize, Serializer};
-use std::fmt::{Display, Formatter, Result as FmtResult};
+use workers::{Url, User, WorkerInfo};
 use std::sync::mpsc::Sender;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub enum Message {
+    // Start a worker. Router -> Runtime.
     Start {
         url: Url,
         user: User,
+        #[serde(skip_serializing)]
         tx: Sender<Message>,
     },
+    // Stop a worker. Router -> Runtime.
     Stop {
         url: Url,
         user: User,
+        #[serde(skip_serializing)]
         tx: Sender<Message>,
     },
+    // Get the list of all workers for a user. Router -> Runtime.
     GetList {
         user: User,
+        #[serde(skip_serializing)]
         tx: Sender<Message>,
     },
+    // Result value for GetList. Runtime -> Router
     List {
         list: Vec<WorkerInfo>,
     },
+    // Notifies that we need to set all workers in the `stopped` state. WebSocket -> Runtime
     StopAll,
+    // Notifies that the foxbox is shutting down. Broadcasted by the main controller.
     Shutdown,
-}
-
-impl Serialize for Message {
-    // TODO: serialize propertly not just List.
-    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error> where S: Serializer {
-        match *self {
-            Message::Start { ref url, user, ref tx } => serializer.serialize_str("Start"),
-            Message::Stop { ref url, user, ref tx } => serializer.serialize_str("Stop"),
-            Message::GetList { user, ref tx } => serializer.serialize_str("GetList"),
-            Message::List { ref list } => list.serialize(serializer),
-            Message::StopAll => serializer.serialize_str("StopAll"),
-            Message::Shutdown => serializer.serialize_str("Shutdown"),
-        }
-    }
-}
-
-impl Display for Message {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        match *self {
-            Message::Start { ref url, user, ref tx } => write!(f, "{}", "Start"),
-            Message::Stop { ref url, user, ref tx } => write!(f, "{}", "Stop"),
-            Message::GetList { user, ref tx } => write!(f, "{}", "GetList"),
-            Message::List { ref list } => write!(f, "{}", "List"),
-            Message::StopAll => write!(f, "{}", "StopAll"),
-            Message::Shutdown => write!(f, "{}", "Shutdown"),
-        }
-    }
 }
