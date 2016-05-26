@@ -6,7 +6,9 @@
 
 extern crate url;
 
-use broker::{ Message as BrokerMessage, SharedBroker };
+use broker::SharedBroker;
+use message::Message as BrokerMessage;
+
 use self::url::Url;
 use std::cell::Cell;
 use std::process::Command;

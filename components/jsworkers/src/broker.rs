@@ -4,63 +4,11 @@
 
 //! A message broker that let you register as a named target to receive and send messages.
 
-use serde::{Serialize, Serializer};
 use std::collections::HashMap;
-use std::fmt::{Display, Formatter, Result as FmtResult};
+use std::fmt::Display;
 use std::result::Result;
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc::Sender;
-use workers::{Url, User, WorkerInfo};
-
-#[derive(Clone, Debug)]
-pub enum Message {
-    Start {
-        url: Url,
-        user: User,
-        tx: Sender<Message>,
-    },
-    Stop {
-        url: Url,
-        user: User,
-        tx: Sender<Message>,
-    },
-    GetList {
-        user: User,
-        tx: Sender<Message>,
-    },
-    List {
-        list: Vec<WorkerInfo>,
-    },
-    StopAll,
-    Shutdown,
-}
-
-impl Serialize for Message {
-    // TODO: serialize propertly not just List.
-    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error> where S: Serializer {
-        match *self {
-            Message::Start { ref url, user, ref tx } => serializer.serialize_str("Start"),
-            Message::Stop { ref url, user, ref tx } => serializer.serialize_str("Stop"),
-            Message::GetList { user, ref tx } => serializer.serialize_str("GetList"),
-            Message::List { ref list } => list.serialize(serializer),
-            Message::StopAll => serializer.serialize_str("StopAll"),
-            Message::Shutdown => serializer.serialize_str("Shutdown"),
-        }
-    }
-}
-
-impl Display for Message {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        match *self {
-            Message::Start { ref url, user, ref tx } => write!(f, "{}", "Start"),
-            Message::Stop { ref url, user, ref tx } => write!(f, "{}", "Stop"),
-            Message::GetList { user, ref tx } => write!(f, "{}", "GetList"),
-            Message::List { ref list } => write!(f, "{}", "List"),
-            Message::StopAll => write!(f, "{}", "StopAll"),
-            Message::Shutdown => write!(f, "{}", "Shutdown"),
-        }
-    }
-}
 
 #[derive(Debug)]
 pub enum BrokerError {

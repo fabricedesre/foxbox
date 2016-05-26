@@ -18,6 +18,7 @@ extern crate serde_json;
 extern crate ws;
 
 pub mod broker;
+pub mod message;
 pub mod runtime;
 pub mod router;
 mod workers;

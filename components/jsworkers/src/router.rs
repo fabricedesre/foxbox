@@ -21,7 +21,9 @@
 ///   input: None
 ///   output: 200 [{ state: Running|Stopped, url: <worker_url>, ws: <websocket_url> }*]
 
-use broker::{Message, SharedBroker};
+use broker::SharedBroker;
+use message::Message;
+
 use foxbox_users::SessionToken;
 
 use iron::{Handler, headers, IronResult, Request, Response};
