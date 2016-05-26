@@ -69,24 +69,25 @@ pub enum BrokerError {
     SendingError,
 }
 
-pub struct MessageBroker {
-    actors: HashMap<String, Sender<Message>>,
+pub struct MessageBroker<T> {
+    actors: HashMap<String, Sender<T>>,
 }
 
-pub type SharedBroker = Arc<Mutex<MessageBroker>>;
+pub type SharedBroker<T> = Arc<Mutex<MessageBroker<T>>>;
 
-impl MessageBroker {
+impl<T> MessageBroker<T> {
     pub fn new() -> Self {
         debug!("MessageBroker::new()");
         MessageBroker { actors: HashMap::new() }
     }
 
-    pub fn new_shared() -> SharedBroker {
+    pub fn new_shared() -> SharedBroker<T> where T: Send {
         debug!("MessageBroker::new_shared()");
         Arc::new(Mutex::new(MessageBroker::new()))
     }
 
-    pub fn add_actor(&mut self, target: &str, sender: Sender<Message>) -> Result<(), BrokerError> {
+    pub fn add_actor(&mut self, target: &str, sender: Sender<T>) -> Result<(), BrokerError>
+    where T: Send {
         if self.actors.contains_key(target) {
             error!("MessageBroker::add_actor: `{}` is not a known target", target);
             return Err(BrokerError::DuplicateTarget);
@@ -106,7 +107,8 @@ impl MessageBroker {
         Ok(())
     }
 
-    pub fn send_message(&mut self, target: &str, message: Message) -> Result<(), BrokerError> {
+    pub fn send_message(&mut self, target: &str, message: T) -> Result<(), BrokerError>
+    where T: Send + Clone + Display {
         if !self.actors.contains_key(target) {
             error!("MessageBroker::send_message: `{}` is not a known target", target);
             return Err(BrokerError::NoSuchTarget);
@@ -122,7 +124,8 @@ impl MessageBroker {
     }
 
     // TODO: figure out if we should return something else than void.
-    pub fn broadcast_message(&mut self, message: Message) {
+    pub fn broadcast_message(&mut self, message: T)
+    where T: Send + Clone + Display {
         info!("Broadcasting {}", message.clone());
         let ref actors = self.actors;
         for (target, actor) in actors {

@@ -29,7 +29,7 @@ enum ClientType {
 /// Handles the jsworkers websocket server.
 struct RuntimeWsHandler {
     pub out: Sender,
-    broker: SharedBroker,
+    broker: SharedBroker<BrokerMessage>,
     mode: Cell<ClientType>,
 }
 
@@ -106,7 +106,7 @@ impl Handler for RuntimeWsHandler {
 pub struct Runtime;
 
 impl Runtime {
-    pub fn start(runtime_path: &str, config_root: &str, broker: &SharedBroker) {
+    pub fn start(runtime_path: &str, config_root: &str, broker: &SharedBroker<BrokerMessage>) {
         info!("Starting jsworkers runtime {}", runtime_path);
         let path = runtime_path.to_string();
         let root = config_root.to_string();

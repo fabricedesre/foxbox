@@ -7,7 +7,7 @@ use serde::{Serialize, Serializer};
 use std::cell::Cell;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use broker::SharedBroker;
+use broker::{Message, SharedBroker};
 
 fn escape<T>(string: &str) -> String {
     // http://www.sqlite.org/faq.html#q14
@@ -86,11 +86,11 @@ impl WorkerInfo {
 pub struct JsWorkers {
     db: Option<Connection>,
     workers: HashMap<String, WorkerInfo>, // The key is a WorkerInfo key.
-    broker: SharedBroker,
+    broker: SharedBroker<Message>,
 }
 
 impl JsWorkers {
-    pub fn new(config_root: &str, broker: &SharedBroker) -> Self {
+    pub fn new(config_root: &str, broker: &SharedBroker<Message>) -> Self {
         // TODO: Read the current set of workers from disk, creating the DB if it doesn't exist yet.
 
         JsWorkers {

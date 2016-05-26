@@ -40,7 +40,7 @@ pub struct FoxBox {
     upnp: Arc<UpnpManager>,
     users_manager: Arc<UsersManager>,
     profile_service: Arc<ProfileService>,
-    jsworkers_broker: SharedBroker,
+    jsworkers_broker: SharedBroker<Message>,
 }
 
 impl FoxBox {
@@ -185,7 +185,7 @@ impl Controller for FoxBox {
         self.hostname.clone()
     }
 
-    fn get_jsworkers_broker(&self) -> SharedBroker {
+    fn get_jsworkers_broker(&self) -> SharedBroker<Message> {
         self.jsworkers_broker.clone()
     }
 }

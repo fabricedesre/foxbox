@@ -36,11 +36,11 @@ use std::sync::mpsc::channel;
 use workers::User;
 
 pub struct Router {
-    broker: SharedBroker,
+    broker: SharedBroker<Message>,
 }
 
 impl Router {
-    pub fn new(broker: &SharedBroker) -> Self {
+    pub fn new(broker: &SharedBroker<Message>) -> Self {
         Router { broker: broker.clone() }
     }
 
@@ -141,7 +141,7 @@ impl Handler for Router {
     }
 }
 
-pub fn create(broker: &SharedBroker) -> Chain {
+pub fn create(broker: &SharedBroker<Message>) -> Chain {
     // TODO: add authentication support.
     // That requires access to controller.get_users_manager() which is not yet available to code
     // in components/ crates.
