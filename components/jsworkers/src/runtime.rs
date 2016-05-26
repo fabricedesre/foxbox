@@ -8,6 +8,7 @@ extern crate url;
 
 use broker::{ Message as BrokerMessage, SharedBroker };
 use self::url::Url;
+use std::cell::Cell;
 use std::process::Command;
 use std::sync::mpsc::channel;
 use std::time::Duration;
@@ -15,16 +16,39 @@ use std::thread;
 use std::thread::Builder;
 use workers::JsWorkers;
 use ws;
-use ws::{Handler, Sender, Result, Message, Handshake, CloseCode, Error};
+use ws::{Handler, Sender, Result, Message, Handshake, CloseCode, Error, ErrorKind};
 use ws::listen;
 
+#[derive(Clone, Copy, PartialEq)]
+enum ClientType {
+    Unknown,
+    Runtime,
+    Browser,
+}
+
+/// Handles the jsworkers websocket server.
 struct RuntimeWsHandler {
     pub out: Sender,
+    broker: SharedBroker,
+    mode: Cell<ClientType>,
 }
 
 impl RuntimeWsHandler {
     fn close_with_error(&mut self, reason: &'static str) -> Result<()> {
+        error!("Closing jsworkers ws: {}", reason);
         self.out.close_with_reason(ws::CloseCode::Error, reason)
+    }
+
+    fn is_runtime(&self) -> bool {
+        self.mode.get() == ClientType::Runtime
+    }
+
+    fn is_browser(&self) -> bool {
+        self.mode.get() == ClientType::Browser
+    }
+
+    fn is_unknown(&self) -> bool {
+        self.mode.get() == ClientType::Unknown
     }
 }
 
@@ -38,27 +62,44 @@ impl Handler for RuntimeWsHandler {
             _ => return self.close_with_error("Invalid path"),
         };
 
-        info!("Opening WS url is {}, resource is {}", url, resource);
+        info!("Opening jsworkers ws: url is {}, resource is {}", url, resource);
+
+        if resource == "/runtime/" {
+            self.mode.set(ClientType::Runtime);
+        }
+
+        if resource == "/client/" {
+            self.mode.set(ClientType::Browser);
+        }
+
+        // Wrong resource path, rejecting connection.
+        if self.is_unknown() {
+            return Err(Error::new(ErrorKind::Internal, "Unknown resource path"));
+        }
 
         Ok(())
     }
 
     fn on_message(&mut self, msg: Message) -> Result<()> {
-        info!("Message from websocket: {}", msg);
+        info!("Message from jsworkers ws: {}", msg);
 
         Ok(())
     }
 
     fn on_close(&mut self, code: CloseCode, reason: &str) {
         match code {
-            CloseCode::Normal => info!("The ws client is done with the connection."),
-            CloseCode::Away => info!("The ws client is leaving the site."),
-            _ => error!("The ws client encountered an error: {}.", reason),
+            CloseCode::Normal => info!("The jsworkers ws client is done with the connection."),
+            CloseCode::Away => info!("The jsworkers ws client is leaving the site."),
+            _ => error!("The jsworkers ws client encountered an error: {}.", reason),
+        }
+
+        if self.is_runtime() {
+            self.broker.lock().unwrap().broadcast_message(BrokerMessage::StopAll);
         }
     }
 
     fn on_error(&mut self, err: Error) {
-        error!("The ws server encountered an error: {:?}", err);
+        error!("The jsworkers ws server encountered an error: {:?}", err);
     }
 }
 
@@ -93,6 +134,10 @@ impl Runtime {
                                 tx.send(infos).unwrap();
                             },
                             BrokerMessage::Shutdown => break,
+                            BrokerMessage::StopAll => {
+                                // This message happens when the runtime itself shuts down.
+                                workers.stop_all();
+                            }
                             _ => { info!("Unexpected message in JsWorkers_Actor thread {}", res); }
                         }
                     }
@@ -103,7 +148,11 @@ impl Runtime {
             thread::Builder::new()
                 .name("JsWorkers_WsServer".to_owned())
                 .spawn(move || {
-                    listen("localhost:2016", |out| RuntimeWsHandler { out: out }).unwrap();
+                    listen("localhost:2016", |out| RuntimeWsHandler {
+                        out: out,
+                        broker: broker.clone(),
+                        mode: Cell::new(ClientType::Unknown),
+                    }).unwrap();
                 })
                 .unwrap();
 

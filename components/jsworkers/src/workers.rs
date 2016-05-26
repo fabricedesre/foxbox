@@ -112,7 +112,6 @@ impl JsWorkers {
 
     pub fn get_workers_for(&mut self, user: User) -> Vec<WorkerInfo> {
         let mut res = Vec::new();
-        //self.workers.get(&WorkerInfo::key_from(&url, user))
         let ref w = self.workers;
         for (_, info) in w {
             if info.user == user {
@@ -120,6 +119,13 @@ impl JsWorkers {
             }
         }
         res
+    }
+
+    pub fn stop_all(&self) {
+        let ref w = self.workers;
+        for (_, info) in w {
+            info.state.set(WorkerState::Stopped);
+        }
     }
 
     /// TODO: improve error case.
@@ -225,6 +231,15 @@ fn test_workers() {
 
         // Check error when stopping an already stopped worker.
         assert_eq!(list.stop_worker(user1, url.clone()).is_err(), true);
+        assert_eq!(info.state.get(), WorkerState::Stopped);
+    }
+
+    {
+        // Start the worker again and check that stop_all works.
+        list.start_worker(user1, url.clone()).unwrap();
+        let info = list.get_worker_info(user1, url.clone()).unwrap();
+        assert_eq!(info.state.get(), WorkerState::Running);
+        list.stop_all();
         assert_eq!(info.state.get(), WorkerState::Stopped);
     }
 
