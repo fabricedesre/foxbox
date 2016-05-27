@@ -1,12 +1,14 @@
 [package]
 name = "jsworkers"
 version = "0.1.0"
-authors = ["Fabrice Desré <fabrice@desre.org>"]
+authors = ["The Project Link Developers"]
+publish = false
 
 [replace]
 "iron:0.3.0" = { path = "../../iron-fork/" }
 
 [dependencies]
+bitsparrow = "0.3.2"
 foxbox_users = { git = "https://github.com/fxbox/users.git", rev = "d4e5277" }
 log = "^0.3"
 rusqlite = "0.6.0"

@@ -54,11 +54,13 @@ impl Serialize for WorkerInfo {
             url: Url,
             user: User,
             state: WorkerState,
+            id: String,
         }
         let info = SerializableInfo {
             url: self.url.clone(),
             user: self.user,
             state: self.state.get(),
+            id: self.key(),
         };
         info.serialize(serializer)
     }
@@ -70,6 +72,14 @@ impl WorkerInfo {
             url: url,
             user: user,
             state: Cell::new(initial_state),
+        }
+    }
+
+    pub fn default(url: Url, user: User) -> Self {
+        WorkerInfo {
+            url: url,
+            user: user,
+            state: Cell::new(WorkerState::Stopped),
         }
     }
 
@@ -278,7 +288,7 @@ fn test_workers() {
     all = list.get_workers_for(user2);
     let serialized = serde_json::to_string(&all).unwrap();
     assert_eq!(serialized,
-               r#"[{"url":"http://example.com/worker.js","user":1,"state":"Stopped"}]"#);
+               r#"[{"url":"http://example.com/worker.js","user":1,"state":"Stopped","id":"15634489503557940443"}]"#);
 
     // ... and remove them, out of order.
     list.remove_worker(user2, url.clone()).unwrap();

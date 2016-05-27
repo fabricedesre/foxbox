@@ -5,6 +5,7 @@
 #![feature(custom_derive, plugin)]
 #![plugin(serde_macros)]
 
+extern crate bitsparrow;
 extern crate foxbox_users;
 #[macro_use]
 extern crate iron;

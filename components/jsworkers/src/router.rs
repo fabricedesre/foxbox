@@ -35,7 +35,7 @@ use iron::status::Status;
 use serde_json;
 use std::io::{Error as IOError, Read};
 use std::sync::mpsc::channel;
-use workers::User;
+use workers::{User, WorkerInfo};
 
 pub struct Router {
     broker: SharedBroker<Message>,
@@ -86,8 +86,7 @@ impl Router {
         let (tx, rx) = channel::<Message>();
         let source = itry!(Self::read_body_to_string(&mut req.body));
         let message = Message::Start {
-            url: source,
-            user: user.unwrap_or(0), // TODO: respect the `authentication` feature.
+            worker: WorkerInfo::default(source, user.unwrap_or(0)), /* TODO: respect the `authentication` feature. */
             tx: tx,
         };
 
