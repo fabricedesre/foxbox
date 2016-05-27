@@ -4,8 +4,10 @@
 
 extern crate serde_json;
 
+use foxbox_core::traits::Controller;
 use foxbox_taxonomy::manager::*;
 use foxbox_taxonomy::api::{ API, Error, TargetMap, User };
+use foxbox_taxonomy::channel::*;
 use foxbox_taxonomy::io::*;
 use foxbox_taxonomy::values::{ Binary, Type, Value };
 use foxbox_taxonomy::selector::*;
@@ -23,7 +25,6 @@ use iron::status::Status;
 
 use std::io::{ Error as IOError, Read };
 use std::sync::Arc;
-use traits::Controller;
 
 /// This is a specialized Router for the taxonomy API.
 /// It handles all the calls under the api/v1/ url space.
@@ -308,7 +309,7 @@ describe! taxonomy_router {
                                     Headers::new(),
                                     &mount).unwrap();
         let body = response::extract_body_to_string(response);
-        let s = r#"[{"adapter":"clock@link.mozilla.org","channels":{"getter:interval.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","id":"getter:interval.clock@link.mozilla.org","kind":"CountEveryInterval","service":"service:clock@link.mozilla.org","supports_fetch":false,"supports_send":false,"tags":[]},"getter:timeofday.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","id":"getter:timeofday.clock@link.mozilla.org","kind":"CurrentTimeOfDay","service":"service:clock@link.mozilla.org","supports_fetch":true,"supports_send":false,"tags":[]},"getter:timestamp.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","id":"getter:timestamp.clock@link.mozilla.org","kind":"CurrentTime","service":"service:clock@link.mozilla.org","supports_fetch":true,"supports_send":false,"tags":[]}},"id":"service:clock@link.mozilla.org","properties":{"model":"Mozilla clock v1"},"tags":[]}]"#;
+        let s = r#"[{"adapter":"clock@link.mozilla.org","channels":{"getter:interval.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","feature":"clock/time-interval-seconds","id":"getter:interval.clock@link.mozilla.org","service":"service:clock@link.mozilla.org","supports_fetch":null,"supports_send":null,"tags":[]},"getter:timeofday.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","feature":"clock/time-of-day-seconds","id":"getter:timeofday.clock@link.mozilla.org","service":"service:clock@link.mozilla.org","supports_fetch":{"returns":{"requires":"Duration"}},"supports_send":null,"tags":[]},"getter:timestamp.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","feature":"clock/time-timestamp-rfc-3339","id":"getter:timestamp.clock@link.mozilla.org","service":"service:clock@link.mozilla.org","supports_fetch":{"returns":{"requires":"TimeStamp"}},"supports_send":null,"tags":[]}},"id":"service:clock@link.mozilla.org","properties":{"model":"Mozilla clock v1"},"tags":[]}]"#;
 
         assert_eq!(body, s);
     }
@@ -319,7 +320,7 @@ describe! taxonomy_router {
                                     r#"[{"id":"service:clock@link.mozilla.org"}]"#,
                                     &mount).unwrap();
         let body = response::extract_body_to_string(response);
-        let s = r#"[{"adapter":"clock@link.mozilla.org","channels":{"getter:interval.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","id":"getter:interval.clock@link.mozilla.org","kind":"CountEveryInterval","service":"service:clock@link.mozilla.org","supports_fetch":false,"supports_send":false,"tags":[]},"getter:timeofday.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","id":"getter:timeofday.clock@link.mozilla.org","kind":"CurrentTimeOfDay","service":"service:clock@link.mozilla.org","supports_fetch":true,"supports_send":false,"tags":[]},"getter:timestamp.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","id":"getter:timestamp.clock@link.mozilla.org","kind":"CurrentTime","service":"service:clock@link.mozilla.org","supports_fetch":true,"supports_send":false,"tags":[]}},"id":"service:clock@link.mozilla.org","properties":{"model":"Mozilla clock v1"},"tags":[]}]"#;
+        let s = r#"[{"adapter":"clock@link.mozilla.org","channels":{"getter:interval.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","feature":"clock/time-interval-seconds","id":"getter:interval.clock@link.mozilla.org","service":"service:clock@link.mozilla.org","supports_fetch":null,"supports_send":null,"tags":[]},"getter:timeofday.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","feature":"clock/time-of-day-seconds","id":"getter:timeofday.clock@link.mozilla.org","service":"service:clock@link.mozilla.org","supports_fetch":{"returns":{"requires":"Duration"}},"supports_send":null,"tags":[]},"getter:timestamp.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","feature":"clock/time-timestamp-rfc-3339","id":"getter:timestamp.clock@link.mozilla.org","service":"service:clock@link.mozilla.org","supports_fetch":{"returns":{"requires":"TimeStamp"}},"supports_send":null,"tags":[]}},"id":"service:clock@link.mozilla.org","properties":{"model":"Mozilla clock v1"},"tags":[]}]"#;
 
         assert_eq!(body, s);
     }
@@ -330,7 +331,7 @@ describe! taxonomy_router {
                                      r#"[{"id":"getter:interval.clock@link.mozilla.org"}]"#,
                                      &mount).unwrap();
         let body = response::extract_body_to_string(response);
-        let s = r#"[{"adapter":"clock@link.mozilla.org","id":"getter:interval.clock@link.mozilla.org","kind":"CountEveryInterval","service":"service:clock@link.mozilla.org","supports_fetch":false,"supports_send":false,"tags":[]}]"#;
+        let s = r#"[{"adapter":"clock@link.mozilla.org","feature":"clock/time-interval-seconds","id":"getter:interval.clock@link.mozilla.org","service":"service:clock@link.mozilla.org","supports_fetch":null,"supports_send":null,"tags":[]}]"#;
 
         assert_eq!(body, s);
     }
@@ -342,6 +343,7 @@ describe! binary_getter {
         extern crate serde_json;
 
         use foxbox_taxonomy::adapter::*;
+        use foxbox_taxonomy::channel::*;
         use foxbox_taxonomy::api::{ Error, InternalError, Operation, User };
         use foxbox_taxonomy::manager::AdapterManager;
         use foxbox_taxonomy::services::*;
@@ -353,7 +355,6 @@ describe! binary_getter {
         use std::collections::HashMap;
         use std::sync::Arc;
         use stubs::controller::ControllerStub;
-        use transformable_channels::mpsc::*;
 
         let taxo_manager = Arc::new(AdapterManager::new(None));
 
@@ -421,14 +422,12 @@ describe! binary_getter {
                 let adapter_id = adapter_id!("adapter@test");
                 try!(adapt.add_service(Service::empty(&service_id, &adapter_id)));
                 try!(adapt.add_channel(Channel {
-                    supports_fetch: true,
-                    kind: ChannelKind::Extension {
-                        vendor: Id::new(ADAPTER_VENDOR),
-                        adapter: Id::new(ADAPTER_NAME),
-                        kind: Id::new("binary_getter"),
-                        typ: Type::Binary,
-                    },
-                    ..Channel::empty(&Id::new("getter:binary@link.mozilla.org"), &service_id, &adapter_id)
+                    feature: Id::new("x-test/x-binary"),
+                    supports_fetch: Some(Signature::returns(Maybe::Required(Type::Binary))),
+                    id: Id::new("getter:binary@link.mozilla.org"),
+                    service: service_id.clone(),
+                    adapter: adapter_id.clone(),
+                    ..Channel::default()
                 }));
 
                 Ok(())

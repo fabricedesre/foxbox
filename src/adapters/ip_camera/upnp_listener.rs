@@ -9,12 +9,12 @@ extern crate url;
 
 use std::sync::Arc;
 
+use foxbox_core::config_store::ConfigService;
+use foxbox_core::upnp::{UpnpListener, UpnpService};
 use foxbox_taxonomy::manager::*;
 
-use config_store::ConfigService;
 use super::IPCameraAdapter;
 use super::IpCameraServiceMap;
-use upnp::{UpnpListener, UpnpService};
 
 pub struct IpCameraUpnpListener {
     manager: Arc<AdapterManager>,

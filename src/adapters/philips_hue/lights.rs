@@ -9,9 +9,9 @@
 //! getters according to the light type.
 
 use foxbox_taxonomy::api::Error;
+use foxbox_taxonomy::channel::*;
 use foxbox_taxonomy::manager::*;
 use foxbox_taxonomy::services::*;
-use foxbox_taxonomy::values::{ Type };
 use super::*;
 use super::hub_api::HubApi;
 use std::sync::{ Arc, Mutex };
@@ -28,10 +28,8 @@ pub struct Light {
     light_id: String,
     service_id: Id<ServiceId>,
     pub get_available_id: Id<Channel>,
-    pub get_power_id: Id<Channel>,
-    pub set_power_id: Id<Channel>,
-    pub get_color_id: Id<Channel>,
-    pub set_color_id: Id<Channel>,
+    pub channel_power_id: Id<Channel>,
+    pub channel_color_id: Id<Channel>,
 }
 
 impl Light {
@@ -43,11 +41,9 @@ impl Light {
             hub_id: hub_id.to_owned(),
             light_id: light_id.to_owned(),
             service_id: create_light_id(&hub_id, &light_id),
-            get_available_id: create_getter_id("available", &hub_id, &light_id),
-            get_power_id: create_getter_id("power", &hub_id, &light_id),
-            set_power_id: create_setter_id("power", &hub_id, &light_id),
-            get_color_id: create_getter_id("color", &hub_id, &light_id),
-            set_color_id: create_setter_id("color", &hub_id, &light_id),
+            get_available_id: create_channel_id("available", &hub_id, &light_id),
+            channel_power_id: create_channel_id("power", &hub_id, &light_id),
+            channel_color_id: create_channel_id("color", &hub_id, &light_id),
         }
     }
     pub fn start(&self) {
@@ -85,58 +81,34 @@ impl Light {
             // Has no effect on the API other than that you won't
             // see the light change because it lacks external power.
             try!(manager.add_channel(Channel {
-                 supports_fetch: true,
-                 kind: ChannelKind::Extension {
-                     vendor: Id::new("foxlink@mozilla.com"),
-                     adapter: Id::new("Philips Hue Adapter"),
-                     kind: Id::new("available"),
-                     typ: Type::OnOff,
-                 },
-                 ..Channel::empty(&self.get_available_id, &self.service_id, &adapter_id)
-            }));
-
-
-            try!(manager.add_channel(Channel {
-                 supports_fetch: true,
-                 kind: ChannelKind::LightOn,
-                 ..Channel::empty(&self.get_power_id, &self.service_id, &adapter_id)
+                id: self.get_available_id.clone(),
+                service: self.service_id.clone(),
+                adapter: adapter_id.clone(),
+                ..AVAILABLE.clone()
             }));
 
             try!(manager.add_channel(Channel {
-                supports_send: true,
-                kind: ChannelKind::LightOn,
-                ..Channel::empty(&self.set_power_id, &self.service_id, &adapter_id)
+                id: self.channel_power_id.clone(),
+                service: self.service_id.clone(),
+                adapter: adapter_id.clone(),
+                supports_watch: None,
+                ..LIGHT_IS_ON.clone()
             }));
 
             try!(manager.add_channel(Channel {
-                 supports_fetch: true,
-                 kind: ChannelKind::Extension {
-                     vendor: Id::new("foxlink@mozilla.com"),
-                     adapter: Id::new("Philips Hue Adapter"),
-                     kind: Id::new("Color"),
-                     typ: Type::Color,
-                 },
-                 ..Channel::empty(&self.get_color_id, &self.service_id, &adapter_id)
+                id: self.channel_color_id.clone(),
+                service: self.service_id.clone(),
+                adapter: adapter_id.clone(),
+                supports_watch: None,
+                ..LIGHT_COLOR_HSV.clone()
             }));
-
-            try!(manager.add_channel(Channel {
-                supports_send: true,
-                kind: ChannelKind::Extension {
-                    vendor: Id::new("foxlink@mozilla.com"),
-                    adapter: Id::new("Philips Hue Adapter"),
-                    kind: Id::new("Color"),
-                    typ: Type::Color,
-                },
-                ..Channel::empty(&self.set_color_id, &self.service_id, &adapter_id)
-            }));
-
 
             let mut services_lock = services.lock().unwrap();
             services_lock.getters.insert(self.get_available_id.clone(), self.clone());
-            services_lock.getters.insert(self.get_power_id.clone(), self.clone());
-            services_lock.setters.insert(self.set_power_id.clone(), self.clone());
-            services_lock.getters.insert(self.get_color_id.clone(), self.clone());
-            services_lock.setters.insert(self.set_color_id.clone(), self.clone());
+            services_lock.getters.insert(self.channel_power_id.clone(), self.clone());
+            services_lock.setters.insert(self.channel_power_id.clone(), self.clone());
+            services_lock.getters.insert(self.channel_color_id.clone(), self.clone());
+            services_lock.setters.insert(self.channel_color_id.clone(), self.clone());
 
         } else if status.lighttype == "Dimmable light" {
             info!("New Philips Hue `Dimmable Light` service for light {} on bridge {}",
@@ -155,33 +127,24 @@ impl Light {
             try!(manager.add_service(service));
 
             try!(manager.add_channel(Channel {
-                 supports_fetch: true,
-                 kind: ChannelKind::Extension {
-                     vendor: Id::new("foxlink@mozilla.com"),
-                     adapter: Id::new("Philips Hue Adapter"),
-                     kind: Id::new("available"),
-                     typ: Type::OnOff,
-                 },
-                 ..Channel::empty(&self.get_available_id, &self.service_id, &adapter_id)
-            }));
-
-
-            try!(manager.add_channel(Channel {
-                 supports_fetch: true,
-                 kind: ChannelKind::LightOn,
-                 ..Channel::empty(&self.get_power_id, &self.service_id, &adapter_id)
+                id: self.get_available_id.clone(),
+                service: self.service_id.clone(),
+                adapter: adapter_id.clone(),
+                ..AVAILABLE.clone()
             }));
 
             try!(manager.add_channel(Channel {
-                 supports_send: true,
-                 kind: ChannelKind::LightOn,
-                 ..Channel::empty(&self.set_power_id, &self.service_id, &adapter_id)
+                id: self.channel_power_id.clone(),
+                service: self.service_id.clone(),
+                adapter: adapter_id.clone(),
+                supports_watch: None,
+                ..LIGHT_IS_ON.clone()
             }));
 
             let mut services_lock = services.lock().unwrap();
             services_lock.getters.insert(self.get_available_id.clone(), self.clone());
-            services_lock.getters.insert(self.get_power_id.clone(), self.clone());
-            services_lock.setters.insert(self.set_power_id.clone(), self.clone());
+            services_lock.getters.insert(self.channel_power_id.clone(), self.clone());
+            services_lock.setters.insert(self.channel_power_id.clone(), self.clone());
 
         } else {
             warn!("Ignoring unsupported Hue light type {}, ID {} on bridge {}",

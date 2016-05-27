@@ -16,7 +16,7 @@ use std::thread;
 use std::time::Duration;
 use super::hub_api::HubApi;
 use super::{ HueAction, PhilipsHueAdapter, structs };
-use traits::Controller;
+use foxbox_core::traits::Controller;
 
 pub struct Hub<C> {
     pub adapter: PhilipsHueAdapter<C>,

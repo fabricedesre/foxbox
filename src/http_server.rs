@@ -2,6 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+use foxbox_core::traits::Controller;
 use foxbox_taxonomy::manager::*;
 use hyper::net::{ NetworkListener };
 use iron::{ AfterMiddleware, Chain, Handler,
@@ -20,7 +21,6 @@ use std::sync::Arc;
 use std::thread;
 use taxonomy_router;
 use tls::SniServerFactory;
-use traits::Controller;
 
 const THREAD_COUNT: usize = 8;
 

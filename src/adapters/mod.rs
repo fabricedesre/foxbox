@@ -27,7 +27,7 @@ pub mod webpush;
 use foxbox_taxonomy::manager::AdapterManager as TaxoManager;
 
 use self::thinkerbell::ThinkerbellAdapter;
-use traits::Controller;
+use foxbox_core::traits::Controller;
 
 use openzwave::Adapter as OpenzwaveAdapter;
 

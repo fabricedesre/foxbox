@@ -157,7 +157,6 @@ impl ConfigService {
 
 #[cfg(test)]
 describe! config {
-
     before_each {
         use uuid::Uuid;
         use std::fs;

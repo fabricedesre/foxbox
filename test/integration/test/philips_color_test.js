@@ -15,7 +15,7 @@ function translateHSB(h,s,b) {
 Prepper.makeSuite('Control lights locally',function(){
 
   var lights;
-  var getterPayload = [{'kind': 'LightOn'}];
+  var getterPayload = [{'feature': 'light/is-on'}];
 
   before(Prepper.turnOnAllSimulators);
   before(Prepper.turnOnFoxbox);
@@ -39,13 +39,13 @@ Prepper.makeSuite('Control lights locally',function(){
 
   testParams.forEach(testParam => {
     it(testParam.testName, function() {
-    
-      lights[testParam.lightID] = 
-      lights[testParam.lightID].replace('getter:power','setter:color');
+
+      lights[testParam.lightID] =
+      lights[testParam.lightID].replace('channel:power','channel:color');
       var hue = testParam.hue;
       var sat = testParam.sat;
       var bri = testParam.bri;
-      
+
       // send various values within valid range
       var payload = {'select': {'id': lights[testParam.lightID]}, 
       'value': { 'Color': {'h':hue,'s':sat,'v':bri} } };
@@ -58,19 +58,19 @@ Prepper.makeSuite('Control lights locally',function(){
         var trans = translateHSB(hue,sat,bri);
         expect(hsb.h).equals(trans.h);
         expect(hsb.s).equals(trans.s);
-        expect(hsb.b).equals(trans.b);             
+        expect(hsb.b).equals(trans.b);
       });
     });
   });
 
-  it('Send invalid sat value', function() {   
-    lights[0] = lights[0].replace('getter:power','setter:color');
+  it('Send invalid sat value', function() {
+    lights[0] = lights[0].replace('channel:power','channel:color');
     var hue = 200;
     var invalidSat = 1.5;  // range = [0,1]
     var bri = 0.5;
 
     // send various values within valid range
-    var payload = {'select': {'id': lights[0]}, 
+    var payload = {'select': {'id': lights[0]},
       'value': { 'Color': {'h':hue,'s':invalidSat,'v':bri} } };
 
     return chakram.put(Prepper.foxboxManager.setterURL,payload)
@@ -83,14 +83,14 @@ Prepper.makeSuite('Control lights locally',function(){
     });
   });
 
-  it('Send invalid brightness value', function() {   
+  it('Send invalid brightness value', function() {
     lights[1] = lights[1].replace('getter:power','setter:color');
     var hue = 200;
     var sat = 0.5;  // range = [0,1]
     var invalidBri = 1.5;  // Value should be less than or equal to 1
 
     // send various values within valid range
-    var payload = {'select': {'id': lights[1]}, 
+    var payload = {'select': {'id': lights[1]},
       'value': { 'Color': {'h':hue,'s':sat,'v':invalidBri} } };
 
     return chakram.put(Prepper.foxboxManager.setterURL,payload)

@@ -62,6 +62,7 @@ macro_rules! json_value {
     }
 }
 
+#[macro_export]
 macro_rules! current_dir {
     () => {
         {
@@ -73,6 +74,7 @@ macro_rules! current_dir {
     };
 }
 
+#[macro_export]
 macro_rules! checklock (
     ($e: expr) => {
         match $e {

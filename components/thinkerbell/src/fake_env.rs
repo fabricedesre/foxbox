@@ -1,6 +1,7 @@
 use compile::ExecutableDevEnv;
 
 use foxbox_taxonomy::api::{ API, Error, User };
+use foxbox_taxonomy::channel::*;
 use foxbox_taxonomy::manager::*;
 use foxbox_taxonomy::services::*;
 use foxbox_taxonomy::values::*;

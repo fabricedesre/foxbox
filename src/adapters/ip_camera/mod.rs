@@ -11,12 +11,13 @@ extern crate serde_json;
 mod api;
 mod upnp_listener;
 
-use config_store::ConfigService;
+use foxbox_core::config_store::ConfigService;
+use foxbox_core::traits::Controller;
 use foxbox_taxonomy::api::{Error, InternalError, User};
+use foxbox_taxonomy::channel::*;
 use foxbox_taxonomy::manager::*;
 use foxbox_taxonomy::services::*;
 use foxbox_taxonomy::values::{ Value, Json, Binary, Type, TypeError};
-use traits::Controller;
 use self::api::*;
 use self::upnp_listener::IpCameraUpnpListener;
 use std::collections::HashMap;
@@ -114,63 +115,50 @@ impl IPCameraAdapter {
               model_name,
               name);
 
-        let getter_image_list_id = create_getter_id("image_list", udn);
+        let getter_image_list_id = create_channel_id("image_list", udn);
         try!(adapt.add_channel(Channel {
-            supports_fetch: true,
-            kind: ChannelKind::Extension {
-                vendor: Id::new("foxlink@mozilla.com"),
-                adapter: Id::new("IPCam Adapter"),
-                kind: Id::new("image_list"),
-                typ: Type::Json,
-            },
-            ..Channel::empty(&getter_image_list_id, &service_id, &adapter_id)
+            feature: Id::new("camera/x-image-list"),
+            supports_fetch: Some(Signature::returns(Maybe::Required(Type::Json))),
+            id: getter_image_list_id.clone(),
+            service: service_id.clone(),
+            adapter: adapter_id.clone(),
+            ..Channel::default()
         }));
 
-        let getter_image_newest_id = create_getter_id("image_newest", udn);
+        let getter_image_newest_id = create_channel_id("image_newest", udn);
         try!(adapt.add_channel(Channel {
-            supports_fetch: true,
-            kind: ChannelKind::Extension {
-                vendor: Id::new("foxlink@mozilla.com"),
-                adapter: Id::new("IPCam Adapter"),
-                kind: Id::new("latest image"),
-                typ: Type::Binary,
-            },
-            ..Channel::empty(&getter_image_newest_id, &service_id, &adapter_id)
+            feature: Id::new("camera/x-latest-image"),
+            supports_fetch: Some(Signature::returns(Maybe::Required(Type::Binary))),
+            id: getter_image_newest_id.clone(),
+            service: service_id.clone(),
+            adapter: adapter_id.clone(),
+            ..Channel::default()
         }));
 
-        let setter_snapshot_id = create_setter_id("snapshot", udn);
+        let setter_snapshot_id = create_channel_id("snapshot", udn);
         try!(adapt.add_channel(Channel {
-            supports_send: true,
-            kind: ChannelKind::TakeSnapshot,
-            ..Channel::empty(&setter_snapshot_id, &service_id, &adapter_id)
+            feature: Id::new("camera/store-snapshot"),
+            supports_send: Some(Signature::returns(Maybe::Nothing)),
+            id: setter_snapshot_id.clone(),
+            service: service_id.clone(),
+            adapter: adapter_id.clone(),
+            ..Channel::default()
         }));
 
-        let getter_username_id = create_getter_id("username", udn);
+        let channel_username_id = create_channel_id("username", udn);
         try!(adapt.add_channel(Channel {
-            supports_fetch: true,
-            kind: ChannelKind::Username,
-            ..Channel::empty(&getter_username_id, &service_id, &adapter_id)
+            id: channel_username_id.clone(),
+            service: service_id.clone(),
+            adapter: adapter_id.clone(),
+            ..USERNAME.clone()
         }));
 
-        let setter_username_id = create_setter_id("username", udn);
+        let channel_password_id = create_channel_id("password", udn);
         try!(adapt.add_channel(Channel {
-            supports_send: true,
-            kind: ChannelKind::Username,
-            ..Channel::empty(&setter_username_id, &service_id, &adapter_id)
-        }));
-
-        let getter_password_id = create_getter_id("password", udn);
-        try!(adapt.add_channel(Channel {
-            supports_fetch: true,
-            kind: ChannelKind::Password,
-            ..Channel::empty(&getter_password_id, &service_id, &adapter_id)
-        }));
-
-        let setter_password_id = create_setter_id("password", udn);
-        try!(adapt.add_channel(Channel {
-            supports_send: true,
-            kind: ChannelKind::Password,
-            ..Channel::empty(&setter_password_id, &service_id, &adapter_id)
+            id: channel_password_id.clone(),
+            service: service_id.clone(),
+            adapter: adapter_id.clone(),
+            ..PASSWORD.clone()
         }));
 
         let mut serv = services.lock().unwrap();
@@ -179,10 +167,10 @@ impl IPCameraAdapter {
         serv.getters.insert(getter_image_list_id, camera.clone());
         serv.getters.insert(getter_image_newest_id, camera.clone());
         serv.setters.insert(setter_snapshot_id, camera.clone());
-        serv.getters.insert(getter_username_id, camera.clone());
-        serv.setters.insert(setter_username_id, camera.clone());
-        serv.getters.insert(getter_password_id, camera.clone());
-        serv.setters.insert(setter_password_id, camera.clone());
+        serv.getters.insert(channel_username_id.clone(), camera.clone());
+        serv.setters.insert(channel_username_id, camera.clone());
+        serv.getters.insert(channel_password_id.clone(), camera.clone());
+        serv.setters.insert(channel_password_id, camera.clone());
 
         Ok(())
     }
@@ -215,12 +203,12 @@ impl Adapter for IPCameraAdapter {
                 None => return (id.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(id))))
             };
 
-            if id == camera.get_username_id {
+            if id == camera.username_id {
                 let rsp = camera.get_username();
                 return (id, Ok(Some(Value::String(Arc::new(rsp)))));
             }
 
-            if id == camera.get_password_id {
+            if id == camera.password_id {
                 let rsp = camera.get_password();
                 return (id, Ok(Some(Value::String(Arc::new(rsp)))));
             }
@@ -251,7 +239,7 @@ impl Adapter for IPCameraAdapter {
                 None => { return (id, Err(Error::InternalError(InternalError::InvalidInitialService))); }
             };
 
-            if id == camera.set_username_id {
+            if id == camera.username_id {
                 if let Value::String(ref username) = value {
                     camera.set_username(username);
                     return (id, Ok(()));
@@ -262,7 +250,7 @@ impl Adapter for IPCameraAdapter {
                             })))
             }
 
-            if id == camera.set_password_id {
+            if id == camera.password_id {
                 if let Value::String(ref password) = value {
                     camera.set_password(password);
                     return (id, Ok(()));

@@ -4,8 +4,8 @@
 extern crate url;
 
 use self::url::Url;
+use foxbox_core::traits::Controller;
 use std::thread;
-use traits::Controller;
 use ws;
 use ws::{ Handler, Sender, Result, Message, Handshake, CloseCode, Error };
 use ws::listen;

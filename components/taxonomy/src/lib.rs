@@ -12,6 +12,7 @@ extern crate chrono;
 extern crate libc;
 #[macro_use]
 extern crate log;
+extern crate odds;
 extern crate rusqlite;
 extern crate serde;
 extern crate serde_json;
@@ -19,8 +20,13 @@ extern crate string_cache;
 extern crate sublock;
 extern crate transformable_channels;
 
-/// Metadata on devices
+/// Metadata on devices.
 pub mod services;
+
+/// Metadata on channels.
+///
+/// This module also offers definitions for standardized channels.
+pub mod channel;
 
 /// Public-facing API
 pub mod api;

@@ -8,6 +8,7 @@ pub use adapter::*;
 use api;
 use api::{ API, Error, TargetMap, User };
 use backend::*;
+use channel::Channel;
 use io::*;
 use selector::*;
 use services::*;

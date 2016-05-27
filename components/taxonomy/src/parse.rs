@@ -476,6 +476,7 @@ impl ToJSON for () {
     }
 }
 
+
 /*
 impl<T> Parser<T> for T where T: Deserialize {
     fn parse(_: Path, source: &JSON) -> Result<T, ParseError> {

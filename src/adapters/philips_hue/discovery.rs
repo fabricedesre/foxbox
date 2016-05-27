@@ -13,13 +13,13 @@
 
 pub extern crate url;
 
+use foxbox_core::traits::Controller;
+use foxbox_core::upnp::{ UpnpListener, UpnpManager, UpnpService };
 use serde_json;
 use std::sync::{ Arc, Mutex };
 use std::thread;
 use super::{ HueAction, http, PhilipsHueAdapter };
-use traits::Controller;
 use transformable_channels::mpsc::*;
-use upnp::{ UpnpListener, UpnpManager, UpnpService };
 
 static UPNP_MODEL_PATH: &'static str = "/root/device/modelName";
 static UPNP_MODEL_NAME: &'static str = "Philips hue bridge";

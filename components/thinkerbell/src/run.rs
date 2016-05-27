@@ -7,8 +7,8 @@ use compile;
 
 use foxbox_taxonomy::api;
 use foxbox_taxonomy::api::{ API, Error as APIError, Targetted, User, WatchEvent };
+use foxbox_taxonomy::channel::Channel;
 use foxbox_taxonomy::io::*;
-use foxbox_taxonomy::services::Channel;
 use foxbox_taxonomy::util::{ Exactly, Id };
 use foxbox_taxonomy::values::{ Duration, Type, Value };
 
@@ -81,8 +81,7 @@ impl<Env> Execution<Env> where Env: ExecutableDevEnv + Debug + 'static {
                         let _ = on_event.send(ExecutionEvent::Starting {
                             result: Ok(())
                         });
-                        let _ = tx_init.send(Ok(()));
-                        task.run(env, on_event);
+                        task.run(env, on_event, &tx_init);
                     }
                 }
             });
@@ -240,7 +239,7 @@ impl<Env> ExecutionTask<Env> where Env: ExecutableDevEnv + Debug {
 
     /// Execute the monitoring task.
     /// This currently expects to be executed in its own thread.
-    fn run<S>(&mut self, env: Env, on_event: S) where S: ExtSender<ExecutionEvent> + Clone {
+    fn run<S>(&mut self, env: Env, on_event: S, tx_init: &ExtSender<Result<(), Error>>) where S: ExtSender<ExecutionEvent> + Clone {
         info!("[Recipe '{}'] Starting execution of script", self.script.name);
 
         let mut witnesses = Vec::new();
@@ -292,6 +291,8 @@ impl<Env> ExecutionTask<Env> where Env: ExecutableDevEnv + Debug {
                 ongoing_timer: None,
             }
         }).collect();
+
+        let _ = tx_init.send(Ok(()));
 
         for msg in self.rx.iter() {
             match msg {

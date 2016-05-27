@@ -3,6 +3,7 @@
 use adapter::*;
 
 use api::{ Error, User };
+use channel::Channel;
 use services::*;
 use values::*;
 

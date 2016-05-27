@@ -1,9 +1,9 @@
 //! Utilities for writing adapters.
 
 use api::{ Error, InternalError, User };
+use channel::Channel;
 use io::*;
 use manager::*;
-use services::Channel;
 use util::{ Id, AdapterId };
 use values::*;
 

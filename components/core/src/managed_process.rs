@@ -82,7 +82,6 @@ impl ManagedProcess {
     ///
     /// # Examples
     ///
-    /// ```
     /// use tunnel_controller::ManagedProcess;
     /// use std::process::Command;
     ///
@@ -93,7 +92,6 @@ impl ManagedProcess {
     ///             .spawn()
     /// });
     ///
-    /// ```
     pub fn start<F: 'static>(spawn: F) -> Result<ManagedProcess>
         where F: Fn() -> Result<Child> + Send {
 
@@ -159,7 +157,6 @@ impl ManagedProcess {
     ///
     /// # Examples
     ///
-    /// ```
     /// use tunnel_controller::ManagedProcess;
     /// use std::process::Command;
     ///
@@ -171,7 +168,6 @@ impl ManagedProcess {
     ///
     /// process.shutdown().unwrap();
     ///
-    /// ```
     pub fn shutdown(self) -> Result<()> {
 
         {

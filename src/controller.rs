@@ -6,14 +6,16 @@ extern crate serde_json;
 extern crate mio;
 
 use adapters::AdapterManager;
-use config_store::ConfigService;
+use foxbox_core::config_store::ConfigService;
+use foxbox_core::profile_service::{ ProfilePath, ProfileService };
+use foxbox_core::traits::Controller;
+use foxbox_core::upnp::UpnpManager;
 use foxbox_taxonomy::manager::AdapterManager as TaxoManager;
 use foxbox_users::UsersManager;
 use http_server::HttpServer;
 use jsworkers::broker::{ MessageBroker, SharedBroker };
 use jsworkers::message::Message;
 use jsworkers::runtime::Runtime;
-use profile_service::{ ProfilePath, ProfileService };
 use std::collections::hash_map::HashMap;
 use std::io;
 use std::net::SocketAddr;
@@ -22,9 +24,7 @@ use std::path::PathBuf;
 use std::sync::{ Arc, Mutex };
 use std::sync::atomic::{ AtomicBool, Ordering };
 use std::vec::IntoIter;
-use upnp::UpnpManager;
 use tls::{ CertificateManager, CertificateRecord, SniSslContextProvider, TlsOption };
-use traits::Controller;
 use ws_server::WsServer;
 use ws;
 

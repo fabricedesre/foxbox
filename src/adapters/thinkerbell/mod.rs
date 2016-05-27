@@ -1,9 +1,10 @@
 //! An adapter providing access to the Thinkerbell rules engine.
 
 use foxbox_taxonomy::api::{ Error, InternalError, User };
+use foxbox_taxonomy::channel::*;
 use foxbox_taxonomy::manager::*;
-use foxbox_taxonomy::services::{ AdapterId, ServiceId, Service, Channel, ChannelKind };
-use foxbox_taxonomy::util::Id;
+use foxbox_taxonomy::services::{ AdapterId, ServiceId, Service };
+use foxbox_taxonomy::util::{ Id, Maybe };
 use foxbox_taxonomy::values::{ Duration, Type, Value, TypeError, OnOff };
 
 use foxbox_thinkerbell::compile::ExecutableDevEnv;
@@ -48,6 +49,12 @@ pub struct ThinkerbellAdapter {
 
     /// The ID of the root service's "Add Rule" setter.
     setter_add_rule_id: Id<Channel>,
+
+    /// The `FeatureId` for accessing the on/off state of a rule.
+    feature_rule_on: Id<FeatureId>,
+
+    feature_source: Id<FeatureId>,
+    feature_remove: Id<FeatureId>,
 }
 
 /// Thinkerbell requires an execution environment following this API.
@@ -148,8 +155,7 @@ struct ThinkerbellRule {
     script_id: Id<ScriptId>,
     service_id: Id<ServiceId>,
     getter_source_id: Id<Channel>,
-    getter_is_enabled_id: Id<Channel>,
-    setter_is_enabled_id: Id<Channel>,
+    channel_is_enabled_id: Id<Channel>,
     setter_remove_id: Id<Channel>,
 }
 
@@ -206,7 +212,7 @@ impl ThinkerbellAdapter {
                 // Respond to a pending Getter request.
                 ThinkAction::RespondToGetter(tx, getter_id) => {
                     for ref rule in &rules {
-                        if getter_id == rule.getter_is_enabled_id {
+                        if getter_id == rule.channel_is_enabled_id {
                             let is_enabled = script_manager.is_enabled(&rule.script_id);
                             let _ = tx.send(Ok(Some(Value::OnOff(if is_enabled { OnOff::On } else { OnOff::Off }))));
                             continue 'recv;
@@ -252,7 +258,7 @@ impl ThinkerbellAdapter {
                         // would be far more complex until we have a simpler way to track state within
                         // getter/setter API requests. In any case, this loop should be plenty fast for now.
                         for ref rule in &rules {
-                            if setter_id == rule.setter_is_enabled_id {
+                            if setter_id == rule.channel_is_enabled_id {
                                 match value {
                                     Value::OnOff(OnOff::On) => {
                                         let _ = tx.send(script_manager.set_enabled(&rule.script_id, true).map_err(sm_error));
@@ -290,38 +296,41 @@ impl ThinkerbellAdapter {
             script_id: script_id.clone(),
             service_id: service_id.clone(),
             getter_source_id: Id::new(&format!("{}/source", service_id.as_atom())),
-            getter_is_enabled_id: Id::new(&format!("{}/get_enabled", service_id.as_atom())),
-            setter_is_enabled_id: Id::new(&format!("{}/set_enabled", service_id.as_atom())),
+            channel_is_enabled_id: Id::new(&format!("{}/is-rule-enabled", service_id.as_atom())),
             setter_remove_id: Id::new(&format!("{}/remove", service_id.as_atom())),
         };
 
         try!(self.adapter_manager.add_service(Service::empty(&service_id, &self.adapter_id)));
 
         try!(self.adapter_manager.add_channel(Channel {
-             supports_fetch: true,
-             kind:  ChannelKind::ThinkerbellRuleOn,
-             ..Channel::empty(& rule.getter_is_enabled_id, &service_id, &self.adapter_id)
+            feature: self.feature_rule_on.clone(),
+            supports_fetch: Some(Signature::returns(Maybe::Required(Type::OnOff))),
+            supports_send: Some(Signature::accepts(Maybe::Required(Type::OnOff))),
+            id: rule.channel_is_enabled_id.clone(),
+            service: service_id.clone(),
+            adapter: self.adapter_id.clone(),
+            ..Channel::default()
         }));
 
         // Add getter for script source
         try!(self.adapter_manager.add_channel(Channel {
-             supports_fetch: true,
-             kind:  ChannelKind::ThinkerbellRuleSource,
-             ..Channel::empty(& rule.getter_source_id, &service_id, &self.adapter_id)
+            feature: self.feature_source.clone(),
+            supports_fetch: Some(Signature::returns(Maybe::Required(Type::String))),
+            id: rule.getter_source_id.clone(),
+            service: service_id.clone(),
+            adapter: self.adapter_id.clone(),
+            ..Channel::default()
         }));
 
-        // Add setter for set_enabled
-        try!(self.adapter_manager.add_channel(Channel {
-             supports_send: true,
-             kind:  ChannelKind::ThinkerbellRuleOn,
-             ..Channel::empty(& rule.setter_is_enabled_id, &service_id, &self.adapter_id)
-        }));
 
         // Add setter for removing this rule.
         try!(self.adapter_manager.add_channel(Channel {
-             supports_send: true,
-             kind:  ChannelKind::RemoveThinkerbellRule,
-             ..Channel::empty(&rule.setter_remove_id, &service_id, &self.adapter_id)
+            feature: self.feature_remove.clone(),
+            supports_send: Some(Signature::accepts(Maybe::Nothing)),
+            id: rule.setter_remove_id.clone(),
+            service: service_id.clone(),
+            adapter: self.adapter_id.clone(),
+            ..Channel::default()
         }));
         info!("[thinkerbell@link.mozilla.org] Added Thinkerbell Rule for '{}'", &script_id.to_string());
 
@@ -339,6 +348,11 @@ impl ThinkerbellAdapter {
         let adapter_id = Id::new("thinkerbell@link.mozilla.org");
         let setter_add_rule_id = Id::new("thinkerbell-add-rule");
         let root_service_id = Id::new("thinkerbell-root-service");
+        let feature_rule_on = Id::new("thinkerbell/is-rule-enabled");
+        let feature_add_rule = Id::new("thinkerbell/add-rule");
+        let feature_remove = Id::new("thinkerbell/remove-rule-id");
+        let feature_source = Id::new("thinkerbell/rule-source");
+
 
         // Prepare the script execution environment and load existing scripts.
         let (tx_env, rx_env) = channel();
@@ -363,15 +377,21 @@ impl ThinkerbellAdapter {
             adapter_manager: manager.clone(),
             adapter_id: adapter_id.clone(),
             setter_add_rule_id: setter_add_rule_id.clone(),
+            feature_rule_on: feature_rule_on,
+            feature_source: feature_source,
+            feature_remove: feature_remove,
         };
 
         // Add the adapter and the root service (the one that exposes `AddThinkerbellRule` for adding new rules).
         try!(manager.add_adapter(Arc::new(adapter.clone())));
         try!(manager.add_service(Service::empty(&root_service_id, &adapter_id)));
         try!(manager.add_channel(Channel {
-            kind: ChannelKind::AddThinkerbellRule,
-            supports_send: true,
-            ..Channel::empty(&setter_add_rule_id, &root_service_id, &adapter_id)
+            feature: feature_add_rule,
+            supports_send: Some(Signature::accepts(Maybe::Required(Type::ThinkerbellRule))),
+            id: setter_add_rule_id,
+            service: root_service_id.clone(),
+            adapter: adapter_id.clone(),
+            ..Channel::default()
         }));
 
         thread::spawn(move || {

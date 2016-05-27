@@ -13,6 +13,7 @@
 //!
 //!
 
+use channel::Channel;
 use io::*;
 use services::*;
 use selector::*;
@@ -271,62 +272,6 @@ pub trait API: Send {
     /// the metadata on all services matching _either_ `req1` or `req2`
     /// or ...
     ///
-    /// # REST API
-    ///
-    /// `GET /api/v1/services`
-    ///
-    /// ### JSON
-    ///
-    /// This call accepts as JSON argument a vector of `ServiceSelector`. See the documentation
-    /// of `ServiceSelector` for more details.
-    ///
-    /// Example: Select all doors in the entrance (tags `door`, `entrance`)
-    /// that support setter channel `OpenClosed`
-    ///
-    /// ```
-    /// # use foxbox_taxonomy::selector::*;
-    ///
-    /// let source = r#"[{
-    ///   "tags": ["entrance", "door"],
-    ///   "getters": [
-    ///     {
-    ///       "kind": "OpenClosed"
-    ///     }
-    ///   ]
-    /// }]"#;
-    ///
-    /// # Vec::<ServiceSelector>::from_str(&source).unwrap();
-    /// ```
-    ///
-    ///
-    /// ## Errors
-    ///
-    /// In case of syntax error, Error 400, accompanied with a
-    /// somewhat human-readable JSON string detailing the error.
-    ///
-    /// ## Success
-    ///
-    /// A JSON representing an array of `Service`. See the implementation
-    /// of `Service` for details.
-    ///
-    /// ### Example
-    ///
-    /// ```
-    /// # let source =
-    /// r#"[{
-    ///   "tags": ["entrance", "door", "somevendor"],
-    ///   "id: "some-service-id",
-    ///   "getters": [],
-    ///   "setters": [
-    ///     "tags": ["tag 1", "tag 2"],
-    ///     "id": "some-channel-id",
-    ///     "service": "some-service-id",
-    ///     "updated": "2014-11-28T12:00:09+00:00",
-    ///     "mechanism": "setter",
-    ///     "kind": "OnOff"
-    ///   ]
-    /// }]"#;
-    /// ```
     fn get_services(& self, Vec<ServiceSelector>) -> Vec<Service>;
 
     /// Label a set of services with a set of tags.
@@ -342,46 +287,6 @@ pub trait API: Send {
     ///
     /// Note that this call is _not live_. In other words, if services
     /// are added after the call, they will not be affected.
-    ///
-    /// # REST API
-    ///
-    /// `POST /api/v1/services/tag`
-    ///
-    /// ## JSON
-    ///
-    /// A JSON object with the following fields:
-    /// - services: array - an array of `ServiceSelector`;
-    /// - tags: array - an array of string
-    ///
-    /// ```
-    /// # extern crate serde;
-    /// # extern crate serde_json;
-    /// # extern crate foxbox_taxonomy;
-    /// # use foxbox_taxonomy::services::*;
-    /// # use foxbox_taxonomy::selector::*;
-    ///
-    /// # fn main() {
-    ///  # let source =
-    /// r#"{
-    ///   "services": [{"id": "id 1"}, {"id": "id 2"}],
-    ///   "tags": ["tag 1", "tag 2"]
-    /// }"#;
-    ///
-    /// # let mut json: JSON = serde_json::from_str(&source).unwrap();
-    /// # Vec::<ServiceSelector>::take(Path::new(), &mut json, "services").unwrap();
-    /// # Vec::<Id<String>>::take(Path::new(), &mut json, "tags").unwrap();
-    ///
-    /// # }
-    /// ```
-    ///
-    /// ## Errors
-    ///
-    /// In case of syntax error, Error 400, accompanied with a
-    /// somewhat human-readable JSON string detailing the error.
-    ///
-    /// ## Success
-    ///
-    /// A JSON string representing a number.
     fn add_service_tags(& self, selectors: Vec<ServiceSelector>, tags: Vec<Id<TagId>>) -> usize;
 
     /// Remove a set of tags from a set of services.
@@ -397,46 +302,6 @@ pub trait API: Send {
     ///
     /// Note that this call is _not live_. In other words, if services
     /// are added after the call, they will not be affected.
-    ///
-    /// # REST API
-    ///
-    /// `DELETE /api/v1/services/tag`
-    ///
-    /// ## JSON
-    ///
-    /// A JSON object with the following fields:
-    /// - services: array - an array of ServiceSelector;
-    /// - tags: array - an array of string
-    ///
-    /// ```
-    /// # extern crate serde;
-    /// # extern crate serde_json;
-    /// # extern crate foxbox_taxonomy;
-    /// # use foxbox_taxonomy::services::*;
-    /// # use foxbox_taxonomy::selector::*;
-    ///
-    /// # fn main() {
-    ///
-    ///  # let source =
-    /// r#"{
-    ///   "services": [{"id": "id 1"}, {"id": "id 2"}],
-    ///   "tags": ["tag 1", "tag 2"]
-    /// }"#;
-    ///
-    /// # let mut json: JSON = serde_json::from_str(&source).unwrap();
-    /// # Vec::<ServiceSelector>::take(Path::new(), &mut json, "services").unwrap();
-    /// # Vec::<Id<String>>::take(Path::new(), &mut json, "tags").unwrap();
-    /// # }
-    /// ```
-    ///
-    /// ## Errors
-    ///
-    /// In case of syntax error, Error 400, accompanied with a
-    /// somewhat human-readable JSON string detailing the error.
-    ///
-    /// ## Success
-    ///
-    /// A JSON string representing a number.
     fn remove_service_tags(& self, selectors: Vec<ServiceSelector>, tags: Vec<Id<TagId>>) -> usize;
 
 
@@ -456,37 +321,6 @@ pub trait API: Send {
     ///
     /// Note that this call is _not live_. In other words, if channels
     /// are added after the call, they will not be affected.
-    ///
-    /// # REST API
-    ///
-    /// `POST /api/v1/channels/tag`
-    ///
-    /// ## Requests
-    ///
-    /// Any JSON that can be deserialized to
-    ///
-    /// ```ignore
-    /// {
-    ///   set: Vec<ChannelSelector>,
-    ///   tags: Vec<Id<TagId>>,
-    /// }
-    /// ```
-    /// or
-    /// ```ignore
-    /// {
-    ///   set: Vec<ChannelSelector>,
-    ///   tags: Vec<Id<TagId>>,
-    /// }
-    /// ```
-    ///
-    /// ## Errors
-    ///
-    /// In case of syntax error, Error 400, accompanied with a
-    /// somewhat human-readable JSON string detailing the error.
-    ///
-    /// ## Success
-    ///
-    /// A JSON representing a number.
     fn add_channel_tags(& self, selectors: Vec<ChannelSelector>, tags: Vec<Id<TagId>>) -> usize;
 
     /// Remove a set of tags from a set of channels.
@@ -502,135 +336,15 @@ pub trait API: Send {
     ///
     /// Note that this call is _not live_. In other words, if channels
     /// are added after the call, they will not be affected.
-    ///
-    /// # REST API
-    ///
-    /// `DELETE /api/v1/channels/tag`
-    ///
-    /// ## Requests
-    ///
-    /// Any JSON that can be deserialized to
-    ///
-    /// ```ignore
-    /// {
-    ///   set: Vec<ChannelSelector>,
-    ///   tags: Vec<Id<TagId>>,
-    /// }
-    /// ```
-    /// or
-    /// ```ignore
-    /// {
-    ///   set: Vec<ChannelSelector>,
-    ///   tags: Vec<Id<TagId>>,
-    /// }
-    /// ```
-    ///
-    /// ## Errors
-    ///
-    /// In case of syntax error, Error 400, accompanied with a
-    /// somewhat human-readable JSON string detailing the error.
-    ///
-    /// ## Success
-    ///
-    /// A JSON representing a number.
     fn remove_channel_tags(& self, selectors: Vec<ChannelSelector>, tags: Vec<Id<TagId>>) -> usize;
 
     /// Read the latest value from a set of channels
-    ///
-    /// # REST API
-    ///
-    /// `GET /api/v1/channels/get`
-    ///
-    /// This call supports one or more `ChannelSelector`.
-    ///
-    /// ```
-    /// # extern crate serde;
-    /// # extern crate serde_json;
-    /// # extern crate foxbox_taxonomy;
-    /// # use foxbox_taxonomy::selector::*;
-    /// # use foxbox_taxonomy::api::*;
-    /// # use foxbox_taxonomy::values::*;
-    ///
-    /// # fn main() {
-    ///
-    /// // The following argument will fetch a value from to a single getter:
-    /// # let source =
-    /// r#"{"id": "my-getter"}"#;
-    ///
-    /// # ChannelSelector::from_str(&source).unwrap();
-    ///
-    /// # }
-    /// ```
-    ///
-    /// ## Errors
-    ///
-    /// In case of syntax error, Error 400, accompanied with a
-    /// somewhat human-readable JSON string detailing the error.
-    ///
-    /// ## Success
-    ///
-    /// The results, per getter.
     fn fetch_values(&self, Vec<ChannelSelector>, user: User) -> ResultMap<Id<Channel>, Option<(Payload, Type)>, Error>;
 
     /// Send a bunch of values to a set of channels.
     ///
     /// Sending values to several setters of the same service in a single call will generally
     /// be much faster than calling this method several times.
-    ///
-    /// # REST API
-    ///
-    /// `PUT /api/v1/channels/set`
-    ///
-    /// ## JSON
-    ///
-    /// This call supports one or more objects with the following fields:
-    /// - select (Service Selector | array of ServiceSelector) - the setters to which the value must be sent
-    /// - value (Value) - the value to send
-    ///
-    /// ```
-    /// # extern crate serde;
-    /// # extern crate serde_json;
-    /// # extern crate foxbox_taxonomy;
-    /// # use foxbox_taxonomy::selector::*;
-    /// # use foxbox_taxonomy::api::*;
-    /// # use foxbox_taxonomy::io::*;
-    /// # use foxbox_taxonomy::values::*;
-    ///
-    /// # fn main() {
-    ///
-    /// // The following argument will send `On` to a single setter:
-    /// # let source =
-    /// r#"{
-    ///   "select": {"id": "my-setter"},
-    ///   "value": {"OnOff": "On"}
-    /// }"#;
-    ///
-    /// # TargetMap::<ChannelSelector, Payload>::from_str(&source).unwrap();
-    ///
-    /// // The following argument will send `On` to two setters and `Unit` to everything
-    /// // that supports `Ready`.
-    /// # let source =
-    /// r#"[{
-    ///   "select": [{"id": "my-setter 1"}, {"id": "my-setter 2"}],
-    ///   "value": {"OnOff": "On"}
-    /// }, {
-    ///   "select": {"kind": "Ready"},
-    ///   "value": {"Unit": null}
-    /// }]"#;
-    ///
-    /// # TargetMap::<ChannelSelector, Payload>::from_str(&source).unwrap();
-    ///
-    /// # }
-    /// ```
-    ///
-    /// ## Errors
-    ///
-    /// In case of syntax error, Error 400, accompanied with a
-    /// somewhat human-readable JSON string detailing the error.
-    ///
-    /// ## Success
-    ///
-    /// The results, per setter.
     fn send_values(&self, TargetMap<ChannelSelector, Payload>, user: User) -> ResultMap<Id<Channel>, (), Error>;
 
     /// Watch for changes from channels.
@@ -653,10 +367,6 @@ pub trait API: Send {
     /// Many devices may reject such requests.
     ///
     /// The watcher is disconnected once the `WatchGuard` returned by this method is dropped.
-    ///
-    /// # `WebSocket` API
-    ///
-    /// `/api/v1/channels/watch`
     fn watch_values(& self, watch: TargetMap<ChannelSelector, Exactly<(Payload, Type)>>,
             on_event: Box<ExtSender<WatchEvent>>) -> Self::WatchGuard;
 

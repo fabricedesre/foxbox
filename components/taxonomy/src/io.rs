@@ -20,6 +20,12 @@ impl Payload {
         }
     }
 
+    pub fn empty() -> Self {
+        Payload {
+            json: JSON::Null
+        }
+    }
+
     /// Serialize a `Value` into a `Payload`.
     pub fn from_value(value: &Value, type_: &Type) -> Result<Payload, Error> {
         // Placeholder implementation. Future versions will actually use `type_`

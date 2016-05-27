@@ -7,11 +7,11 @@ var Prepper = require('../lib/make_suite.js');
 Prepper.makeSuite('Test Push Service locally',function(){
   var pushURI = Prepper.webPush_server.getEndpointURI();
   var pushkey = Prepper.webPush_server.getPublicKey();
-  
+
   var baseSubscriptionPayload = {
      'select': {
-       'id':'setter:subscribe.webpush@link.mozilla.org'
-     }, 
+       'id':'channel:subscription.webpush@link.mozilla.org'
+     },
      'value': {
        'Json': {
          'subscriptions':[{
@@ -59,19 +59,19 @@ Prepper.makeSuite('Test Push Service locally',function(){
           expect(listResponse).to.have.status(200);
           for (var entry of listResponse.body) {
             if (entry.adapter === 'webpush@link.mozilla.org') {
-              pushService = true;                
+              pushService = true;
             }
           }
           expect(pushService).equals(true);
         });
       });
 
-      it('Add push subscription',function(){     
-        var setter = 'setter:subscribe.webpush@link.mozilla.org';
-        var getter =  'getter:subscription.webpush@link.mozilla.org';
+      it('Add push subscription',function(){
+        var setter = 'channel:subscription.webpush@link.mozilla.org';
+        var getter =  'channel:subscription.webpush@link.mozilla.org';
         // differs by the type of webpush std
-        var setterPayload = testParam.payload;  
-        var getterPayload = {'id': getter};    
+        var setterPayload = testParam.payload;
+        var getterPayload = {'id': getter};
 
         return chakram.put(Prepper.foxboxManager.setterURL,setterPayload)
         .then(function(cmdResp){
@@ -89,12 +89,12 @@ Prepper.makeSuite('Test Push Service locally',function(){
         });
       });
 
-      it('Set resources to receive notification',function(){     
-        var getter =  'getter:resource.webpush@link.mozilla.org';   
-        var setter = 'setter:resource.webpush@link.mozilla.org';
+      it('Set resources to receive notification',function(){
+        var getter = 'channel:resource.webpush@link.mozilla.org';
+        var setter = 'channel:resource.webpush@link.mozilla.org';
         var setterPayload = {
           'select': {
-            'id': setter}, 
+            'id': setter},
             'value': {
               'Json': {
                 'resources':['livingroom', 'washroom']}}};
@@ -112,17 +112,17 @@ Prepper.makeSuite('Test Push Service locally',function(){
             .Json.resources[0]).equals('livingroom');
           expect(cmdResp.body[getter]
             .Json.resources[1]).equals('washroom');
-        });  
+        });
       });
 
       it('Accepts notification trigger requests',function(){
-        var setter = 'setter:notify.webpush@link.mozilla.org';
+        var setter = 'channel:notify.webpush@link.mozilla.org';
         var resource = 'washroom';
         var notificationText = 'lights on!';
         var payload = {
           'select': {
             'id': setter
-          }, 
+          },
           'value': {
             'WebPushNotify': {
               'resource':resource,'message':notificationText}}} ;
@@ -138,11 +138,11 @@ Prepper.makeSuite('Test Push Service locally',function(){
         var notificationText = 'can you encrypt this one too?';
 
         before(function(done) {
-          var setter = 'setter:notify.webpush@link.mozilla.org';
+          var setter = 'channel:notify.webpush@link.mozilla.org';
           var payload = {
             'select': {
               'id': setter
-            }, 
+            },
             'value': {
               'WebPushNotify': {
                 'resource':resource,'message':notificationText}}} ;
@@ -162,8 +162,8 @@ Prepper.makeSuite('Test Push Service locally',function(){
         });
 
         it('Remove subscription', function(){
-          var setter = 'setter:unsubscribe.webpush@link.mozilla.org';
-          var getter =  'getter:subscription.webpush@link.mozilla.org';
+          var setter = 'channel:unsubscribe.webpush@link.mozilla.org';
+          var getter =  'channel:subscription.webpush@link.mozilla.org';
           var setterPayload = {
             'select': {
               'id':setter

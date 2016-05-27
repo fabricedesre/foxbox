@@ -8,8 +8,9 @@ mod id_map;
 mod watchers;
 
 
-use taxonomy::util::Id as TaxoId;
-use taxonomy::services::{ AdapterId, ServiceId, Service, Channel, ChannelKind };
+use taxonomy::channel::*;
+use taxonomy::util::{ Id as TaxoId, Maybe, ref_eq };
+use taxonomy::services::{ AdapterId, ServiceId, Service };
 use taxonomy::values::*;
 use taxonomy::api::{ Operation, ResultMap, Error as TaxoError, InternalError, User };
 use taxonomy::adapter::{ AdapterManagerHandle, AdapterWatchGuard, WatchEvent };
@@ -121,10 +122,10 @@ impl RangeChecker for Range {
     }
 }
 
-fn taxo_kind_from_ozw_vid(vid: &ValueID) -> Option<ChannelKind> {
+fn taxo_kind_from_ozw_vid(vid: &ValueID) -> Option<&Channel> {
     match (vid.get_type(), vid.get_command_class(), vid.get_index()) {
-        (ValueType::ValueType_Bool, Some(CommandClass::DoorLock),     0) => Some(ChannelKind::DoorLocked),
-        (ValueType::ValueType_Bool, Some(CommandClass::SensorBinary), _) => Some(ChannelKind::OpenClosed),
+        (ValueType::ValueType_Bool, Some(CommandClass::DoorLock),     0) => Some(&DOOR_IS_LOCKED),
+        (ValueType::ValueType_Bool, Some(CommandClass::SensorBinary), _) => Some(&DOOR_IS_OPEN),
         // (ValueType::ValueType_Bool, Some(_)) => Some(ChannelKind::OnOff), TODO Find a proper type
         // Unrecognized command class or type - we don't know what to do with it.
         _ => None
@@ -139,12 +140,19 @@ fn ozw_vid_as_taxo_value(vid: &ValueID) -> Option<Value> {
     match vid.get_type() {
         ValueType::ValueType_Bool => {
             if let Ok(value) = vid.as_bool() {
-                match taxo_kind_from_ozw_vid(vid) {
-                    // Some(ChannelKind::OnOff)  => Some(Value::OnOff(if value {OnOff::On} else {OnOff::Off})), // TODO support switches
-                    Some(ChannelKind::OpenClosed)  => Some(Value::OpenClosed(if value {OpenClosed::Open} else {OpenClosed::Closed})),
-                    Some(ChannelKind::DoorLocked)  => Some(Value::DoorLocked(if value {DoorLocked::Locked} else {DoorLocked::Unlocked})),
-                    _ => None,
+                let kind = if let Some(kind) = taxo_kind_from_ozw_vid(vid) {
+                    kind
+                } else {
+                    return None;
+                };
+                if ref_eq(kind, &DOOR_IS_OPEN) {
+                    Some(Value::OpenClosed(if value {OpenClosed::Open} else {OpenClosed::Closed}))
+                } else if ref_eq(kind, &DOOR_IS_LOCKED) {
+                    Some(Value::DoorLocked(if value {DoorLocked::Locked} else {DoorLocked::Unlocked}))
+                } else {
+                    None
                 }
+                // Some(ChannelKind::OnOff)  => Some(Value::OnOff(if value {OnOff::On} else {OnOff::Off})), // TODO support switches
             } else {
                 None
             }
@@ -304,9 +312,12 @@ impl OpenzwaveAdapter {
                         include_map.push(include_setter_id.clone(), controller);
 
                         box_manager.add_channel(Channel {
-                            kind: ChannelKind::ZwaveInclude,
-                            supports_send: true,
-                            ..Channel::empty(&include_setter_id, &service_id, &adapter_id)
+                            feature: TaxoId::new("zwave/include"),
+                            supports_send: Some(Signature::accepts(Maybe::Required(Type::IsSecure))),
+                            id: include_setter_id.clone(),
+                            service: service_id.clone(),
+                            adapter: adapter_id.clone(),
+                            .. Channel::default()
                         }).unwrap_or_else(|e| {
                             error!("Couldn't add the setter {}: {}", include_setter_id, e);
                         });
@@ -340,36 +351,42 @@ impl OpenzwaveAdapter {
 
                         let node_id = node_map.find_taxo_id_from_ozw(&vid.get_node()).unwrap();
 
-                        let has_getter = !vid.is_write_only();
-                        let has_setter = !vid.is_read_only();
-
                         let kind = taxo_kind_from_ozw_vid(&vid);
-                        if kind.is_none() { continue }
-                        let kind = kind.unwrap();
+                        let chan = match kind {
+                            None => continue,
+                            Some(kind) => kind.clone()
+                        };
 
-                        if has_getter {
-                            let getter_id = TaxoId::<Channel>::new(&value_id);
-                            getter_map.push(getter_id.clone(), vid);
-                            box_manager.add_channel(Channel {
-                                kind: kind.clone(),
-                                supports_fetch: true,
-                                ..Channel::empty(&getter_id, &node_id, &adapter_id)
-                            }).unwrap_or_else(|e| {
+                        let id = TaxoId::<Channel>::new(&value_id);
+
+                        let mut chan = Channel {
+                            id: id.clone(),
+                            service: node_id,
+                            adapter: adapter_id.clone(),
+                            ..chan
+                        };
+
+                        if vid.is_write_only() {
+                            // For some reason, the device is configured as not being readable.
+                            // Make sure that the channel doesn't pretend the opposite.
+                            chan.supports_fetch = None;
+                            chan.supports_watch = None;
+                        } else {
+                            getter_map.push(id.clone(), vid);
+                        }
+                        if vid.is_read_only() {
+                            // For some reason, the device is configured as not being writeable.
+                            // Make sure that the channel doesn't pretend the opposite.
+                            chan.supports_send = None;
+                        } else {
+                            setter_map.push(id.clone(), vid);
+                        }
+
+
+                        box_manager.add_channel(chan)
+                            .unwrap_or_else(|e| {
                                 error!("Couldn't add the getter {}: {}", value_id, e);
                             });
-                        }
-
-                        if has_setter {
-                            let setter_id = TaxoId::<Channel>::new(&value_id);
-                            setter_map.push(setter_id.clone(), vid);
-                            box_manager.add_channel(Channel {
-                                kind: kind.clone(),
-                                supports_send: true,
-                                ..Channel::empty(&setter_id, &node_id, &adapter_id)
-                            }).unwrap_or_else(|e| {
-                                error!("Couldn't add the setter {}: {}", value_id, e);
-                            });
-                        }
                     }
                     ZWaveNotification::ValueChanged(vid)          => {
                         match vid.get_type() {

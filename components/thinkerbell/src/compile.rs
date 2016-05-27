@@ -161,12 +161,12 @@ impl<Env> Compiler<Env> where Env: ExecutableDevEnv {
         let source = match_.source
             .iter()
             .map(|input| input.clone()
-                 .with_kind(match_.kind.clone())
+                 .with_feature(&match_.feature)
                  .with_supports_watch(Exactly::Exactly(true)))
             .collect();
         Ok(Match {
             source: source,
-            kind: match_.kind,
+            feature: match_.feature,
             range: match_.range,
             duration: match_.duration,
             phantom: PhantomData
@@ -181,12 +181,12 @@ impl<Env> Compiler<Env> where Env: ExecutableDevEnv {
         let destination = statement.destination
             .iter()
             .map(|output| output.clone()
-                 .with_kind(statement.kind.clone()))
+                 .with_feature(&statement.feature))
             .collect();
         Ok(Statement {
             destination: destination,
             value: statement.value,
-            kind: statement.kind,
+            feature: statement.feature,
             phantom: PhantomData
         })
     }

@@ -7,13 +7,13 @@ var source = {'name': 'Hellooo, Thinkerbell', 'rules':
           [{'conditions':
             [{'source':
               [{'id':'OpenZWave72057594126794752 (Sensor)'}],
-            'kind':'OpenClosed',
+            'feature':'door/is-open',
             'range':{'Eq':{'OpenClosed':'Open'}}
           }],
           'execute':
             [{'destination':
-              [{'kind':'Log'}],
-              'kind':'Log',
+              [{'feature':'log/append-text'}],
+              'feature':'log/append-text',
               'value':{'String':'Closed'}}]}
             ]};
 source = JSON.stringify(source);
@@ -21,7 +21,7 @@ source = JSON.stringify(source);
 function generateThinkerbellNewRecipePayload(recipeName) {
   return {
     'select':{
-       'kind':'AddThinkerbellRule'
+       'feature':'thinkerbell/add-rule'
     },
     'value':{
        'ThinkerbellRule':{
@@ -43,7 +43,7 @@ Prepper.makeSuite('Add/Remove recipe',function(){
   before(Prepper.turnOnFoxbox);
   before(Prepper.foxboxManager.foxboxLogin);
 
-  it('Check service list for recipe',function(){        
+  it('Check service list for recipe',function(){
     return chakram.get(Prepper.foxboxManager.serviceListURL)
     .then(function(listResponse) {
       expect(listResponse).to.have.status(200);
@@ -54,8 +54,8 @@ Prepper.makeSuite('Add/Remove recipe',function(){
   });
 
   describe('add recipes', function(){
-    it('Add recipe',function(){  
-    return chakram.put(Prepper.foxboxManager.setterURL, 
+    it('Add recipe',function(){
+    return chakram.put(Prepper.foxboxManager.setterURL,
       generateThinkerbellNewRecipePayload('First Recipe'))
       .then(function(cmdResponse) {
         expect(cmdResponse).to.have.status(200);
@@ -68,10 +68,10 @@ Prepper.makeSuite('Add/Remove recipe',function(){
           entry => entry.id === 'thinkerbell/First Recipe');
         expect(isFound).to.be.true;
       });
-    }); 
+    });
 
-    it('Add two recipes one by one',function(){              
-      return chakram.put(Prepper.foxboxManager.setterURL, 
+    it('Add two recipes one by one',function(){
+      return chakram.put(Prepper.foxboxManager.setterURL,
         generateThinkerbellNewRecipePayload('Second Recipe'))
         .then(function(cmdResponse) {
 
@@ -95,7 +95,7 @@ Prepper.makeSuite('Add/Remove recipe',function(){
           expect(isFound).to.be.true; 
         });
       });
-  
+
     after(function(){
       var promises = ['First', 'Second', 'Third'].map(number => 
         chakram.put(Prepper.foxboxManager.setterURL, {'select':

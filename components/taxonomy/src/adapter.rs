@@ -1,4 +1,5 @@
 use api::{ Error, Operation, User };
+use channel::Channel;
 use io::*;
 use services::*;
 use values::*;

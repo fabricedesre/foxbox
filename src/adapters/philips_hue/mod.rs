@@ -17,7 +17,9 @@ pub mod hub_api;
 pub mod lights;
 pub mod structs;
 
+use foxbox_core::traits::Controller;
 use foxbox_taxonomy::api::{ Error, InternalError, User };
+use foxbox_taxonomy::channel::*;
 use foxbox_taxonomy::manager::*;
 use foxbox_taxonomy::services::*;
 use foxbox_taxonomy::values::{ Color, OnOff, Type, TypeError, Value };
@@ -27,7 +29,6 @@ use std::sync::{ Arc, Mutex };
 use std::thread;
 use self::hub::Hub;
 use self::lights::Light;
-use traits::Controller;
 use transformable_channels::mpsc::*;
 
 static ADAPTER_NAME: &'static str = "Philips Hue adapter (built-in)";
@@ -202,12 +203,8 @@ pub fn create_light_id(hub_id: &str, light_id: &str) -> Id<ServiceId> {
     Id::new(&format!("service:{}.{}.{}", light_id, hub_id, create_adapter_id()))
 }
 
-pub fn create_getter_id(op: &str, hub_id: &str, light_id: &str) -> Id<Channel> {
-    Id::new(&format!("getter:{}.{}.{}.{}", op, light_id, hub_id, create_adapter_id()))
-}
-
-pub fn create_setter_id(op: &str, hub_id: &str, light_id: &str) -> Id<Channel> {
-    Id::new(&format!("setter:{}.{}.{}.{}", op, light_id, hub_id, create_adapter_id()))
+pub fn create_channel_id(op: &str, hub_id: &str, light_id: &str) -> Id<Channel> {
+    Id::new(&format!("channel:{}.{}.{}.{}", op, light_id, hub_id, create_adapter_id()))
 }
 
 impl<C: Controller> Adapter for PhilipsHueAdapter<C> {
@@ -243,14 +240,14 @@ impl<C: Controller> Adapter for PhilipsHueAdapter<C> {
                     return (id, Ok(Some(Value::OnOff(OnOff::Off))));
                 }
             }
-            if id == light.get_power_id {
+            if id == light.channel_power_id {
                 if light.get_power() {
                     return (id, Ok(Some(Value::OnOff(OnOff::On))));
                 } else {
                     return (id, Ok(Some(Value::OnOff(OnOff::Off))));
                 }
             }
-            if id == light.get_color_id {
+            if id == light.channel_color_id {
                 let (h, s, v) = light.get_color();
                 return (id, Ok(Some(Value::Color(Color::HSV(h, s, v)))));
             }
@@ -268,7 +265,7 @@ impl<C: Controller> Adapter for PhilipsHueAdapter<C> {
                 None => return (id.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(id))))
             };
 
-            if id == light.set_power_id {
+            if id == light.channel_power_id {
                 match value {
                     Value::OnOff(OnOff::On)  => { light.set_power(true); },
                     Value::OnOff(OnOff::Off) => { light.set_power(false); },
@@ -281,7 +278,7 @@ impl<C: Controller> Adapter for PhilipsHueAdapter<C> {
                 }
                 return (id, Ok(()));
             }
-            if id == light.set_color_id {
+            if id == light.channel_color_id {
                 match value {
                     Value::Color(Color::HSV(h, s, v)) => { light.set_color((h, s, v)); },
                     _ => {

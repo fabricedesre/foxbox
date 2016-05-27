@@ -6,6 +6,8 @@ use std::hash::{ Hash, Hasher };
 use std::marker::PhantomData;
 use std::fmt;
 
+pub use odds::{ ptr_eq, ref_eq };
+
 use string_cache::Atom;
 
 use serde::ser::{ Serialize, Serializer };
@@ -76,6 +78,14 @@ impl<T> Default for Exactly<T> {
         Exactly::Always
     }
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum Maybe<T> {
+    Required(T),
+    Optional(T),
+    Nothing
+}
+
 
 /// A variant of `PhantomData` that supports [De]serialization
 #[derive(Clone, Debug, PartialEq, Hash, Eq)]
@@ -182,19 +192,23 @@ impl<K, T> Targetted<K, T> where K: Clone, T: Clone {
 pub struct Id<T> {
     id: Atom,
 
-    phantom: Phantom<T>,
+    phantom: PhantomData<T>,
 }
 
 impl<T> Id<T> {
     pub fn new(id: &str) -> Self {
         Id {
             id: Atom::from(id),
-            phantom: Phantom::new(),
+            phantom: PhantomData,
         }
     }
 
     pub fn as_atom(&self) -> &Atom {
         &self.id
+    }
+
+    pub fn is_default(&self) -> bool {
+        self.id == *ATOM_DEFAULT_ID
     }
 }
 
@@ -253,8 +267,21 @@ impl<T> Deserialize for Id<T> {
 
         Ok(Id {
             id: Atom::from(deserialized_string),
-            phantom: Phantom::new(),
+            phantom: PhantomData,
         })
+    }
+}
+
+lazy_static! {
+    pub static ref ATOM_DEFAULT_ID : Atom = Atom::from("~~THIS IS THE DEFAULT VALUE FOR ID<T>. IF YOU ARE SEEING THIS, THERE IS AN INTERNAL ERROR IN THE CODE AND SOMETHING WAS NOT INITIALIZED.~~");
+}
+
+impl<T> Default for Id<T> {
+    fn default() -> Self {
+        Id {
+            id: ATOM_DEFAULT_ID.clone(),
+            phantom: PhantomData
+        }
     }
 }
 
@@ -380,3 +407,4 @@ pub struct MimeTypeId;
 
 /// Helper function, to check that a type implements Sync.
 pub fn is_sync<T: Sync>() {}
+

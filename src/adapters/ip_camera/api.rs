@@ -6,8 +6,9 @@ extern crate hyper;
 extern crate time;
 extern crate url;
 
-use config_store::ConfigService;
+use foxbox_core::config_store::ConfigService;
 use foxbox_taxonomy::api::{ Error, InternalError };
+use foxbox_taxonomy::channel::*;
 use foxbox_taxonomy::services::*;
 use rustc_serialize::base64::{ FromBase64, ToBase64, STANDARD };
 use std::fs;
@@ -21,17 +22,9 @@ pub fn create_service_id(service_id: &str) -> Id<ServiceId> {
     Id::new(&format!("service:{}@link.mozilla.org", service_id))
 }
 
-pub fn create_setter_id(operation: &str, service_id: &str) -> Id<Channel> {
-    create_io_mechanism_id("setter", operation, service_id)
-}
-
-pub fn create_getter_id(operation: &str, service_id: &str) -> Id<Channel> {
-    create_io_mechanism_id("getter", operation, service_id)
-}
-
-pub fn create_io_mechanism_id<IO>(prefix: &str, operation: &str, service_id: &str) -> Id<IO>
+pub fn create_channel_id(operation: &str, service_id: &str) -> Id<Channel>
 {
-    Id::new(&format!("{}:{}.{}@link.mozilla.org", prefix, operation, service_id))
+    Id::new(&format!("channel:{}.{}@link.mozilla.org", operation, service_id))
 }
 
 #[derive(Clone)]
@@ -46,10 +39,8 @@ pub struct IpCamera {
     pub image_list_id: Id<Channel>,
     pub image_newest_id: Id<Channel>,
     pub snapshot_id: Id<Channel>,
-    pub get_username_id: Id<Channel>,
-    pub set_username_id: Id<Channel>,
-    pub get_password_id: Id<Channel>,
-    pub set_password_id: Id<Channel>,
+    pub username_id: Id<Channel>,
+    pub password_id: Id<Channel>,
 }
 
 impl IpCamera {
@@ -60,13 +51,11 @@ impl IpCamera {
             snapshot_dir: format!("{}/{}", root_snapshot_dir, udn),
             config: config.clone(),
             upnp_name: upnp_name.to_owned(),
-            image_list_id: create_getter_id("image_list", udn),
-            image_newest_id: create_getter_id("image_newest", udn),
-            snapshot_id: create_setter_id("snapshot", udn),
-            get_username_id: create_getter_id("username", udn),
-            set_username_id: create_setter_id("username", udn),
-            get_password_id: create_getter_id("password", udn),
-            set_password_id: create_setter_id("password", udn),
+            image_list_id: create_channel_id("image_list", udn),
+            image_newest_id: create_channel_id("image_newest", udn),
+            snapshot_id: create_channel_id("snapshot", udn),
+            username_id: create_channel_id("username", udn),
+            password_id: create_channel_id("password", udn),
         };
         // Create a directory to store snapshots for this camera.
         if let Err(err) = fs::create_dir_all(&camera.snapshot_dir) {
@@ -315,7 +304,7 @@ pub fn remove_dir_all<P: AsRef<Path>>(dirname: P) -> io::Result<()> {
 describe! ip_camera {
 
     before_each {
-        use config_store::ConfigService;
+        use foxbox_core::config_store::ConfigService;
         use std::sync::Arc;
         use uuid::Uuid;
 

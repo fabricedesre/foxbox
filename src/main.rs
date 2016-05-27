@@ -17,14 +17,14 @@
 #![cfg_attr(test, feature(const_fn))] // Dependency of stainless
 #![cfg_attr(test, plugin(stainless))] // Test runner
 
-#![feature(reflect_marker)]
-
 #![feature(associated_consts)]
 
 extern crate chrono;
 extern crate core;
 extern crate docopt;
 extern crate env_logger;
+#[macro_use]
+extern crate foxbox_core;
 #[macro_use]
 extern crate foxbox_taxonomy;
 extern crate foxbox_thinkerbell;
@@ -58,10 +58,8 @@ extern crate timer;
 extern crate transformable_channels;
 extern crate unicase;
 extern crate url;
-extern crate uuid;
 extern crate ws;
 extern crate multicast_dns;
-extern crate xml;
 
 // adapters
 extern crate openzwave_adapter as openzwave;
@@ -70,21 +68,15 @@ extern crate openzwave_adapter as openzwave;
 extern crate regex;
 #[cfg(test)]
 extern crate tempdir;
+#[cfg(test)]
+extern crate uuid;
 
-// Need to be declared first so to let the macros be visible from other modules.
-#[macro_use]
-mod utils;
 mod adapters;
-mod config_store;
 mod controller;
 mod http_server;
-mod managed_process;
-mod profile_service;
 mod registration;
-mod upnp;
 mod static_router;
 mod taxonomy_router;
-mod traits;
 mod tunnel_controller;
 mod ws_server;
 
@@ -103,11 +95,12 @@ use libc::{ sighandler_t, SIGINT };
 use log::{ LogRecord, LogLevelFilter };
 
 use multicast_dns::host::HostManager;
-use profile_service::ProfilePath;
+use foxbox_core::profile_service::ProfilePath;
 use std::env;
 use std::sync::atomic::{ AtomicBool, Ordering, ATOMIC_BOOL_INIT };
 use tls::TlsOption;
-use traits::Controller;
+use foxbox_core::traits::Controller;
+use foxbox_core::utils;
 
 docopt!(Args derive Debug, "
 Usage: foxbox [-v] [-h] [-l <hostname>] [-p <port>] [-w <wsport>] [-d <profile_path>] [-r <url>] [-i <iface>] [-t <tunnel>] [-s <secret>] [--disable-tls] [--dns-domain <domain>] [--dns-api <url>] [-c <namespace;key;value>]...

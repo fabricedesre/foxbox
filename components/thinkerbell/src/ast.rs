@@ -4,6 +4,7 @@
 //! objects. Rather, they will use module `parse` to parse a script
 //! and module `run` to execute it.
 
+use foxbox_taxonomy::channel::*;
 use foxbox_taxonomy::io::*;
 use foxbox_taxonomy::selector::*;
 use foxbox_taxonomy::services::*;
@@ -60,14 +61,14 @@ impl Parser<Script<UncheckedCtx>> for Script<UncheckedCtx> {
 /// let source = r#"{
 ///   "conditions": [{
 ///     "source": [{"id": "my getter"}],
-///     "kind": "OvenTemperature",
+///     "feature": "oven/temperature-c",
 ///     "range": {"Geq": {"Temperature": {"C": 300}}},
 ///     "duration": 3600
 ///   }],
 ///   "execute": [{
 ///     "destination": [{"id": "my setter"}],
 ///     "value": {"OnOff": "Off"},
-///     "kind": "LightOn"
+///     "feature": "light/is-on"
 ///   }]
 /// }"#;
 ///
@@ -120,7 +121,7 @@ impl Parser<Rule<UncheckedCtx>> for Rule<UncheckedCtx> {
 ///
 /// - source (array of ChannelSelector) - the selector for getters that will
 ///   provide the data;
-/// - kind (ChannelKind) - the kind of getters;
+/// - feature (string) - the kind of channels;
 /// - range (Range) - the condition in whih the match is considered met –
 ///   a match becomes met when any of the sources *enters* the range;
 /// - duration (Duration, optional) - if provided, the match is only considered
@@ -138,13 +139,13 @@ impl Parser<Rule<UncheckedCtx>> for Rule<UncheckedCtx> {
 /// # fn main() {
 /// let source = r#"{
 ///   "source": [{"id": "my getter"}],
-///   "kind": "OvenTemperature",
+///   "feature": "oven/temperature-c",
 ///   "range": {"Geq": {"Temperature": {"C": 300}}},
 ///   "duration": 3600
 /// }"#;
 ///
 /// let match_ = Match::<UncheckedCtx>::from_str(&source).unwrap();
-/// assert_eq!(match_.kind, ChannelKind::OvenTemperature);
+/// assert_eq!(match_.feature, Id::new("oven/temperature-c"));
 /// # }
 /// ```
 #[derive(Debug)]
@@ -157,8 +158,8 @@ pub struct Match<Ctx> where Ctx: Context {
     /// The kind of channel expected from `source`, e.g. "the current
     /// time of day", "is the door opened?", etc. During compilation,
     /// we make sure that we restrict to the elements of `source` that
-    /// offer `kind`.
-    pub kind: ChannelKind,
+    /// offer `feature`.
+    pub feature: Id<FeatureId>,
 
     /// The range of values for which the condition is considered met.
     /// During compilation, we check that the type of `range` is
@@ -182,8 +183,8 @@ impl Parser<Match<UncheckedCtx>> for Match<UncheckedCtx> {
         let sources = try!(path.push("source",
             |path| ChannelSelector::take_vec(path, source, "source"))
         );
-        let kind = try!(path.push("kind",
-            |path| ChannelKind::take(path, source, "kind"))
+        let feature = try!(path.push("feature",
+            |path| Id::take(path, source, "feature"))
         );
         let range = try!(path.push("range",
             |path| Range::take(path, source, "range"))
@@ -197,7 +198,7 @@ impl Parser<Match<UncheckedCtx>> for Match<UncheckedCtx> {
         };
         Ok(Match {
             source: sources,
-            kind: kind,
+            feature: feature,
             range: range,
             duration: duration,
             phantom: PhantomData,
@@ -212,7 +213,7 @@ impl Parser<Match<UncheckedCtx>> for Match<UncheckedCtx> {
 /// A statement is represented as an object with the following fields:
 /// - destination (array of ChannelSelector);
 /// - value (Value);
-/// - kind (ChannelKind);
+/// - feature (Id<FeatureId>);
 ///
 /// ```
 /// extern crate foxbox_thinkerbell;
@@ -228,12 +229,12 @@ impl Parser<Match<UncheckedCtx>> for Match<UncheckedCtx> {
 /// let source = r#"{
 ///   "destination": [{"id": "my setter"}],
 ///   "value": {"OnOff": "Off"},
-///   "kind": "LightOn"
+///   "feature": "light/is-on"
 /// }"#;
 ///
 /// let statement = Statement::<UncheckedCtx>::from_str(&source).unwrap();
 /// assert_eq!(statement.value, Payload::from_value_auto(&Value::OnOff(OnOff::Off)));
-/// assert_eq!(statement.kind, ChannelKind::LightOn);
+/// assert_eq!(statement.feature, Id::new("light/is-on"));
 /// # }
 /// ```
 #[derive(Debug)]
@@ -251,8 +252,8 @@ pub struct Statement<Ctx> where Ctx: Context {
     /// The kind of channel expected from `destination`, e.g. "close
     /// the door", "set the temperature", etc. During compilation, we
     /// make sure that we restrict to the elements of `destination` that
-    /// offer `kind`.
-    pub kind: ChannelKind,
+    /// offer `feature`.
+    pub feature: Id<FeatureId>,
 
     pub phantom: PhantomData<Ctx>,
 }
@@ -265,8 +266,8 @@ impl Parser<Statement<UncheckedCtx>> for Statement<UncheckedCtx> {
         let destination = try!(path.push("destination",
             |path| ChannelSelector::take_vec(path, source, "destination"))
         );
-        let kind = try!(path.push("kind",
-            |path| ChannelKind::take(path, source, "kind"))
+        let feature = try!(path.push("feature",
+            |path| Id::take(path, source, "feature"))
         );
         let value = try!(path.push("value",
             |path| Payload::take(path, source, "value"))
@@ -274,7 +275,7 @@ impl Parser<Statement<UncheckedCtx>> for Statement<UncheckedCtx> {
         Ok(Statement {
             destination: destination,
             value: value,
-            kind: kind,
+            feature: feature,
             phantom: PhantomData,
         })
     }

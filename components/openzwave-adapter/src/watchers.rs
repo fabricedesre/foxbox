@@ -1,5 +1,5 @@
+use taxonomy::channel::Channel;
 use taxonomy::util::Id as TaxoId;
-use taxonomy::services::Channel;
 use taxonomy::values::*;
 use taxonomy::adapter::{ AdapterWatchGuard, WatchEvent };
 

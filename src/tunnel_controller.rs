@@ -2,11 +2,12 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+use foxbox_core::managed_process::ManagedProcess;
+
 // Assumes Unix
 use std::process::{ Child, Command };
 use std::io::Result;
 use url::{ SchemeData, Url };
-use managed_process::ManagedProcess;
 
 pub type TunnelProcess = ManagedProcess;
 

@@ -4,9 +4,11 @@
 
 extern crate rand;
 
-use config_store::ConfigService;
+use foxbox_core::config_store::ConfigService;
+use foxbox_core::profile_service::{ ProfilePath, ProfileService };
+use foxbox_core::traits::Controller;
+use foxbox_core::upnp::UpnpManager;
 use foxbox_users::UsersManager;
-use profile_service::{ ProfilePath, ProfileService };
 use std::vec::IntoIter;
 use serde_json;
 use std::io;
@@ -16,8 +18,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use tls::{ CertificateManager, CertificateRecord, SniSslContextProvider };
-use traits::Controller;
-use upnp::UpnpManager;
 use ws;
 
 #[derive(Clone)]

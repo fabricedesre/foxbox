@@ -3,6 +3,7 @@
 //! Useful for logging.
 
 use foxbox_taxonomy::api::{ Error, InternalError, User };
+use foxbox_taxonomy::channel::*;
 use foxbox_taxonomy::manager::*;
 use foxbox_taxonomy::services::*;
 use foxbox_taxonomy::values::{ Value };
@@ -88,9 +89,10 @@ impl Console {
         service.properties.insert("model".to_owned(), "Mozilla console v1".to_owned());
         try!(adapt.add_service(service));
         try!(adapt.add_channel(Channel {
-            kind: ChannelKind::Log,
-            supports_send: true,
-            ..Channel::empty(&setter_stdout_id, &service_console_id, &adapter_id)
+            id: setter_stdout_id,
+            service: service_console_id,
+            adapter: adapter_id,
+            ..LOG.clone()
         }));
         Ok(())
     }

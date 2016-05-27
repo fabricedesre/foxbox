@@ -27,7 +27,7 @@ describe('sessions ui', function() {
       describe('failures', function() {
 
         afterEach(function() {
-          return setUpView.dismissAlert();
+          return setUpView.acceptAlert();
         });
 
         PASSWORDS.invalids.forEach((invalidPassword) => {

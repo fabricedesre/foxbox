@@ -39,7 +39,7 @@
     "node-ssdp": "^2.7.0",
     "path": "^0.12.7",
     "raw-body": "^2.1.6",
-    "selenium-webdriver": "2.53.1",
+    "selenium-webdriver": "https://github.com/JohanLorenzo/selenium/releases/download/2.54.0-dev/selenium-webdriver-2.54.0-dev.tgz",
     "should": "^8.2.2",
     "socket.io": "^1.4.5",
     "supertest": "^1.2.0",

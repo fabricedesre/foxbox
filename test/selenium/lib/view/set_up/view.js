@@ -2,6 +2,7 @@
 
 const View = require('../view');
 const PASSWORDS = require('../../passwords.json');
+const Alert = require('../alert.js');
 
 
 function SetUpView() {
@@ -22,7 +23,7 @@ SetUpView.prototype = Object.assign({
 
   failureLogin(password, confirmPassword) {
     return this._submitPassword(password, confirmPassword)
-      .then(() => this.alertMessage());
+      .then(() => this.alert.message);
   },
 
   _submitPassword(password, confirmPassword) {
@@ -35,12 +36,12 @@ SetUpView.prototype = Object.assign({
       .then(() => this.accessor.submitButton.click());
   },
 
-  alertMessage() {
-    return this.driver.switchTo().alert().getText();
+  get alert() {
+    return new Alert(this.driver);
   },
 
-  dismissAlert() {
-    return this.driver.switchTo().alert().accept();
+  acceptAlert() {
+    return this.alert.accept();
   },
 
 }, View.prototype);

@@ -13,12 +13,12 @@ use self::hyper::Client;
 use self::hyper::header::Connection;
 use self::hyper::status::StatusCode;
 use self::get_if_addrs::{ IfAddr, Interface };
+use foxbox_core::traits::Controller;
 use serde_json;
 use std::io::Read;
 use std::time::Duration;
 use std::thread;
 use tls::{ CertificateManager, DnsRecord, get_san_cert_for, register_dns_record };
-use traits::Controller;
 use tunnel_controller:: { Tunnel };
 
 const REGISTRATION_INTERVAL_IN_MINUTES: u32 = 1;

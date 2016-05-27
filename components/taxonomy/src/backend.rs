@@ -2,13 +2,13 @@
 
 use adapter::{ Adapter, AdapterWatchGuard, RawAdapter,  WatchEvent as AdapterWatchEvent };
 use adapter_utils::RawAdapterForAdapter;
-use transact::InsertInMap;
-
 use api::{ Error, InternalError, TargetMap, Targetted, WatchEvent };
+use channel::Channel;
 use io::*;
 use selector::*;
 use services::*;
 use tag_storage::TagStorage;
+use transact::InsertInMap;
 use values::*;
 
 use sublock::atomlock::*;
@@ -75,7 +75,7 @@ impl ServiceData {
     ///
     /// # Warning
     ///
-    /// Any `getters` or `setters` will be ignored!
+    /// Any channels will be ignored!
     fn new(liveness: &Arc<Liveness>, service: Service) -> Self {
         ServiceData {
             tags: Arc::new(SubCell::new(liveness, service.tags)),
@@ -509,11 +509,7 @@ impl State {
                             let on_event = &watcher.on_event;
                             let _ = on_event.lock().unwrap().send(WatchEvent::ChannelAdded(id.clone()));
 
-                            if !channel_data.supports_watch {
-                                continue;
-                            }
-
-                            // Register to be informed of future changes.
+                            // If the channel supports watching, register to be informed of future changes.
                             Self::aux_start_channel_watch(&mut watcher.clone(),
                                 &mut *channel_data, &targetted.payload, adapter_by_id, &mut per_adapter)
                         }
@@ -563,6 +559,9 @@ impl State {
         self.add_raw_adapter(Arc::new(RawAdapterForAdapter::new(adapter)))
     }
     pub fn add_raw_adapter(&mut self, adapter: Arc<RawAdapter>) -> Result<(), Error> {
+        if adapter.id().is_default() {
+            return Err(Error::InternalError(InternalError::NoSuchAdapter(adapter.id())));
+        }
         match self.adapter_by_id.entry(adapter.id()) {
             Entry::Occupied(_) => return Err(Error::InternalError(InternalError::DuplicateAdapter(adapter.id()))),
             Entry::Vacant(entry) => {
@@ -609,6 +608,14 @@ impl State {
     /// - a service with id `service.id` is already installed on the system;
     /// - there is no adapter with id `service.adapter`.
     pub fn add_service(&mut self, service: Service) -> Result<(), Error> {
+        // Sanity checks.
+        if service.adapter.is_default() {
+            return Err(Error::InternalError(InternalError::NoSuchAdapter(service.adapter)));
+        }
+        if service.id.is_default() {
+            return Err(Error::InternalError(InternalError::NoSuchService(service.id)));
+        }
+
         // Make sure that there are no channels.
         if !service.channels.is_empty() {
             return Err(Error::InternalError(InternalError::InvalidInitialService));
@@ -682,8 +689,8 @@ impl State {
         }
     }
 
-    /// Add a setter to the system. Typically, this is called by the adapter when a new
-    /// service has been detected/configured. Some services may gain/lose setters at
+    /// Add a channel to the system. Typically, this is called by the adapter when a new
+    /// service has been detected/configured. Some services may gain/lose channels at
     /// runtime depending on their configuration.
     ///
     /// # Requirements
@@ -695,51 +702,62 @@ impl State {
     /// Returns an error if the adapter is not registered, the parent service is not
     /// registered, or a channel with the same identifier is already registered.
     /// In either cases, this method reverts all its changes.
-    pub fn add_channel(&mut self, mut setter: Channel) -> Result<WatchRequest, Error> {
-        // Add the database tags to this setter.
+    pub fn add_channel(&mut self, mut channel: Channel) -> Result<WatchRequest, Error> {
+        // Sanity checks.
+        if channel.adapter.is_default() {
+            return Err(Error::InternalError(InternalError::NoSuchAdapter(channel.adapter)));
+        }
+        if channel.service.is_default() {
+            return Err(Error::InternalError(InternalError::NoSuchService(channel.service)));
+        }
+        if channel.id.is_default() {
+            return Err(Error::InternalError(InternalError::NoSuchChannel(channel.id)));
+        }
+
+        // Add the database tags to this channel.
         if let Some(ref path) = self.db_path {
             let mut store = TagStorage::new(path);
             // Add all the tags for this channel.
-            if let Ok(all_tags) = store.get_tags_for(&setter.id) {
-                setter.insert_tags(&all_tags);
+            if let Ok(all_tags) = store.get_tags_for(&channel.id) {
+                channel.insert_tags(&all_tags);
             }
         }
 
-        let id = setter.id.clone();
+        let id = channel.id.clone();
         let channel_data;
         {
-            let service = match self.service_by_id.get_mut(&setter.service) {
-                None => return Err(Error::InternalError(InternalError::NoSuchService(setter.service.clone()))),
+            let service = match self.service_by_id.get_mut(&channel.service) {
+                None => return Err(Error::InternalError(InternalError::NoSuchService(channel.service.clone()))),
                 Some(service) => service
             };
             let mut service = &mut *service.borrow_mut();
-            if service.adapter != setter.adapter {
-                return Err(Error::InternalError(InternalError::ConflictingAdapter(service.adapter.clone(), setter.adapter)));
+            if service.adapter != channel.adapter {
+                return Err(Error::InternalError(InternalError::ConflictingAdapter(service.adapter.clone(), channel.adapter)));
             }
 
             let channels = &mut service.channels;
-            channel_data = Arc::new(SubCell::new(&self.liveness, ChannelData::new(setter, service.tags.clone())));
+            channel_data = Arc::new(SubCell::new(&self.liveness, ChannelData::new(channel, service.tags.clone())));
 
             let insert_in_service = match InsertInMap::start(channels, vec![(id.clone(), channel_data.clone())]) {
                 Ok(transaction) => transaction,
                 Err(id) => return Err(Error::InternalError(InternalError::DuplicateChannel(id)))
             };
-            let insert_in_setters = match InsertInMap::start(&mut self.channel_by_id, vec![(id.clone(), channel_data.clone())]) {
+            let insert_in_channels = match InsertInMap::start(&mut self.channel_by_id, vec![(id.clone(), channel_data.clone())]) {
                 Ok(transaction) => transaction,
                 Err(id) => return Err(Error::InternalError(InternalError::DuplicateChannel(id)))
             };
             insert_in_service.commit();
-            insert_in_setters.commit();
+            insert_in_channels.commit();
         }
         Ok(self.aux_channels_may_need_registration(vec![id]))
     }
 
-    /// Remove a setter previously registered on the system. Typically, called by
-    /// an adapter when a service is reconfigured to remove one of its setters.
+    /// Remove a channel previously registered on the system. Typically, called by
+    /// an adapter when a service is reconfigured to remove one of its channels.
     ///
     /// # Error
     ///
-    /// This method returns an error if the setter is not registered or if the service
+    /// This method returns an error if the channel is not registered or if the service
     /// is not registered. In either case, it attemps to clean as much as possible, even
     /// if the state is inconsistent.
     pub fn remove_channel(&mut self, id: &Id<Channel>) -> Result<(), Error> {
@@ -865,12 +883,20 @@ impl State {
         let mut per_adapter : FetchRequest = HashMap::new();
         let adapter_by_id = &self.adapter_by_id;
         Self::with_channels(selectors, &self.channel_by_id, |data| {
-            if !data.supports_fetch {
-                return;
-            }
             use std::collections::hash_map::Entry::*;
+            let sig = if let Some(ref sig) = data.supports_fetch {
+                // FIXME: For the moment, we ignore `accepts`.
+                sig
+            } else {
+                return;
+            };
+            let typ = if let Maybe::Required(ref typ) = sig.returns {
+                typ.clone()
+            } else {
+                log_debug_assert!(false, "[prepare_fetch_values] Signature kind is not implemented yet: {:?}", sig);
+                return;
+            };
             let id = data.channel.id.clone();
-            let typ = data.channel.kind.get_type();
             match per_adapter.entry(data.adapter.clone()) {
                 Vacant(entry) => {
                     let adapter = match adapter_by_id.get(&data.channel.adapter) {
@@ -901,11 +927,21 @@ impl State {
         for Targetted { select: selectors, payload } in keyvalues.drain(..) {
             Self::with_channels(selectors, &self.channel_by_id, |data| {
                 use std::collections::hash_map::Entry::*;
-                if !data.supports_send {
+                let sig = if let Some(ref sig) = data.supports_send {
+                    // FIXME: For the moment, we ignore `returns`.
+                    sig
+                } else {
                     return;
-                }
+                };
+                let value = match sig.accepts {
+                    Maybe::Required(ref typ) => (payload.clone(), typ.clone()),
+                    Maybe::Nothing => (Payload::empty(), Type::Unit),
+                    _ => {
+                        log_debug_assert!(false, "[prepare_send_values] Signature kind is not implemented yet: {:?}", sig);
+                        return
+                    }
+                };
                 let id = data.channel.id.clone();
-                let value = (payload.clone(), data.kind.get_type());
                 match per_adapter.entry(data.channel.adapter.clone()) {
                     Vacant(entry) => {
                         let mut request = HashMap::new();
@@ -940,7 +976,20 @@ impl State {
         let id = getter_data.id.clone();
         let adapter = getter_data.adapter.clone();
 
-        let type_ = getter_data.kind.get_type();
+        let return_type =
+        {
+            let sig = if let Some(ref sig) = getter_data.supports_watch {
+                sig
+            } else {
+                return;
+            };
+            if let Maybe::Required(ref typ) = sig.returns {
+                typ.clone()
+            } else {
+                log_debug_assert!(false, "[aux_start_channel_watch] Signature kind is not implemented yet: {:?}", sig);
+                return;
+            }
+        };
 
         let insert_in_getter =
             match InsertInMap::start(&mut getter_data.watchers, vec![ ( watcher.key, Arc::downgrade(watcher) )] ) {
@@ -972,10 +1021,10 @@ impl State {
                         adapter_data.adapter.clone()
                     }
                 };
-                entry.insert((adapter, (vec![(id, range, type_, Arc::downgrade(watcher) )])));
+                entry.insert((adapter, (vec![(id, range, return_type, Arc::downgrade(watcher) )])));
             },
             Occupied(mut entry) => {
-                (entry.get_mut().1).push((id, range, type_, Arc::downgrade(watcher)));
+                (entry.get_mut().1).push((id, range, return_type, Arc::downgrade(watcher)));
             }
         }
 
@@ -999,9 +1048,6 @@ impl State {
             // the watcher immediately.
             let filter = &filter;
             Self::with_channels_mut(selectors, &mut self.channel_by_id, |mut data| {
-                if !data.channel.supports_watch {
-                    return;
-                }
                 Self::aux_start_channel_watch(&mut watcher, &mut data, filter,
                     adapter_by_id, &mut per_adapter)
             });
