@@ -84,6 +84,7 @@ impl Router {
     fn handle_start(&self, req: &mut Request, user: Option<User>) -> IronResult<Response> {
         // Sends a "Start" message to the worker set and wait for the answer.
         let (tx, rx) = channel::<Message>();
+        // TODO: use json to read the body.
         let source = itry!(Self::read_body_to_string(&mut req.body));
         let message = Message::Start {
             worker: WorkerInfo::default(source, user.unwrap_or(0)), /* TODO: respect the `authentication` feature. */
@@ -94,6 +95,8 @@ impl Router {
             return Ok(Response::with(Status::InternalServerError));
         }
 
+        // There is no acknowledgment when a worker starts successfully, but we receive the
+        // url for the ws endpoint.
         let res = rx.recv();
         if res.is_err() {
             return Ok(Response::with(Status::InternalServerError));

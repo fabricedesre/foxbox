@@ -10,6 +10,10 @@ use ws::Sender as WsSender;
 
 #[derive(Clone, Debug, Serialize)]
 pub enum Message {
+    // Result value when starting a worker, giving the url of the ws used.
+    ClientEndpoint {
+        ws_url: String,
+    },
     // Get the list of all workers for a user. Router -> Runtime.
     GetList {
         user: User,

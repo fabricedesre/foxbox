@@ -1,0 +1,11 @@
+TODO:
+
+Foxbox:
+- Start worker
+- Stop worker
+- client ws
+
+Gecko:
+- Start worker
+- Stop worker
+- onmessage / postmessage

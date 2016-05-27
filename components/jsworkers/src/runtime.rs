@@ -152,6 +152,9 @@ impl Runtime {
                                         .end()
                                         .unwrap();
                                     out.send(Message::Binary(buffer));
+                                    tx.send(BrokerMessage::ClientEndpoint {
+                                        ws_url: format!("ws://locahost:2016/client/{}", worker.key()),
+                                    }).unwrap_or(());
                                 } else {
                                     // TODO: queue the requests and drain them when the runtime
                                     // comes up.

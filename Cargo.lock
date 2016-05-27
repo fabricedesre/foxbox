@@ -83,6 +83,11 @@ version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "bitsparrow"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
 name = "bodyparser"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -374,6 +379,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "jsworkers"
 version = "0.1.0"
 dependencies = [
+ "bitsparrow 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "foxbox_users 0.1.0 (git+https://github.com/fxbox/users.git?rev=d4e5277)",
  "iron 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)",

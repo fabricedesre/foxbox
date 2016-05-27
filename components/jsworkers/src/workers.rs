@@ -84,7 +84,7 @@ impl WorkerInfo {
     }
 
     /// Creates a unique key for this WorkerInfo.
-    fn key(&self) -> String {
+    pub fn key(&self) -> String {
         WorkerInfo::key_from(&self.url, self.user)
     }
 
