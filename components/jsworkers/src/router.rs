@@ -8,18 +8,18 @@
 ///
 /// POST /start
 ///   description: starts a new worker or let the client re-connect to an already created one.
-///   input: { url: <worker_url> }
-///   output: 200 { url: <worker_url>, ws: <websocket_url> }
+///   input: { webworker_url: <worker_url> }
+///   output: 200 { webworker_url: <worker_url>, ws_url: <websocket_url> }
 ///
 /// POST /stop
 ///   description: stops a worker.
-///   input: { url: <worker_url> }
-///   output: 200 { url: <worker_url>, ws: <websocket_url> }
+///   input: { webworker_url: <worker_url> }
+///   output: 200 { webworker_url: <worker_url>, ws_url: <websocket_url> }
 ///
 /// GET /list
 ///   description: returns the list of workers installed for this user.
 ///   input: None
-///   output: 200 [{ state: Running|Stopped, url: <worker_url>, ws: <websocket_url> }*]
+///   output: 200 [{ state: Running|Stopped, webworker_url: <worker_url>, ws_url: <websocket_url> }*]
 
 use broker::SharedBroker;
 use message::Message;
@@ -86,8 +86,18 @@ impl Router {
         let (tx, rx) = channel::<Message>();
         // TODO: use json to read the body.
         let source = itry!(Self::read_body_to_string(&mut req.body));
+        #[derive(Deserialize)]
+        struct Params {
+            webworker_url: String,
+        }
+        let params: Result<Params, serde_json::Error> = serde_json::from_str(&source);
+        if params.is_err() {
+            return Ok(Response::with(Status::BadRequest));
+        }
+        let webworker_url = params.unwrap().webworker_url;
+
         let message = Message::Start {
-            worker: WorkerInfo::default(source, user.unwrap_or(0)), /* TODO: respect the `authentication` feature. */
+            worker: WorkerInfo::default(webworker_url.clone(), user.unwrap_or(0)), /* TODO: respect the `authentication` feature. */
             tx: tx,
         };
 
@@ -101,8 +111,29 @@ impl Router {
         if res.is_err() {
             return Ok(Response::with(Status::InternalServerError));
         }
-
-        Ok(Response::with(Status::Ok))
+        let res = res.unwrap();
+        match res {
+            Message::ClientEndpoint { ws_url } => {
+                // TODO: replace by utils::json!
+                #[derive(Serialize)]
+                struct Answer {
+                    webworker_url: String,
+                    ws_url: String,
+                }
+                let answer = Answer {
+                    webworker_url: webworker_url,
+                    ws_url: ws_url,
+                };
+                let serialized = serde_json::to_string(&answer).unwrap_or("".to_owned());
+                let mut response = Response::with(serialized);
+                response.status = Some(Status::Ok);
+                response.headers.set(ContentType::json());
+                return Ok(response);
+            }
+            _ => {
+                return Ok(Response::with(Status::InternalServerError));
+            }
+        }
     }
 
     fn handle_stop(&self, _: &mut Request, _: Option<User>) -> IronResult<Response> {
