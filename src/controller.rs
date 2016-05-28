@@ -42,6 +42,7 @@ pub struct FoxBox {
     users_manager: Arc<UsersManager>,
     profile_service: Arc<ProfileService>,
     jsworkers_broker: SharedBroker<Message>,
+    jsrunner_path: Option<String>,
 }
 
 impl FoxBox {
@@ -50,7 +51,8 @@ impl FoxBox {
                http_port: u16,
                ws_port: u16,
                tls_option: TlsOption,
-               profile_path: ProfilePath) -> Self {
+               profile_path: ProfilePath,
+               jsrunner_path: Option<String>) -> Self {
 
         let profile_service = ProfileService::new(profile_path);
         let config = Arc::new(ConfigService::new(&profile_service.path_for("foxbox.conf")));
@@ -71,6 +73,7 @@ impl FoxBox {
             users_manager: Arc::new(UsersManager::new(&profile_service.path_for("users_db.sqlite"))),
             profile_service: Arc::new(profile_service),
             jsworkers_broker: MessageBroker::new_shared(),
+            jsrunner_path: jsrunner_path,
         }
     }
 }
@@ -99,9 +102,11 @@ impl Controller for FoxBox {
         self.upnp.search(None).unwrap();
 
         let broker = self.get_jsworkers_broker();
-        Runtime::start("/home/fabrice/dev/builds/obj-jsworkers-mozilla-inbound/dist/bin/jsworkers",
-                       &ProfileService::new(ProfilePath::Default).path_for(""),
-                       &broker);
+        if let Some(ref path) = self.jsrunner_path {
+            Runtime::start(path,
+                           &ProfileService::new(ProfilePath::Default).path_for(""),
+                           &broker);
+        }
 
         event_loop.run(&mut FoxBoxEventLoop {
             controller: self.clone(),

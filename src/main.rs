@@ -103,7 +103,7 @@ use foxbox_core::traits::Controller;
 use foxbox_core::utils;
 
 docopt!(Args derive Debug, "
-Usage: foxbox [-v] [-h] [-l <hostname>] [-p <port>] [-w <wsport>] [-d <profile_path>] [-r <url>] [-i <iface>] [-t <tunnel>] [-s <secret>] [--disable-tls] [--dns-domain <domain>] [--dns-api <url>] [-c <namespace;key;value>]...
+Usage: foxbox [-v] [-h] [-l <hostname>] [-p <port>] [-w <wsport>] [-d <profile_path>] [-r <url>] [-i <iface>] [-t <tunnel>] [-s <secret>] [--disable-tls] [--dns-domain <domain>] [--dns-api <url>] [-j <path>] [-c <namespace;key;value>]...
 
 Options:
     -v, --verbose            Toggle verbose output.
@@ -118,6 +118,7 @@ Options:
         --disable-tls                  Run as a plain HTTP server, disabling encryption.
         --dns-domain <domain>          Set the top level domain for public DNS [default: box.knilxof.org]
         --dns-api <url>                Set the DNS API endpoint [default: https://knilxof.org:5300]
+    -j, --jsrunner <path>    Set the path to the js engine used for js workers.
     -c, --config <namespace;key;value>  Set configuration override
     -h, --help               Print this help menu.
 ",
@@ -132,6 +133,7 @@ Options:
         flag_disable_tls: bool,
         flag_dns_domain: String,
         flag_dns_api: String,
+        flag_jsrunner: Option<String>,
         flag_config: Option<Vec<String>>);
 
 /// Updates local host name with the provided host name string. If requested host name
@@ -238,7 +240,8 @@ fn main() {
         match args.flag_profile {
             Some(p) => ProfilePath::Custom(p),
             None => ProfilePath::Default
-        });
+        },
+        args.flag_jsrunner);
 
     // Override config values
     {
