@@ -9,6 +9,8 @@ use foxbox_core::profile_service::{ ProfilePath, ProfileService };
 use foxbox_core::traits::Controller;
 use foxbox_core::upnp::UpnpManager;
 use foxbox_users::UsersManager;
+use jsworkers::broker::{ MessageBroker, SharedBroker };
+use jsworkers::message::Message;
 use std::vec::IntoIter;
 use serde_json;
 use std::io;
@@ -90,5 +92,9 @@ impl Controller for ControllerStub {
 
     fn get_certificate_manager(&self) -> CertificateManager {
        CertificateManager::new(PathBuf::from(current_dir!()), Box::new(SniSslContextProvider::new()))
+    }
+
+    fn get_jsworkers_broker(&self) -> SharedBroker<Message> {
+        MessageBroker::new_shared()
     }
 }

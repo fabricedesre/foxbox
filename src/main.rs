@@ -321,6 +321,7 @@ describe! main {
             assert_eq!(args.flag_iface, None);
             assert_eq!(args.flag_tunnel, None);
             assert_eq!(args.flag_config, None);
+            assert_eq!(args.flag_jsrunner, None);
             assert_eq!(args.flag_help, false);
         }
 
