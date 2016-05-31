@@ -19,7 +19,6 @@ features = ["ssl"]
 clippy = "0.0.70"
 foxbox_users = { git = "https://github.com/fxbox/users.git", rev = "d4e5277" }
 hyper = "0.8.1"
-jsworkers = { path = "../jsworkers/" }
 libc = "0.2.7"
 log = "0.3"
 serde_json = "0.7.0"

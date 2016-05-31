@@ -36,6 +36,7 @@ extern crate xml;
 pub mod utils;
 
 pub mod config_store;
+pub mod jsworkers;
 pub mod managed_process;
 pub mod profile_service;
 pub mod traits;

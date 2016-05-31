@@ -84,7 +84,6 @@ impl Router {
     fn handle_start(&self, req: &mut Request, user: Option<User>) -> IronResult<Response> {
         // Sends a "Start" message to the worker set and wait for the answer.
         let (tx, rx) = channel::<Message>();
-        // TODO: use json to read the body.
         let source = itry!(Self::read_body_to_string(&mut req.body));
         #[derive(Deserialize)]
         struct Params {
@@ -92,6 +91,7 @@ impl Router {
         }
         let params: Result<Params, serde_json::Error> = serde_json::from_str(&source);
         if params.is_err() {
+            error!("Bad payload for {:?} {}: {:?}", req.url.path, source.clone(), params.err());
             return Ok(Response::with(Status::BadRequest));
         }
         let webworker_url = params.unwrap().webworker_url;

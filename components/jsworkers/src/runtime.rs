@@ -8,8 +8,10 @@ extern crate url;
 
 use bitsparrow::Encoder;
 use broker::SharedBroker;
+use foxbox_core::managed_process::ManagedProcess;
 use message::Message as BrokerMessage;
 use self::url::Url;
+use serde::Serialize;
 use serde_json;
 use std::cell::Cell;
 use std::process::Command;
@@ -79,6 +81,8 @@ impl Handler for RuntimeWsHandler {
 
         if resource == "/runtime/" {
             self.mode.set(ClientType::Runtime);
+            let mut guard = self.broker.lock().unwrap();
+            guard.send_message("workers", BrokerMessage::RunnerWS { out: self.out.clone() });
         }
 
         if resource == "/client/" {
@@ -116,6 +120,16 @@ impl Handler for RuntimeWsHandler {
     }
 }
 
+/// Sends a command and JSON payload over a WS.
+fn send_json_to_ws<T>(out: &Sender, command: &str, obj: &T) where T: Serialize {
+    let buffer = Encoder::new()
+        .string(command)
+        .string(&serde_json::to_string(obj).unwrap())
+        .end()
+        .unwrap();
+    out.send(Message::Binary(buffer));
+}
+
 pub struct Runtime;
 
 impl Runtime {
@@ -146,12 +160,9 @@ impl Runtime {
                             BrokerMessage::Start { ref worker, ref tx } => {
                                 if let Some(ref out) = runtime_ws_out {
                                     // Serialize the worker info and send it the the runtime.
-                                    let buffer = Encoder::new()
-                                        .string("StartWorker")
-                                        .string(&serde_json::to_string(worker).unwrap())
-                                        .end()
-                                        .unwrap();
-                                    out.send(Message::Binary(buffer));
+                                    send_json_to_ws(out, "StartWorker", worker);
+
+                                    // Return the ws url for the client side.
                                     tx.send(BrokerMessage::ClientEndpoint {
                                         ws_url: format!("ws://locahost:2016/client/{}", worker.key()),
                                     }).unwrap_or(());
@@ -164,12 +175,7 @@ impl Runtime {
                             BrokerMessage::Stop { ref worker, ref tx } => {
                                 if let Some(ref out) = runtime_ws_out {
                                     // Serialize the worker info and send it the the runtime.
-                                    let buffer = Encoder::new()
-                                        .string("StopWorker")
-                                        .string(&serde_json::to_string(worker).unwrap())
-                                        .end()
-                                        .unwrap();
-                                    out.send(Message::Binary(buffer));
+                                    send_json_to_ws(out, "StopWorker", worker);
                                 } else {
                                     // TODO: queue the requests and drain them when the runtime
                                     // comes up.
@@ -187,10 +193,11 @@ impl Runtime {
                                 workers.stop_all();
                             }
                             BrokerMessage::RunnerWS { ref out } => {
+                                info!("jsrunner WS is ready.");
                                 runtime_ws_out = Some(out.clone());
                             }
                             _ => {
-                                info!("Unexpected message in JsWorkers_Actor thread {:?}", res);
+                                info!("Unexpected message by the  `workers` actor {:?}", res);
                             }
                         }
                     }
@@ -199,8 +206,24 @@ impl Runtime {
 
             Runtime::start_ws(&broker);
 
-            // This is a blocking call.
-            Runtime::start_jsrunner(&path);
+            let jsrunner = Runtime::start_jsrunner(&path);
+
+            let (tx, rx) = channel::<BrokerMessage>();
+            broker.lock().unwrap().add_actor("runtime", tx);
+            loop {
+                let res = rx.recv().unwrap();
+                match res {
+                    BrokerMessage::Shutdown => {
+                        // Stops the jsrunner.
+                        if jsrunner.is_some() {
+                            jsrunner.shutdown();
+                        }
+                    }
+                    _ => {
+                        info!("Unexpected message received by the `runtime` actor {:?}", res);
+                    }
+                }
+            }
         });
     }
 
@@ -218,23 +241,15 @@ impl Runtime {
             .unwrap();
     }
 
-    fn start_jsrunner(runtime_path: &str) {
+    fn start_jsrunner(runtime_path: &str) -> Result<ManagedProcess> {
         let path = runtime_path.to_string();
         info!("Starting jsrunner {}", runtime_path);
-        loop {
-            let output = Command::new(&path)
+
+        ManagedProcess::start(|| {
+            Command::new(&path)
                 .arg("-ws")
                 .arg("ws://localhost:2016/runtime/")
-                .output()
-                .unwrap_or_else(|e| panic!("failed to execute process: {}", e));
-
-            error!("Failed to run jsworkers runtime:\nstdout:\n{}\nstderr:\n{}",
-                   String::from_utf8_lossy(&output.stdout),
-                   String::from_utf8_lossy(&output.stderr));
-
-            // Wait 1 second before restarting.
-            // TODO: exponential backoff?? something better anyway.
-            thread::sleep(Duration::new(1, 0));
-        }
+                .spawn()
+        })
     }
 }

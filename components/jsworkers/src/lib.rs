@@ -6,6 +6,7 @@
 #![plugin(serde_macros)]
 
 extern crate bitsparrow;
+extern crate foxbox_core;
 extern crate foxbox_users;
 #[macro_use]
 extern crate iron;
@@ -18,8 +19,6 @@ extern crate serde;
 extern crate serde_json;
 extern crate ws;
 
-pub mod broker;
-pub mod message;
 pub mod runtime;
 pub mod router;
 mod workers;

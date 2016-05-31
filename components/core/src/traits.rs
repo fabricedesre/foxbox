@@ -5,8 +5,7 @@
 use config_store::ConfigService;
 use core::marker::Reflect;
 use foxbox_users::UsersManager;
-use jsworkers::broker::SharedBroker;
-use jsworkers::message::Message;
+use jsworkers::{ Message, SharedBroker };
 use profile_service::ProfileService;
 use serde_json;
 use std::io;

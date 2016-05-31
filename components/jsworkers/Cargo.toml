@@ -9,6 +9,7 @@ publish = false
 
 [dependencies]
 bitsparrow = "0.3.2"
+foxbox_core = { path = "../core" }
 foxbox_users = { git = "https://github.com/fxbox/users.git", rev = "d4e5277" }
 log = "^0.3"
 rusqlite = "0.6.0"
