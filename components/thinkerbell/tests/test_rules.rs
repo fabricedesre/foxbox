@@ -190,8 +190,8 @@ fn test_run() {
     println!("* Injecting an error does not trigger the send.");
     env.execute(Instruction::InjectGetterValues(vec![
         (getter_id_1.clone(), Err(APIError::TypeError(APITypeError {
-            expected: Type::OnOff,
-            got: Type::OpenClosed
+            expected: Type::OnOff.name(),
+            got: Type::OpenClosed.name()
         })))
     ]));
 
@@ -430,8 +430,8 @@ fn test_run() {
 
     env.execute(Instruction::InjectSetterErrors(vec![
         (setter_id_1.clone(), Some(APIError::TypeError(APITypeError {
-            expected: Type::OnOff,
-            got: Type::OpenClosed
+            expected: Type::OnOff.name(),
+            got: Type::OpenClosed.name()
         })))
     ]));
     rx_done.recv().unwrap();
@@ -658,8 +658,8 @@ fn test_run_with_delay() {
 
     env.execute(Instruction::InjectGetterValues(vec![
         (getter_id_1.clone(), Err(APIError::TypeError(APITypeError {
-            expected: Type::OnOff,
-            got: Type::OpenClosed
+            expected: Type::OnOff.name(),
+            got: Type::OpenClosed.name()
         })))
     ]));
     rx_done.recv().unwrap();

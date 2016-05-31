@@ -1105,9 +1105,9 @@ fn test_fetch() {
         assert_eq!(data.len(), 4);
         match data.get(&getter_id_1_1).transform() {
             Some(Err(Error::TypeError(TypeError {
-                got: Type::OpenClosed,
-                expected: Type::OnOff,
-            }))) => {},
+                ref got,
+                ref expected,
+            }))) if &got as &str == "OpenClosed" && &expected as &str == "OnOff" => {},
             other => panic!("Unexpected result, {:?}", other)
         }
         match data.get(&getter_id_1_2).transform() {
@@ -1263,9 +1263,9 @@ fn test_send() {
         for id in vec![&setter_id_1_1, &setter_id_1_2, &setter_id_2] {
             match data.get(id) {
                 Some(&Err(Error::TypeError(TypeError {
-                    got: Type::OpenClosed,
-                    expected: Type::OnOff
-                }))) => {},
+                    ref got,
+                    ref expected,
+                }))) if &got as &str == "OpenClosed" && &expected as &str == "OnOff" => {},
                 other => panic!("Unexpected result for {}: {:?}", id, other)
             }
         }

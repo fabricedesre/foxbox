@@ -10,7 +10,10 @@
 
 // Make linter fail for every warning
 #![plugin(clippy)]
+
 #![deny(clippy)]
+// TODO: re-enable deny mode once the identity_op issue is fixed.
+#![warn(identity_op)]
 // Needed for many #[derive(...)] macros
 #![allow(used_underscore_binding)]
 

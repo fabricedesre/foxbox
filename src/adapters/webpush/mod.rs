@@ -277,13 +277,19 @@ impl<C: Controller> Adapter for WebPush<C> {
                             Err(err) => return (id, Err(Error::InternalError(InternalError::GenericError(format!("Database error: {}", err)))))
                         }
                     },
-                   _ => return (id, Err(Error::TypeError(TypeError { expected: Type::WebPushNotify, got: value.get_type() })))
+                   _ => return (id, Err(Error::TypeError(TypeError {
+                            expected: Type::WebPushNotify.name(),
+                            got: value.get_type().name()
+                    })))
                 }
             }
 
             let arc_json_value = match value {
                 Value::Json(v) => v,
-                _ => return (id, Err(Error::TypeError(TypeError { expected: Type::Json, got: value.get_type() })))
+                _ => return (id, Err(Error::TypeError(TypeError {
+                    expected: Type::Json.name(),
+                    got: value.get_type().name()
+                })))
             };
             let Json(ref json_value) = *arc_json_value;
 

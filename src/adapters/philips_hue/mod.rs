@@ -271,8 +271,8 @@ impl<C: Controller> Adapter for PhilipsHueAdapter<C> {
                     Value::OnOff(OnOff::Off) => { light.set_power(false); },
                     _ => {
                         return (id, Err(Error::TypeError(TypeError {
-                                        got: value.get_type(),
-                                        expected: Type::OnOff
+                                        got: value.get_type().name(),
+                                        expected: Type::OnOff.name()
                                     })));
                     }
                 }
@@ -283,8 +283,8 @@ impl<C: Controller> Adapter for PhilipsHueAdapter<C> {
                     Value::Color(Color::HSV(h, s, v)) => { light.set_color((h, s, v)); },
                     _ => {
                         return (id, Err(Error::TypeError(TypeError {
-                                        got: value.get_type(),
-                                        expected: Type::Color
+                                        got: value.get_type().name(),
+                                        expected: Type::Color.name()
                                     })));
                     }
                 }

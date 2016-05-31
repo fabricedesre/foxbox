@@ -245,8 +245,8 @@ impl Adapter for IPCameraAdapter {
                     return (id, Ok(()));
                 }
                 return (id, Err(Error::TypeError(TypeError {
-                                got:value.get_type(),
-                                expected: Type::String
+                                got:value.get_type().name(),
+                                expected: Type::String.name()
                             })))
             }
 
@@ -256,8 +256,8 @@ impl Adapter for IPCameraAdapter {
                     return (id, Ok(()));
                 }
                 return (id, Err(Error::TypeError(TypeError {
-                                got:value.get_type(),
-                                expected: Type::String
+                                got:value.get_type().name(),
+                                expected: Type::String.name()
                             })))
             }
 

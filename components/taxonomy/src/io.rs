@@ -31,7 +31,7 @@ impl Payload {
         // Placeholder implementation. Future versions will actually use `type_`
         // for serialization purposes.
         if value.get_type() != *type_ {
-            return Err(Error::TypeError(TypeError {expected: type_.clone(), got: value.get_type()} ));
+            return Err(Error::TypeError(TypeError {expected: type_.name(), got: value.get_type().name()} ));
         }
         Ok(Payload {
             json: value.to_json()
@@ -42,7 +42,7 @@ impl Payload {
         // for deserialization purposes.
         let value = try!(Value::parse(Path::new(), &self.json).map_err(Error::ParseError));
         if value.get_type() != *type_ {
-            return Err(Error::TypeError(TypeError {expected: type_.clone(), got: value.get_type()} ));
+            return Err(Error::TypeError(TypeError {expected: type_.name(), got: value.get_type().name()} ));
         }
         Ok(value)
     }

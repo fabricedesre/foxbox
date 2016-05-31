@@ -15,7 +15,7 @@ use foxbox_thinkerbell::ast::Script;
 use foxbox_thinkerbell::fake_env::*;
 
 use foxbox_taxonomy::api::User;
-use foxbox_taxonomy::parse::Parser;
+use foxbox_taxonomy::parse::{ Path, Parser };
 
 use std::io::prelude::*;
 use std::fs::File;
@@ -98,7 +98,8 @@ fn main () {
         let mut file = File::open(path).unwrap();
         let mut source = String::new();
         file.read_to_string(&mut source).unwrap();
-        let script : Vec<Instruction> = serde_json::from_str(&source).unwrap();
+        let json : serde_json::Value = serde_json::from_str(&source).unwrap();
+        let script : Vec<Instruction> = Vec::parse(Path::new(), &json).unwrap();
         println!("Sequence of events loaded, playing...");
 
         for event in script {

@@ -8,9 +8,7 @@ pub use parse::*;
 use channel::*;
 use services::Service;
 use util::*;
-use values::Duration;
 
-use std::cmp;
 use std::hash::Hash;
 use std::collections::HashSet;
 
@@ -497,65 +495,6 @@ impl ChannelSelector {
         true
     }
 }
-
-/// An acceptable interval of time.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct Period {
-    #[serde(default)]
-    pub min: Option<Duration>,
-    #[serde(default)]
-    pub max: Option<Duration>,
-}
-impl Period {
-    pub fn and(self, other: Self) -> Self {
-        let min = match (self.min, other.min) {
-            (None, x) |
-            (x, None) => x,
-            (Some(min1), Some(min2)) => Some(cmp::max(min1, min2))
-        };
-        let max = match (self.max, other.max) {
-            (None, x) |
-            (x, None) => x,
-            (Some(max1), Some(max2)) => Some(cmp::min(max1, max2))
-        };
-        Period {
-            min: min,
-            max: max
-        }
-    }
-
-    pub fn and_option(a: Option<Self>, b: Option<Self>) -> Option<Self> {
-        match (a, b) {
-            (None, x) |
-            (x, None) => x,
-            (Some(a), Some(b)) => Some(a.and(b))
-        }
-    }
-
-    pub fn matches(&self, duration: &Duration) -> bool {
-        if let Some(ref min) = self.min {
-            if min > duration {
-                return false;
-            }
-        }
-        if let Some(ref max) = self.max {
-            if max < duration {
-                return false;
-            }
-        }
-        true
-    }
-
-    pub fn matches_option(period: &Option<Self>, duration: &Option<Duration>) -> bool {
-        match (period, duration) {
-            (&Some(ref period), &Some(ref duration))
-                if !period.matches(duration) => false,
-            (&Some(_), &None) => false,
-            _ => true,
-        }
-    }
-}
-
 
 fn has_selected_tags(actual: &HashSet<Id<TagId>>, requested: &HashSet<Id<TagId>>) -> bool {
     for tag in &*actual {

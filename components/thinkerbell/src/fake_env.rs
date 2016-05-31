@@ -3,6 +3,7 @@ use compile::ExecutableDevEnv;
 use foxbox_taxonomy::api::{ API, Error, User };
 use foxbox_taxonomy::channel::*;
 use foxbox_taxonomy::manager::*;
+use foxbox_taxonomy::parse::*;
 use foxbox_taxonomy::services::*;
 use foxbox_taxonomy::values::*;
 
@@ -16,10 +17,6 @@ use std::thread;
 use transformable_channels::mpsc::*;
 
 use chrono::{ DateTime, UTC };
-
-use serde::ser::{Serialize, Serializer};
-use serde::de::{Deserialize, Deserializer};
-
 
 
 static VERSION : [u32;4] = [0, 0, 0, 0];
@@ -511,18 +508,8 @@ impl FakeEnv {
         }
     }
 }
-impl Serialize for FakeEnv {
-    fn serialize<S>(&self, _: &mut S) -> Result<(), S::Error> where S: Serializer {
-        panic!("Why are we attempting to serialize the env?")
-    }
-}
-impl Deserialize for FakeEnv {
-    fn deserialize<D>(_: &mut D) -> Result<Self, D::Error> where D: Deserializer {
-         panic!("Why are we attempting to deserialize the env?")
-    }
-}
 
-#[derive(Deserialize, Debug)]
+#[derive(Debug)]
 /// Instructions given to the simulator by the user.
 pub enum Instruction {
     AddAdapters(Vec<String>),
@@ -557,5 +544,78 @@ enum AdapterOp {
     ResetTimers(Box<ExtSender<FakeEnvEvent>>),
 }
 
+struct SetterErrorParser;
+impl Parser<(Id<Channel>, Option<Error>)> for SetterErrorParser {
+    fn description() -> String {
+        "SetterErrorParser".to_owned()
+    }
+    fn parse(path: Path, source: &JSON) -> Result<(Id<Channel>, Option<Error>), ParseError> {
+        unimplemented!()
+    }
+}
+
+struct GetterValueParser;
+impl Parser<(Id<Channel>, Result<Value, Error>)> for GetterValueParser {
+    fn description() -> String {
+        "GetterValueParser".to_owned()
+    }
+    fn parse(path: Path, source: &JSON) -> Result<(Id<Channel>, Result<Value, Error>), ParseError> {
+        unimplemented!()
+    }
+}
+
+
+struct AddChannelsParser;
+impl Parser<Instruction> for AddChannelsParser {
+    fn description() -> String {
+        "AddChannelsParser".to_owned()
+    }
+    fn parse(path: Path, source: &JSON) -> Result<Instruction, ParseError> {
+        unimplemented!()
+    }
+}
+
+
+struct AddServicesParser;
+impl Parser<Instruction> for AddServicesParser {
+    fn description() -> String {
+        "AddServicesParser".to_owned()
+    }
+    fn parse(path: Path, source: &JSON) -> Result<Instruction, ParseError> {
+        unimplemented!()
+    }
+}
+
+impl Parser<Instruction> for Instruction {
+    fn description() -> String {
+        "Instruction".to_owned()
+    }
+
+    fn parse(path: Path, source: &JSON) -> Result<Instruction, ParseError> {
+        if let JSON::String(ref s) = *source {
+            if &*s == "ResetTimers" {
+                Ok(Instruction::ResetTimers)
+            } else {
+                Err(ParseError::unknown_fields(vec![s.clone()], &path))
+            }
+        } else if let Some(result) = path.push_str("TriggerTimersUntil", |path| TimeStamp::take_opt(path, source, "TriggerTimersUntil")) {
+            Ok(Instruction::TriggerTimersUntil(try!(result)))
+        } else if let Some(result) = path.push_str("InjectSetterErrors", |path| SetterErrorParser::take_vec_opt(path, source, "InjectSetterErrors")) {
+            Ok(Instruction::InjectSetterErrors(try!(result)))
+        } else if let Some(result) = path.push_str("InjectGetterValues", |path| GetterValueParser::take_vec_opt(path, source, "InjectGetterValues")) {
+            Ok(Instruction::InjectGetterValues(try!(result)))
+        } else if let Some(result) = path.push_str("RemoveChannels", |path| Vec::take_opt(path, source, "RemoveChannels")) {
+            Ok(Instruction::RemoveChannels(try!(result)))
+        } else if let Some(result) = path.push_str("AddChannels", |path| AddChannelsParser::take_opt(path, source, "AddChannels")) {
+            result
+        } else if let Some(result) = path.push_str("AddServices", |path| AddServicesParser::take_opt(path, source, "AddServices")) {
+            result
+        } else if let Some(result) = path.push_str("AddAdapters", |path| Vec::take_opt(path, source, "AddAdapters")) {
+            Ok(Instruction::AddAdapters(try!(result)))
+        } else {
+            unimplemented!()
+        }
+    }
+}
 
 

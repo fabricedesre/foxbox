@@ -247,8 +247,8 @@ impl ThinkerbellAdapter {
                             },
                             _ => {
                                 let _ = tx.send(Err(Error::TypeError(TypeError {
-                                    expected: Type::ThinkerbellRule,
-                                    got: value.get_type()
+                                    expected: Type::ThinkerbellRule.name(),
+                                    got: value.get_type().name()
                                 })));
                             }
                         }
@@ -268,8 +268,8 @@ impl ThinkerbellAdapter {
                                     },
                                     _ => {
                                         let _ = tx.send(Err(Error::TypeError(TypeError {
-                                            expected: Type::OnOff,
-                                            got: value.get_type()
+                                            expected: Type::OnOff.name(),
+                                            got: value.get_type().name()
                                         })));
                                     },
                                 }

@@ -6,7 +6,7 @@ use std::collections::HashSet;
 use std::hash::{ Hash, Hasher };
 
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Signature {
     pub accepts: Maybe<Type>,
     pub returns: Maybe<Type>
@@ -52,7 +52,7 @@ impl ToJSON for Signature {
     }
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default)]
 pub struct FeatureId;
 
 /// An channel represents a single place where data can enter or
@@ -60,7 +60,7 @@ pub struct FeatureId;
 /// of getter or a single kind of setter. Devices that support both
 /// getters or setters, or several kinds of getters, or several kinds of
 /// setters, are represented as services containing several channels.
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone)]
 pub struct Channel {
     /// Tags describing the channel.
     ///
@@ -68,7 +68,6 @@ pub struct Channel {
     /// applications. They are used to regroup channels for rules.
     ///
     /// For instance "entrance".
-    #[serde(default)]
     pub tags: HashSet<Id<TagId>>,
 
     /// An id unique to this channel.

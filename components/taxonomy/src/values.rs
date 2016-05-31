@@ -14,17 +14,15 @@ use std::{ error, fmt };
 use chrono::{ Duration as ChronoDuration, DateTime, Local, TimeZone, UTC };
 
 use serde_json;
-use serde::ser::{ Serialize, Serializer };
-use serde::de::{ Deserialize, Deserializer, Error, Visitor };
 
 /// Representation of a type error.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct TypeError {
     /// The type we expected.
-    pub expected: Type,
+    pub expected: String,
 
     /// The type we actually got.
-    pub got: Type,
+    pub got: String,
 }
 
 impl fmt::Display for TypeError {
@@ -46,7 +44,7 @@ impl error::Error for TypeError {
 ///
 /// The type of values manipulated by endpoints.
 ///
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord)]
 pub enum Type {
     ///
     /// # Trivial values
@@ -134,6 +132,25 @@ impl Parser<Type> for Type {
 }
 impl ToJSON for Type {
     fn to_json(&self) -> JSON {
+        JSON::String(self.name())
+    }
+}
+
+impl Type {
+    /// Determine whether using `Range::Eq` for this type is
+    /// appropriate. Typically, using `Range::Eq` for a floating point
+    /// number is a bad idea.
+    pub fn supports_eq(&self) -> bool {
+        use self::Type::*;
+        match *self {
+            Duration | TimeStamp | Temperature | ExtNumeric | Color | ThinkerbellRule => false,
+            WebPushNotify | Unit | String | Json | Binary | OnOff | OpenClosed |
+            IsSecure | DoorLocked | ExtBool => true,
+            Range => false,
+        }
+    }
+
+    pub fn name(&self) -> String {
         use self::Type::*;
         let key = match *self {
             Unit => "Unit",
@@ -154,33 +171,7 @@ impl ToJSON for Type {
             ExtNumeric => "ExtNumeric",
             Range => "Range",
         };
-        JSON::String(key.to_owned())
-    }
-}
-
-impl Type {
-    /// Determine whether using `Range::Eq` for this type is
-    /// appropriate. Typically, using `Range::Eq` for a floating point
-    /// number is a bad idea.
-    pub fn supports_eq(&self) -> bool {
-        use self::Type::*;
-        match *self {
-            Duration | TimeStamp | Temperature | ExtNumeric | Color | ThinkerbellRule => false,
-            WebPushNotify | Unit | String | Json | Binary | OnOff | OpenClosed |
-            IsSecure | DoorLocked | ExtBool => true,
-            Range => false,
-        }
-    }
-
-    pub fn ensure_eq(&self, other: &Self) -> Result<(), TypeError> {
-        if self == other {
-            Ok(())
-        } else {
-            Err(TypeError {
-                expected: self.clone(),
-                got: other.clone(),
-            })
-        }
+        key.to_owned()
     }
 }
 
@@ -273,48 +264,6 @@ impl Ord for OnOff {
     }
 }
 
-///
-/// # (De)serialization
-///
-/// Values of this type are represented by strings "On" | "Off".
-///
-/// ```
-/// extern crate serde;
-/// extern crate serde_json;
-/// extern crate foxbox_taxonomy;
-///
-/// let on = serde_json::to_string(&foxbox_taxonomy::values::OnOff::On).unwrap();
-/// assert_eq!(on, "\"On\"");
-///
-/// let on : foxbox_taxonomy::values::OnOff = serde_json::from_str("\"On\"").unwrap();
-/// assert_eq!(on, foxbox_taxonomy::values::OnOff::On);
-///
-/// let off = serde_json::to_string(&foxbox_taxonomy::values::OnOff::Off).unwrap();
-/// assert_eq!(off, "\"Off\"");
-///
-/// let off : foxbox_taxonomy::values::OnOff = serde_json::from_str("\"Off\"").unwrap();
-/// assert_eq!(off, foxbox_taxonomy::values::OnOff::Off);
-/// ```
-impl Serialize for OnOff {
-    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error> where S: Serializer {
-        match *self {
-            OnOff::On => "On".serialize(serializer),
-            OnOff::Off => "Off".serialize(serializer)
-        }
-    }
-}
-impl Deserialize for OnOff {
-    fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error> where D: Deserializer {
-        deserializer.deserialize_string(TrivialEnumVisitor::new(|source| {
-            match source {
-                "On" => Ok(OnOff::On),
-                "Off" => Ok(OnOff::Off),
-                _ => Err(())
-            }
-        }))
-    }
-}
-
 /// An open/closed state.
 ///
 /// # JSON
@@ -404,47 +353,6 @@ impl Ord for OpenClosed {
     }
 }
 
-///
-/// # (De)serialization
-///
-/// Values of this state are represented by strings "Open"|"Closed".
-///
-/// ```
-/// extern crate serde;
-/// extern crate serde_json;
-/// extern crate foxbox_taxonomy;
-///
-/// let open = serde_json::to_string(&foxbox_taxonomy::values::OpenClosed::Open).unwrap();
-/// assert_eq!(open, "\"Open\"");
-///
-/// let open : foxbox_taxonomy::values::OpenClosed = serde_json::from_str("\"Open\"").unwrap();
-/// assert_eq!(open, foxbox_taxonomy::values::OpenClosed::Open);
-///
-/// let closed = serde_json::to_string(&foxbox_taxonomy::values::OpenClosed::Closed).unwrap();
-/// assert_eq!(closed, "\"Closed\"");
-///
-/// let closed : foxbox_taxonomy::values::OpenClosed = serde_json::from_str("\"Closed\"").unwrap();
-/// assert_eq!(closed, foxbox_taxonomy::values::OpenClosed::Closed);
-/// ```
-impl Serialize for OpenClosed {
-    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error> where S: Serializer {
-        match *self {
-            OpenClosed::Open => "Open".serialize(serializer),
-            OpenClosed::Closed => "Closed".serialize(serializer)
-        }
-    }
-}
-impl Deserialize for OpenClosed {
-    fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error> where D: Deserializer {
-        deserializer.deserialize_string(TrivialEnumVisitor::new(|source| {
-            match source {
-                "Open" | "open" => Ok(OpenClosed::Open),
-                "Closed" | "closed" => Ok(OpenClosed::Closed),
-                _ => Err(())
-            }
-        }))
-    }
-}
 
 /// An locked/unlocked state.
 ///
@@ -535,47 +443,6 @@ impl Ord for DoorLocked {
     }
 }
 
-///
-/// # (De)serialization
-///
-/// Values of this state are represented by strings "Locked"|"Unlocked".
-///
-/// ```
-/// extern crate serde;
-/// extern crate serde_json;
-/// extern crate foxbox_taxonomy;
-///
-/// let locked = serde_json::to_string(&foxbox_taxonomy::values::DoorLocked::Locked).unwrap();
-/// assert_eq!(locked, "\"Locked\"");
-///
-/// let locked : foxbox_taxonomy::values::DoorLocked = serde_json::from_str("\"Locked\"").unwrap();
-/// assert_eq!(locked, foxbox_taxonomy::values::DoorLocked::Locked);
-///
-/// let unlocked = serde_json::to_string(&foxbox_taxonomy::values::DoorLocked::Unlocked).unwrap();
-/// assert_eq!(unlocked, "\"Unlocked\"");
-///
-/// let unlocked : foxbox_taxonomy::values::DoorLocked = serde_json::from_str("\"Unlocked\"").unwrap();
-/// assert_eq!(unlocked, foxbox_taxonomy::values::DoorLocked::Unlocked);
-/// ```
-impl Serialize for DoorLocked {
-    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error> where S: Serializer {
-        match *self {
-            DoorLocked::Locked => "Locked".serialize(serializer),
-            DoorLocked::Unlocked => "Unlocked".serialize(serializer)
-        }
-    }
-}
-impl Deserialize for DoorLocked {
-    fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error> where D: Deserializer {
-        deserializer.deserialize_string(TrivialEnumVisitor::new(|source| {
-            match source {
-                "Locked" | "locked" => Ok(DoorLocked::Locked),
-                "Unlocked" | "unlocked" => Ok(DoorLocked::Unlocked),
-                _ => Err(())
-            }
-        }))
-    }
-}
 
 /// A secure/insecure state.
 ///
@@ -666,48 +533,6 @@ impl Ord for IsSecure {
     }
 }
 
-///
-/// # (De)serialization
-///
-/// Values of this type are represented by strings "Insecure" | "Secure".
-///
-/// ```
-/// extern crate serde;
-/// extern crate serde_json;
-/// extern crate foxbox_taxonomy;
-///
-/// let insecure = serde_json::to_string(&foxbox_taxonomy::values::IsSecure::Insecure).unwrap();
-/// assert_eq!(insecure, "\"Insecure\"");
-///
-/// let insecure : foxbox_taxonomy::values::IsSecure = serde_json::from_str("\"Insecure\"").unwrap();
-/// assert_eq!(insecure, foxbox_taxonomy::values::IsSecure::Insecure);
-///
-/// let secure = serde_json::to_string(&foxbox_taxonomy::values::IsSecure::Secure).unwrap();
-/// assert_eq!(secure, "\"Secure\"");
-///
-/// let secure : foxbox_taxonomy::values::IsSecure = serde_json::from_str("\"Secure\"").unwrap();
-/// assert_eq!(secure, foxbox_taxonomy::values::IsSecure::Secure);
-/// ```
-impl Serialize for IsSecure {
-    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error> where S: Serializer {
-        match *self {
-            IsSecure::Insecure => "Insecure".serialize(serializer),
-            IsSecure::Secure => "Secure".serialize(serializer)
-        }
-    }
-}
-impl Deserialize for IsSecure {
-    fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error> where D: Deserializer {
-        deserializer.deserialize_string(TrivialEnumVisitor::new(|source| {
-            match source {
-                "Insecure" => Ok(IsSecure::Insecure),
-                "Secure" => Ok(IsSecure::Secure),
-                _ => Err(())
-            }
-        }))
-    }
-}
-
 impl fmt::Display for IsSecure {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", match *self { IsSecure::Insecure => "insecure", IsSecure::Secure => "secure" })
@@ -721,7 +546,7 @@ impl fmt::Display for IsSecure {
 /// # JSON
 ///
 /// Values of this type are represented by objects `{F; float}` or `{C: float}`
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Temperature {
     /// Fahrenheit
     ///
@@ -822,7 +647,7 @@ impl PartialOrd for Temperature {
 /// A color. Internal representation may vary. The `FoxBox` adapters are
 /// expected to perform conversions to the format requested by their
 /// device.
-#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum Color {
     /// # JSON
     ///
@@ -914,7 +739,7 @@ impl ToJSON for Color {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct WebPushNotify {
     pub resource: String,
     pub message: String,
@@ -940,7 +765,7 @@ impl ToJSON for WebPushNotify {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ThinkerbellRule {
     pub name: String,
     pub source: String,
@@ -969,7 +794,7 @@ impl ToJSON for ThinkerbellRule {
 /// always) possible to choose a more precise data structure for
 /// representing values send/accepted by a service. If possible,
 /// adapters should rather pick such more precise data structure.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Json(pub serde_json::value::Value);
 
 impl Parser<Json> for Json {
@@ -995,8 +820,8 @@ impl PartialOrd for Json {
 
 /// A data structure holding a boolean value of a type that has not
 /// been standardized yet.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ExtValue<T> where T: Debug + Clone + PartialEq + PartialOrd + Serialize + Deserialize {
+#[derive(Debug, Clone)]
+pub struct ExtValue<T> where T: Debug + Clone + PartialEq + PartialOrd {
     pub value: T,
 
     /// The vendor. Used for namespacing purposes, to avoid
@@ -1016,7 +841,7 @@ pub struct ExtValue<T> where T: Debug + Clone + PartialEq + PartialOrd + Seriali
 }
 
 impl<T> Parser<ExtValue<T>> for ExtValue<T>
-    where T: Debug + Clone + PartialEq + PartialOrd + Serialize + Deserialize + Parser<T>
+    where T: Debug + Clone + PartialEq + PartialOrd + Parser<T>
 {
     fn description() -> String {
         format!("ExtValue<{}>", T::description())
@@ -1036,7 +861,7 @@ impl<T> Parser<ExtValue<T>> for ExtValue<T>
 }
 
 impl<T> ToJSON for ExtValue<T>
-    where T: Debug + Clone + PartialEq + PartialOrd + Serialize + Deserialize + ToJSON
+    where T: Debug + Clone + PartialEq + PartialOrd + ToJSON
 {
     fn to_json(&self) -> JSON {
         let mut source = vec![
@@ -1053,7 +878,7 @@ impl<T> ToJSON for ExtValue<T>
 }
 
 impl<T> PartialEq<ExtValue<T>> for ExtValue<T>
-    where T: Debug + Clone + PartialEq + PartialOrd + Serialize + Deserialize
+    where T: Debug + Clone + PartialEq + PartialOrd
 {
     fn eq(&self, other: &Self) -> bool {
         if self.vendor != other.vendor
@@ -1066,7 +891,7 @@ impl<T> PartialEq<ExtValue<T>> for ExtValue<T>
 }
 
 impl<T> PartialOrd<ExtValue<T>> for ExtValue<T>
-    where T: Debug + Clone + PartialEq + PartialOrd + Serialize + Deserialize
+    where T: Debug + Clone + PartialEq + PartialOrd
 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         if self.vendor != other.vendor
@@ -1078,7 +903,7 @@ impl<T> PartialOrd<ExtValue<T>> for ExtValue<T>
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Binary {
    /// The actual data. We put it behind an `Arc` to make sure
    /// that cloning remains inexpensive.
@@ -1127,37 +952,7 @@ impl ToJSON for Binary {
 ///
 /// Values of this state are represented by an object `{ key: value }`, where key is one of
 /// `Unit`, `OnOff`, `OpenClosed`, ... The `value` for `Unit` is ignored.
-///
-/// ```
-/// extern crate serde;
-/// extern crate serde_json;
-/// extern crate foxbox_taxonomy;
-///
-/// # fn main() {
-/// use foxbox_taxonomy::values::Value::*;
-/// use foxbox_taxonomy::values::OnOff::*;
-/// use foxbox_taxonomy::values::OpenClosed::*;
-///
-/// let unit = serde_json::to_string(&Unit).unwrap();
-/// assert_eq!(unit, "{\"Unit\":[]}");
-///
-/// let unit : foxbox_taxonomy::values::Value = serde_json::from_str("{\"Unit\":[]}").unwrap();
-/// assert_eq!(unit, Unit);
-///
-/// let on = serde_json::to_string(&OnOff(On)).unwrap();
-/// assert_eq!(on, "{\"OnOff\":\"On\"}");
-///
-/// let on : foxbox_taxonomy::values::Value = serde_json::from_str("{\"OnOff\":\"On\"}").unwrap();
-/// assert_eq!(on, OnOff(On));
-///
-/// let open = serde_json::to_string(&OpenClosed(Open)).unwrap();
-/// assert_eq!(open, "{\"OpenClosed\":\"Open\"}");
-///
-/// let open : foxbox_taxonomy::values::Value = serde_json::from_str("{\"OpenClosed\":\"Open\"}").unwrap();
-/// assert_eq!(open, OpenClosed(Open));
-/// # }
-/// ```
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     /// An absolute time and date.
     ///
@@ -1762,14 +1557,14 @@ impl Value {
     pub fn as_timestamp(&self) -> Result<&TimeStamp, TypeError> {
         match *self {
             Value::TimeStamp(ref x) => Ok(x),
-            _ => Err(TypeError {expected: Type::TimeStamp, got: self.get_type()})
+            _ => Err(TypeError {expected: "TimeStamp".to_owned(), got: unimplemented!()})
         }
     }
 
     pub fn as_duration(&self) -> Result<&Duration, TypeError> {
         match *self {
             Value::Duration(ref x) => Ok(x),
-            _ => Err(TypeError {expected: Type::Duration, got: self.get_type()})
+            _ => Err(TypeError {expected: "Duration".to_owned(), got: unimplemented!()})
         }
     }
 }
@@ -1916,31 +1711,13 @@ impl<T> From<DateTime<T>> for TimeStamp where T: TimeZone {
     }
 }
 
-impl Serialize for TimeStamp {
-    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
-        where S: Serializer {
-        let str = self.0.to_rfc3339();
-        str.serialize(serializer)
-    }
-}
-impl Deserialize for TimeStamp {
-    fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
-        where D: Deserializer {
-        let str = try!(String::deserialize(deserializer));
-        match DateTime::<UTC>::from_str(&str) {
-            Ok(dt) => Ok(TimeStamp(dt)),
-            Err(_) => Err(D::Error::custom("Invalid date"))
-        }
-    }
-}
-
 /// A comparison between two values.
 ///
 /// # JSON
 ///
 /// A range is an object with one field `{key: value}`.
 ///
-#[derive(Clone, Deserialize, Serialize, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Range {
     /// Leq(x) accepts any value v such that v <= x.
     ///
@@ -2064,29 +1841,6 @@ impl Range {
             Eq(ref val) => value == val,
         }
     }
-
-    /// Get the type associated to this range.
-    ///
-    /// If this range has a `min` and a `max` with conflicting types,
-    /// produce an error.
-    pub fn get_type(&self) -> Result<Type, TypeError> {
-        use self::Range::*;
-        match *self {
-            Leq(ref v) | Geq(ref v) | Eq(ref v) => Ok(v.get_type()),
-            BetweenEq {ref min, ref max} | OutOfStrict {ref min, ref max} => {
-                let min_typ = min.get_type();
-                let max_typ = max.get_type();
-                if min_typ == max_typ {
-                    Ok(min_typ)
-                } else {
-                    Err(TypeError {
-                        expected: min_typ,
-                        got: max_typ
-                    })
-                }
-            }
-        }
-    }
 }
 
 
@@ -2143,36 +1897,6 @@ impl Into<Value> for Duration {
     }
 }
 
-///
-/// # Serialization
-///
-/// Values are deserialized to a floating-point number of seconds.
-///
-/// ```
-/// extern crate serde;
-/// extern crate serde_json;
-/// extern crate foxbox_taxonomy;
-/// extern crate chrono;
-///
-/// # fn main() {
-/// use foxbox_taxonomy::values::*;
-///
-/// let duration = Duration::from(chrono::Duration::milliseconds(3141));
-///
-/// let duration_as_json = serde_json::to_string(&duration).unwrap();
-/// assert_eq!(duration_as_json, "3.141");
-///
-/// let duration_back : Duration = serde_json::from_str(&duration_as_json).unwrap();
-/// assert_eq!(duration, duration_back);
-/// # }
-/// ```
-impl Serialize for Duration {
-    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
-        where S: Serializer
-     {
-         serializer.serialize_f64(self.0.num_milliseconds() as f64 / 1000 as f64)
-     }
-}
 impl From<ChronoDuration> for Duration {
     fn from(source: ChronoDuration) -> Self {
         Duration(source)
@@ -2181,35 +1905,5 @@ impl From<ChronoDuration> for Duration {
 impl Into<ChronoDuration> for Duration {
     fn into(self) -> ChronoDuration {
         self.0
-    }
-}
-
-impl Deserialize for Duration {
-    /// Deserialize this value given this `Deserializer`.
-    fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
-        where D: Deserializer
-    {
-        struct DurationVisitor;
-        impl Visitor for DurationVisitor
-        {
-            type Value = Duration;
-            fn visit_f64<E>(&mut self, v: f64) -> Result<Self::Value, E>
-                where E: Error,
-            {
-                Ok(Duration(ChronoDuration::milliseconds((v * 1000.) as i64)))
-            }
-            fn visit_i64<E>(&mut self, v: i64) -> Result<Self::Value, E>
-                where E: Error,
-            {
-                Ok(Duration(ChronoDuration::milliseconds(v * 1000)))
-            }
-            fn visit_u64<E>(&mut self, v: u64) -> Result<Self::Value, E>
-                where E: Error,
-            {
-                self.visit_i64(v as i64)
-            }
-        }
-        deserializer.deserialize_f64(DurationVisitor)
-            .or_else(|_| deserializer.deserialize_i64(DurationVisitor))
     }
 }

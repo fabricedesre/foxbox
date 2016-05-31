@@ -5,7 +5,7 @@ authors = ["David Rajchenbach-Teller <dteller@mozilla.com>"]
 
 [dependencies]
 chrono = "0.2.19"
-clippy = "0.0.69"
+clippy = "0.0.70"
 lazy_static = "^0.1"
 libc = "0.2.9"
 log = "0.3"

@@ -18,7 +18,7 @@ use io::*;
 use services::*;
 use selector::*;
 pub use util::{ ResultMap, TargetMap, Targetted };
-use values::{ Value, Type, TypeError };
+use values::{ Type, TypeError };
 
 use transformable_channels::mpsc::*;
 
@@ -63,7 +63,7 @@ pub enum Error {
     TypeError(TypeError),
 
     /// Attempting to send an invalid value. For instance, a time of day larger than 24h.
-    InvalidValue(Value),
+    InvalidValue,
 
     /// An error internal to the foxbox or an adapter. Normally, these errors should never
     /// arise from the high-level API.
@@ -92,7 +92,7 @@ impl fmt::Display for Error {
             Error::OperationNotSupported(ref operation, ref channel) => write!(f, "{}: {} {}", self.description(), operation, channel),
             Error::GetterRequiresThresholdForWatching(ref getter) => write!(f, "{}: {}", self.description(), getter),
             Error::TypeError(ref err) => write!(f, "{}: {}", self.description(), err),
-            Error::InvalidValue(ref value) => write!(f, "{}: {:?}",self.description(), value),
+            Error::InvalidValue => write!(f, "{}",self.description()),
             Error::InternalError(ref err) => write!(f, "{}: {:?}", self.description(), err), // TODO implement Display for InternalError as well
             Error::ParseError(ref err) => write!(f, "{}: {:?}", self.description(), err), // TODO implement Display for ParseError as well
         }
@@ -105,7 +105,7 @@ impl error::Error for Error {
             Error::OperationNotSupported(_, _) => "Attempting to perform a call to a Channel that does not support such calls",
             Error::GetterRequiresThresholdForWatching(_) => "Attempting to watch all value from a Channel that requires a filter",
             Error::TypeError(_) => "Attempting to send a value with a wrong type",
-            Error::InvalidValue(_) => "Attempting to send an invalid value",
+            Error::InvalidValue => "Attempting to send an invalid value",
             Error::InternalError(_) => "Internal Error", // TODO implement Error for InternalError as well
             Error::ParseError(ref err) => err.description()
         }
@@ -150,7 +150,7 @@ pub enum InternalError {
 }
 
 /// An event during watching.
-#[derive(Serialize, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub enum WatchEvent {
     /// If a range was specified when we registered for watching, `EnterRange` is fired whenever
     /// we enter this range. If `Always` was specified, `EnterRange` is fired whenever a new value

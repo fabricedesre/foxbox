@@ -230,6 +230,25 @@ pub trait Parser<T: Sized> {
         }
     }
 
+    fn take_index_opt(path: Path, source: &JSON, index: usize) -> Option<Result<T, ParseError>> {
+        if let JSON::Array(ref array) = *source {
+            if let Some(v) = array.get(index) {
+                Some(Self::parse(path, v))
+            } else {
+                None
+            }
+        } else {
+            Some(Err(ParseError::type_error(&format!("{}", index), &path, "array")))
+        }
+    }
+
+    fn take_index(path: Path, source: &JSON, index: usize) -> Result<T, ParseError> {
+        match Self::take_index_opt(path.clone(), source, index) {
+            Some(result) => result,
+            None => Err(ParseError::missing_field(&format!("{}", index), &path))
+        }
+    }
+
     /// Parse a field containing an array from JSON, consuming the field.
     fn take_vec_opt(path: Path, source: &JSON, field_name: &str) -> Option<Result<Vec<T>, ParseError>>
     {

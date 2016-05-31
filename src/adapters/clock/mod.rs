@@ -144,18 +144,13 @@ impl Clock {
     {
         use foxbox_taxonomy::values::Range::*;
 
-        // Sanity checks
-        let typ = try!(range.get_type().map_err(Error::TypeError));
-        try!(Type::Duration.ensure_eq(&typ).map_err(Error::TypeError));
-
-        // Now determine when to call the trigger.
+        // Determine when to call the trigger.
         let duration = match *range {
             Eq (ref val) | Geq (ref val) => {
-                // Equivalent to BetweenEq { min: val, max: 0am }
                 try!(val.as_duration().map_err(Error::TypeError))
                     .clone().into()
             }
-            _ => return Err(Error::InvalidValue(Value::Range(Box::new(range.clone()))))
+            _ => return Err(Error::InvalidValue)
         };
 
         debug!(target: "clock@link.mozilla.org", "[clock@link.mozilla.org] Scheduling a repeating watch with a duration of {}", duration);
@@ -177,11 +172,7 @@ impl Clock {
     {
         use foxbox_taxonomy::values::Range::*;
 
-        // Sanity checks
-        let typ = try!(range.get_type().map_err(Error::TypeError));
-        try!(Type::Duration.ensure_eq(&typ).map_err(Error::TypeError));
-
-        // Now determine when to call the trigger. Repeat duration is always one day.
+        // Determine when to call the trigger. Repeat duration is always one day.
         let mut thresholds = match *range {
             Leq (ref val) => {
                 // Equivalent to BetweenEq { min: 0am, max: val }
@@ -249,14 +240,14 @@ impl Clock {
         -> Result<DateTime<Local>, Error>
     {
         match chrono::Local::today().and_time(NaiveTime::from_hms(0, 0, 0) + time_of_day) {
-            None => Err(Error::InvalidValue(Value::Duration(ValDuration::from(time_of_day)))),
+            None => Err(Error::InvalidValue),
             Some(date) => {
                 if date >= *now  {
                     Ok(date)
                 } else {
                     // Otherwise, shift to tomorrow.
                     match date.checked_add(Duration::days(1)) {
-                        None => Err(Error::InvalidValue(Value::Duration(ValDuration::from(time_of_day)))),
+                        None => Err(Error::InvalidValue),
                         Some(date) => Ok(date)
                     }
                 }
@@ -268,10 +259,6 @@ impl Clock {
         -> Result<Box<AdapterWatchGuard>, Error>
     {
         use foxbox_taxonomy::values::Range::*;
-
-        // Sanity checks
-        let typ = try!(range.get_type().map_err(Error::TypeError));
-        try!(Type::TimeStamp.ensure_eq(&typ).map_err(Error::TypeError));
 
         // Now determine when/if to call the trigger.
         let mut thresholds = match *range {

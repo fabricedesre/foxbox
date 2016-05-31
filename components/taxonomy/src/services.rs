@@ -46,7 +46,7 @@ macro_rules! tag_id {
 /// - getters: object (keys are string identifiers, for more details on values see Channel<Getter>);
 /// - setters: object (keys are string identifiers, for more details on values see Channel<Setter>);
 ///
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default)]
 pub struct Service {
     /// Tags describing the service.
     ///

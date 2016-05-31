@@ -16,7 +16,7 @@ default-features = true
 features = ["ssl"]
 
 [dependencies]
-clippy = "0.0.69"
+clippy = "0.0.70"
 foxbox_users = { git = "https://github.com/fxbox/users.git", rev = "d4e5277" }
 hyper = "0.8.1"
 jsworkers = { path = "../jsworkers/" }
