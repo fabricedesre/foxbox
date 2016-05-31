@@ -415,7 +415,7 @@ dependencies = [
  "iron 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "rusqlite 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 0.7.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 0.7.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_macros 0.7.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "url 0.5.9 (registry+https://github.com/rust-lang/crates.io-index)",
