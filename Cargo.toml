@@ -19,6 +19,7 @@ authentication = []
 
 [build-dependencies]
 pkg-config = "0.3"
+rustc_version = "0.1.7"
 
 [dependencies]
 foxbox_core = { path = "components/core/" }

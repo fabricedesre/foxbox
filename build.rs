@@ -6,6 +6,22 @@ use std::env;
 use std::fs;
 use std::path::Path;
 extern crate pkg_config;
+extern crate rustc_version;
+
+static RUSTC_DATE: &'static str = "2016-05-30";
+static RUSTC_HASH: &'static str = "a967611d8ffececb5ed0ecf6a205b464d7a5a31e";
+
+fn check_rustc_version() {
+    let info = rustc_version::version_meta();
+    let hash = info.commit_hash.unwrap_or("".to_owned());
+    let date = info.commit_date.unwrap_or("".to_owned());
+    if hash == RUSTC_HASH && date == RUSTC_DATE {
+        return;
+    }
+
+    panic!(r#"Found rustc ({} {}), but you need to install rustc nightly from {}, commit {}"#,
+           hash, date, RUSTC_DATE, RUSTC_HASH);
+}
 
 fn update_local_git_hook() {
     let p = env::current_dir().unwrap();
@@ -54,6 +70,7 @@ fn link_external_libs() {
 }
 
 fn main() {
+    check_rustc_version();
     update_local_git_hook();
     link_external_libs();
     copy_shared_static_files();
