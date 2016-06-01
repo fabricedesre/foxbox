@@ -549,7 +549,7 @@ impl Parser<(Id<Channel>, Option<Error>)> for SetterErrorParser {
     fn description() -> String {
         "SetterErrorParser".to_owned()
     }
-    fn parse(path: Path, source: &JSON) -> Result<(Id<Channel>, Option<Error>), ParseError> {
+    fn parse(_: Path, _: &JSON) -> Result<(Id<Channel>, Option<Error>), ParseError> {
         unimplemented!()
     }
 }
@@ -559,7 +559,7 @@ impl Parser<(Id<Channel>, Result<Value, Error>)> for GetterValueParser {
     fn description() -> String {
         "GetterValueParser".to_owned()
     }
-    fn parse(path: Path, source: &JSON) -> Result<(Id<Channel>, Result<Value, Error>), ParseError> {
+    fn parse(_: Path, _: &JSON) -> Result<(Id<Channel>, Result<Value, Error>), ParseError> {
         unimplemented!()
     }
 }
@@ -570,7 +570,7 @@ impl Parser<Instruction> for AddChannelsParser {
     fn description() -> String {
         "AddChannelsParser".to_owned()
     }
-    fn parse(path: Path, source: &JSON) -> Result<Instruction, ParseError> {
+    fn parse(_: Path, _: &JSON) -> Result<Instruction, ParseError> {
         unimplemented!()
     }
 }
@@ -581,7 +581,7 @@ impl Parser<Instruction> for AddServicesParser {
     fn description() -> String {
         "AddServicesParser".to_owned()
     }
-    fn parse(path: Path, source: &JSON) -> Result<Instruction, ParseError> {
+    fn parse(_: Path, _: &JSON) -> Result<Instruction, ParseError> {
         unimplemented!()
     }
 }
@@ -617,5 +617,3 @@ impl Parser<Instruction> for Instruction {
         }
     }
 }
-
-

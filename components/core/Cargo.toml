@@ -16,14 +16,14 @@ default-features = true
 features = ["ssl"]
 
 [dependencies]
-clippy = "0.0.70"
+clippy = "0.0.71"
 foxbox_users = { git = "https://github.com/fxbox/users.git", rev = "d4e5277" }
 hyper = "0.8.1"
 libc = "0.2.7"
 log = "0.3"
 serde_json = "0.7.0"
 tls = { path = "../tls/" }
-ws = { git = "https://github.com/JohanLorenzo/ws-rs.git" , branch = "0.4.6" }
+ws = "0.4.8"
 xml-rs = "0.3.0"
 
 [dev-dependencies]

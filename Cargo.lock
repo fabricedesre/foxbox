@@ -3,7 +3,7 @@ name = "foxbox"
 version = "0.1.0"
 dependencies = [
  "chrono 0.2.22 (registry+https://github.com/rust-lang/crates.io-index)",
- "clippy 0.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "clippy 0.0.71 (registry+https://github.com/rust-lang/crates.io-index)",
  "docopt 0.6.80 (registry+https://github.com/rust-lang/crates.io-index)",
  "docopt_macros 0.6.84 (registry+https://github.com/rust-lang/crates.io-index)",
  "env_logger 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -19,7 +19,7 @@ dependencies = [
  "jsworkers 0.1.0",
  "libc 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "mio 0.5.0 (git+https://github.com/carllerche/mio.git)",
+ "mio 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "mount 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "multicast_dns 0.1.0 (git+https://github.com/fxbox/multicast-dns.git?rev=a6e4bcc)",
  "nix 0.5.1-pre (git+https://github.com/nix-rust/nix.git?rev=138080)",
@@ -46,7 +46,7 @@ dependencies = [
  "unicase 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "url 0.5.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "uuid 0.1.18 (registry+https://github.com/rust-lang/crates.io-index)",
- "ws 0.4.6 (git+https://github.com/JohanLorenzo/ws-rs.git?branch=0.4.6)",
+ "ws 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -65,11 +65,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "bitflags"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-
-[[package]]
-name = "bitflags"
-version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
@@ -130,12 +125,13 @@ dependencies = [
 
 [[package]]
 name = "clippy"
-version = "0.0.70"
+version = "0.0.71"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "clippy_lints 0.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "clippy_lints 0.0.71 (registry+https://github.com/rust-lang/crates.io-index)",
  "quine-mc_cluskey 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "regex-syntax 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rustc-serialize 0.3.19 (registry+https://github.com/rust-lang/crates.io-index)",
  "semver 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "toml 0.1.30 (registry+https://github.com/rust-lang/crates.io-index)",
  "unicode-normalization 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -143,11 +139,12 @@ dependencies = [
 
 [[package]]
 name = "clippy_lints"
-version = "0.0.70"
+version = "0.0.71"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "quine-mc_cluskey 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "regex-syntax 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rustc-serialize 0.3.19 (registry+https://github.com/rust-lang/crates.io-index)",
  "semver 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "toml 0.1.30 (registry+https://github.com/rust-lang/crates.io-index)",
  "unicode-normalization 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -220,7 +217,7 @@ dependencies = [
 name = "foxbox_core"
 version = "0.1.0"
 dependencies = [
- "clippy 0.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "clippy 0.0.71 (registry+https://github.com/rust-lang/crates.io-index)",
  "foxbox_users 0.1.0 (git+https://github.com/fxbox/users.git?rev=d4e5277)",
  "hyper 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "iron 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -228,7 +225,7 @@ dependencies = [
  "log 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "tls 0.1.0",
- "ws 0.4.6 (git+https://github.com/JohanLorenzo/ws-rs.git?branch=0.4.6)",
+ "ws 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "xml-rs 0.3.4 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -237,7 +234,7 @@ name = "foxbox_taxonomy"
 version = "0.1.2"
 dependencies = [
  "chrono 0.2.22 (registry+https://github.com/rust-lang/crates.io-index)",
- "clippy 0.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "clippy 0.0.71 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 0.1.16 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -510,15 +507,15 @@ dependencies = [
 
 [[package]]
 name = "mio"
-version = "0.5.0"
-source = "git+https://github.com/carllerche/mio.git#f4aa49a9d2c4507fb33a4533d5238e0365f67c99"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "bytes 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "miow 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "net2 0.2.23 (registry+https://github.com/rust-lang/crates.io-index)",
- "nix 0.5.0-pre (git+https://github.com/carllerche/nix-rust?rev=c4257f8a76)",
+ "nix 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "slab 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "time 0.1.35 (registry+https://github.com/rust-lang/crates.io-index)",
  "winapi 0.2.7 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -580,10 +577,10 @@ dependencies = [
 
 [[package]]
 name = "nix"
-version = "0.5.0-pre"
-source = "git+https://github.com/carllerche/nix-rust?rev=c4257f8a76#c4257f8a76b69b0d2e9a001d83e4bef67c03b23f"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "bitflags 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "bitflags 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -1031,7 +1028,7 @@ dependencies = [
 name = "tls"
 version = "0.1.0"
 dependencies = [
- "clippy 0.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "clippy 0.0.71 (registry+https://github.com/rust-lang/crates.io-index)",
  "hyper 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "iron 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1206,16 +1203,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "ws"
-version = "0.4.6"
-source = "git+https://github.com/JohanLorenzo/ws-rs.git?branch=0.4.6#8d71ed015148a63bc2805456d819e80dae9ca5e5"
+version = "0.4.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "httparse 1.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "mio 0.5.0 (git+https://github.com/carllerche/mio.git)",
+ "mio 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.3.14 (registry+https://github.com/rust-lang/crates.io-index)",
  "sha1 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "slab 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "url 0.5.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "url 1.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
