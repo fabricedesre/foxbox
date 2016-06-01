@@ -21,7 +21,9 @@ foxbox_users = { git = "https://github.com/fxbox/users.git", rev = "d4e5277" }
 hyper = "0.8.1"
 libc = "0.2.7"
 log = "0.3"
+serde = "0.7.0"
 serde_json = "0.7.0"
+serde_macros = "0.7.2"
 tls = { path = "../tls/" }
 ws = "0.4.8"
 xml-rs = "0.3.0"

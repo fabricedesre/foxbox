@@ -2,10 +2,11 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+use broker::SharedBroker;
 use config_store::ConfigService;
 use core::marker::Reflect;
 use foxbox_users::UsersManager;
-use jsworkers::{ Message, SharedBroker };
+use jsworkers::Message;
 use profile_service::ProfileService;
 use serde_json;
 use std::io;

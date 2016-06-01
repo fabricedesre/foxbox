@@ -85,7 +85,7 @@ impl<T> MessageBroker<T> {
         where T: Send + Clone + Debug
     {
         info!("Broadcasting {:?}", message.clone());
-        let ref actors = self.actors;
+        let actors = &self.actors;
         for (target, actor) in actors {
             debug!("Sending {:?} to {}", message.clone(), target);
             actor.send(message.clone());

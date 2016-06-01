@@ -2,11 +2,13 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-#![feature(reflect_marker)]
-#![feature(plugin)]
+#![feature(custom_derive, plugin, reflect_marker)]
+
+#![plugin(serde_macros)]
 
 #![plugin(clippy)]
 #![deny(clippy)]
+#![warn(identity_op)]
 
 #![cfg_attr(test, feature(const_fn))] // Dependency of stainless
 #![cfg_attr(test, plugin(stainless))] // Test runner
@@ -14,11 +16,11 @@
 extern crate core;
 extern crate foxbox_users;
 extern crate hyper;
-extern crate jsworkers;
 extern crate libc;
 
 #[macro_use]
 extern crate log;
+extern crate serde;
 extern crate serde_json;
 
 extern crate tls;
@@ -35,6 +37,7 @@ extern crate xml;
 #[macro_use]
 pub mod utils;
 
+pub mod broker;
 pub mod config_store;
 pub mod jsworkers;
 pub mod managed_process;

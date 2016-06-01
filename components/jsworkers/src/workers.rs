@@ -7,20 +7,12 @@ use message::Message;
 
 use rusqlite::Connection;
 use serde::{Serialize, Serializer};
-use std::cell::Cell;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
 fn escape<T>(string: &str) -> String {
     // http://www.sqlite.org/faq.html#q14
     format!("{}", string).replace("'", "''")
-}
-
-/// An enum representing a worker state.
-#[derive(Copy, Clone, Debug, PartialEq)]
-enum WorkerState {
-    Stopped,
-    Running,
 }
 
 impl Serialize for WorkerState {
@@ -31,70 +23,6 @@ impl Serialize for WorkerState {
             WorkerState::Stopped => serializer.serialize_str("Stopped"),
             WorkerState::Running => serializer.serialize_str("Running"),
         }
-    }
-}
-
-pub type Url = String; // FIXME: should be the url type from hyper.
-pub type User = i32;   // FIXME: should be the user type from foxbox_users.
-
-/// A Worker representation, that we'll keep synchronized with the runtime.
-#[derive(Clone, Debug, PartialEq)]
-pub struct WorkerInfo {
-    url: Url,
-    user: User,
-    state: Cell<WorkerState>,
-}
-
-impl Serialize for WorkerInfo {
-    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
-        where S: Serializer
-    {
-        #[derive(Serialize)]
-        struct SerializableInfo {
-            url: Url,
-            user: User,
-            state: WorkerState,
-            id: String,
-        }
-        let info = SerializableInfo {
-            url: self.url.clone(),
-            user: self.user,
-            state: self.state.get(),
-            id: self.key(),
-        };
-        info.serialize(serializer)
-    }
-}
-
-impl WorkerInfo {
-    fn new(url: Url, user: User, initial_state: WorkerState) -> Self {
-        WorkerInfo {
-            url: url,
-            user: user,
-            state: Cell::new(initial_state),
-        }
-    }
-
-    pub fn default(url: Url, user: User) -> Self {
-        WorkerInfo {
-            url: url,
-            user: user,
-            state: Cell::new(WorkerState::Stopped),
-        }
-    }
-
-    /// Creates a unique key for this WorkerInfo.
-    pub fn key(&self) -> String {
-        WorkerInfo::key_from(&self.url, self.user)
-    }
-
-    fn key_from(url: &Url, user: User) -> String {
-        use std::hash::{Hash, Hasher, SipHasher};
-
-        let mut hasher = SipHasher::new();
-        url.hash(&mut hasher);
-        user.hash(&mut hasher);
-        format!("{}", hasher.finish())
     }
 }
 
