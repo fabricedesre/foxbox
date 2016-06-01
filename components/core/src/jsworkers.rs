@@ -13,18 +13,29 @@ pub type Url = String; // FIXME: should be the url type from hyper.
 pub type User = i32;   // FIXME: should be the user type from foxbox_users.
 
 /// An enum representing a worker state.
-#[derive(Copy, Clone, Debug, PartialEq, Serialize)]
-enum WorkerState {
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum WorkerState {
     Stopped,
     Running,
+}
+
+impl Serialize for WorkerState {
+    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
+        where S: Serializer
+    {
+        match *self {
+            WorkerState::Stopped => serializer.serialize_str("Stopped"),
+            WorkerState::Running => serializer.serialize_str("Running"),
+        }
+    }
 }
 
 /// A Worker representation, that we'll keep synchronized with the runtime.
 #[derive(Clone, Debug, PartialEq)]
 pub struct WorkerInfo {
     url: Url,
-    user: User,
-    state: Cell<WorkerState>,
+    pub user: User,
+    pub state: Cell<WorkerState>,
 }
 
 impl Serialize for WorkerInfo {
@@ -49,7 +60,7 @@ impl Serialize for WorkerInfo {
 }
 
 impl WorkerInfo {
-    fn new(url: Url, user: User, initial_state: WorkerState) -> Self {
+    pub fn new(url: Url, user: User, initial_state: WorkerState) -> Self {
         WorkerInfo {
             url: url,
             user: user,
@@ -70,7 +81,7 @@ impl WorkerInfo {
         WorkerInfo::key_from(&self.url, self.user)
     }
 
-    fn key_from(url: &str, user: User) -> String {
+    pub fn key_from(url: &str, user: User) -> String {
         use std::hash::{Hash, Hasher, SipHasher};
 
         let mut hasher = SipHasher::new();
@@ -96,7 +107,7 @@ pub enum Message {
     List {
         list: Vec<WorkerInfo>,
     },
-    // Notifies that we have a ws runner connection established. WebSocket -> Runtime
+    // Notifies that we have a js runner connection established. WebSocket -> Runtime
     RunnerWS {
         #[serde(skip_serializing)]
         out: WsSender,

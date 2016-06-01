@@ -21,8 +21,8 @@
 ///   input: None
 ///   output: 200 [{ state: Running|Stopped, webworker_url: <worker_url>, ws_url: <websocket_url> }*]
 
-use broker::SharedBroker;
-use message::Message;
+use foxbox_core::broker::SharedBroker;
+use foxbox_core::jsworkers::{ Message, User, WorkerInfo };
 
 use foxbox_users::SessionToken;
 
@@ -35,7 +35,6 @@ use iron::status::Status;
 use serde_json;
 use std::io::{Error as IOError, Read};
 use std::sync::mpsc::channel;
-use workers::{User, WorkerInfo};
 
 pub struct Router {
     broker: SharedBroker<Message>,

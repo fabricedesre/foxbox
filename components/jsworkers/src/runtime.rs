@@ -7,22 +7,21 @@
 extern crate url;
 
 use bitsparrow::Encoder;
-use broker::SharedBroker;
+use foxbox_core::broker::SharedBroker;
 use foxbox_core::managed_process::ManagedProcess;
-use message::Message as BrokerMessage;
+use foxbox_core::jsworkers::Message as BrokerMessage;
 use self::url::Url;
 use serde::Serialize;
 use serde_json;
 use std::cell::Cell;
+use std::io::Error as IoError;
 use std::process::Command;
 use std::sync::mpsc::channel;
-use std::time::Duration;
 use std::thread;
 use std::thread::Builder;
 use workers::JsWorkers;
 use ws;
-use ws::{Handler, Sender, Result, Message, Handshake, CloseCode, Error, ErrorKind};
-use ws::listen;
+use ws::{Handler, listen, Sender, Result as WsResult, Message, Handshake, CloseCode, Error, ErrorKind};
 
 #[derive(Clone, Copy, PartialEq)]
 enum ClientType {
@@ -47,7 +46,7 @@ impl RuntimeWsHandler {
         }
     }
 
-    fn close_with_error(&mut self, reason: &'static str) -> Result<()> {
+    fn close_with_error(&mut self, reason: &'static str) -> WsResult<()> {
         error!("Closing jsworkers ws: {}", reason);
         self.out.close_with_reason(ws::CloseCode::Error, reason)
     }
@@ -66,7 +65,7 @@ impl RuntimeWsHandler {
 }
 
 impl Handler for RuntimeWsHandler {
-    fn on_open(&mut self, handshake: Handshake) -> Result<()> {
+    fn on_open(&mut self, handshake: Handshake) -> WsResult<()> {
         let resource = &handshake.request.resource()[..];
 
         // creating a fake url to get the path and query parsed
@@ -97,7 +96,7 @@ impl Handler for RuntimeWsHandler {
         Ok(())
     }
 
-    fn on_message(&mut self, msg: Message) -> Result<()> {
+    fn on_message(&mut self, msg: Message) -> WsResult<()> {
         info!("Message from jsworkers ws: {}", msg);
 
         Ok(())
@@ -214,9 +213,10 @@ impl Runtime {
                 let res = rx.recv().unwrap();
                 match res {
                     BrokerMessage::Shutdown => {
-                        // Stops the jsrunner.
-                        if jsrunner.is_some() {
-                            jsrunner.shutdown();
+                        // Stop the js runner.
+                        if let Ok(ref runner) = jsrunner {
+                            // TODO: make the borrow checker happy.
+                            //runner.shutdown();
                         }
                     }
                     _ => {
@@ -241,11 +241,11 @@ impl Runtime {
             .unwrap();
     }
 
-    fn start_jsrunner(runtime_path: &str) -> Result<ManagedProcess> {
+    fn start_jsrunner(runtime_path: &str) -> Result<ManagedProcess, IoError> {
         let path = runtime_path.to_string();
         info!("Starting jsrunner {}", runtime_path);
 
-        ManagedProcess::start(|| {
+        ManagedProcess::start(move || {
             Command::new(&path)
                 .arg("-ws")
                 .arg("ws://localhost:2016/runtime/")

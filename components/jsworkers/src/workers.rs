@@ -2,8 +2,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use broker::SharedBroker;
-use message::Message;
+use foxbox_core::broker::SharedBroker;
+use foxbox_core::jsworkers::{ Message, Url, User, WorkerInfo, WorkerState };
 
 use rusqlite::Connection;
 use serde::{Serialize, Serializer};
@@ -13,17 +13,6 @@ use std::path::PathBuf;
 fn escape<T>(string: &str) -> String {
     // http://www.sqlite.org/faq.html#q14
     format!("{}", string).replace("'", "''")
-}
-
-impl Serialize for WorkerState {
-    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
-        where S: Serializer
-    {
-        match *self {
-            WorkerState::Stopped => serializer.serialize_str("Stopped"),
-            WorkerState::Running => serializer.serialize_str("Running"),
-        }
-    }
 }
 
 /// The entire set of workers.
