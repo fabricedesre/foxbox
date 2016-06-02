@@ -229,12 +229,13 @@ fn ensure_directory<T: AsRef<Path> + ?Sized>(directory: &T) -> Result<(), Error>
 }
 
 impl OpenzwaveAdapter {
-    pub fn init<T: AdapterManagerHandle + Send + Sync + 'static>(box_manager: &Arc<T>, user_path: &str, device: Option<String>) -> Result<(), Error> {
+    pub fn init<T: AdapterManagerHandle + Send + Sync + 'static>(box_manager: &Arc<T>, user_path: &str, devices: Option<String>) -> Result<(), Error> {
 
         try!(ensure_directory(user_path));
 
         let options = InitOptions {
-            device: device,
+            // We treat devices as a comma (with optional whitespace) delimited list of device names.
+            devices: devices.map(|s| s.split(',').map(|s| s.trim().to_owned()).collect()),
             config_path: ConfigPath::Default, // This is where the default system configuraton is, usually contains the device information.
             user_path: user_path, // This is where we can override the system configuration, and where the network layout and logs are stored.
         };
@@ -296,6 +297,8 @@ impl OpenzwaveAdapter {
                 match notification {
                     ZWaveNotification::ControllerReady(controller) => {
                         let home_id = controller.get_home_id();
+                        info!("Opened ZWave Controller {} HomeId: {:08x}", controller.get_controller_path(), home_id);
+
                         let service_name = format!("OpenZWave-controller-{:08x}", home_id);
                         let service_id = TaxoId::new(&service_name);
                         controller_map.push(service_id.clone(), controller);
