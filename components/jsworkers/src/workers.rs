@@ -34,13 +34,13 @@ impl JsWorkers {
     }
 
     pub fn has_worker(&self, user: User, url: Url) -> bool {
-        self.workers.contains_key(&WorkerInfo::key_from(&url, user))
+        self.workers.contains_key(&WorkerInfo::key_from(user, &url))
     }
 
     /// Returns the current info for this worker.
     /// Note that this is a live value.
     pub fn get_worker_info(&self, user: User, url: Url) -> Option<&WorkerInfo> {
-        self.workers.get(&WorkerInfo::key_from(&url, user))
+        self.workers.get(&WorkerInfo::key_from(user, &url))
     }
 
     pub fn get_workers_for(&mut self, user: User) -> Vec<WorkerInfo> {
@@ -67,7 +67,7 @@ impl JsWorkers {
             return Err(());
         }
 
-        let info = WorkerInfo::new(url, user, WorkerState::Stopped);
+        let info = WorkerInfo::new(user, url, WorkerState::Stopped);
         self.workers.insert(info.key(), info);
         Ok(())
     }
@@ -78,7 +78,7 @@ impl JsWorkers {
             return Err(());
         }
 
-        let key = WorkerInfo::key_from(&url, user);
+        let key = WorkerInfo::key_from(user, &url);
         self.workers.remove(&key);
         Ok(())
     }

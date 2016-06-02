@@ -14,6 +14,7 @@ use self::url::Url;
 use serde::Serialize;
 use serde_json;
 use std::cell::Cell;
+use std::fmt::Debug;
 use std::io::Error as IoError;
 use std::process::Command;
 use std::sync::mpsc::channel;
@@ -120,7 +121,7 @@ impl Handler for RuntimeWsHandler {
 }
 
 /// Sends a command and JSON payload over a WS.
-fn send_json_to_ws<T>(out: &Sender, command: &str, obj: &T) where T: Serialize {
+fn send_json_to_ws<T>(out: &Sender, command: &str, obj: &T) where T: Serialize + Debug {
     let buffer = Encoder::new()
         .string(command)
         .string(&serde_json::to_string(obj).unwrap())
@@ -158,8 +159,17 @@ impl Runtime {
                         match res {
                             BrokerMessage::Start { ref worker, ref tx } => {
                                 if let Some(ref out) = runtime_ws_out {
-                                    // Serialize the worker info and send it the the runtime.
-                                    send_json_to_ws(out, "StartWorker", worker);
+                                    // If we don't already run this worker, add it to our set
+                                    // as a running one.
+                                    // TODO: just pass WorkerInfo objects around.
+                                    if !workers.has_worker(worker.user, worker.url.clone()) {
+                                        workers.add_worker(worker.user, worker.url.clone());
+                                    }
+                                    workers.start_worker(worker.user, worker.url.clone());
+
+                                    send_json_to_ws(out,
+                                                    "StartWorker",
+                                                    &workers.get_worker_info(worker.user, worker.url.clone()));
 
                                     // Return the ws url for the client side.
                                     tx.send(BrokerMessage::ClientEndpoint {
@@ -215,6 +225,7 @@ impl Runtime {
                     BrokerMessage::Shutdown => {
                         // Stop the js runner.
                         if let Ok(ref runner) = jsrunner {
+                            info!("Shutting down the js runner");
                             // TODO: make the borrow checker happy.
                             //runner.shutdown();
                         }

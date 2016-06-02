@@ -96,7 +96,7 @@ impl Router {
         let webworker_url = params.unwrap().webworker_url;
 
         let message = Message::Start {
-            worker: WorkerInfo::default(webworker_url.clone(), user.unwrap_or(0)), /* TODO: respect the `authentication` feature. */
+            worker: WorkerInfo::default(user.unwrap_or(0), webworker_url.clone()), /* TODO: respect the `authentication` feature. */
             tx: tx,
         };
 

@@ -33,7 +33,7 @@ impl Serialize for WorkerState {
 /// A Worker representation, that we'll keep synchronized with the runtime.
 #[derive(Clone, Debug, PartialEq)]
 pub struct WorkerInfo {
-    url: Url,
+    pub url: Url,
     pub user: User,
     pub state: Cell<WorkerState>,
 }
@@ -60,7 +60,7 @@ impl Serialize for WorkerInfo {
 }
 
 impl WorkerInfo {
-    pub fn new(url: Url, user: User, initial_state: WorkerState) -> Self {
+    pub fn new(user: User, url: Url, initial_state: WorkerState) -> Self {
         WorkerInfo {
             url: url,
             user: user,
@@ -68,7 +68,7 @@ impl WorkerInfo {
         }
     }
 
-    pub fn default(url: Url, user: User) -> Self {
+    pub fn default(user: User, url: Url) -> Self {
         WorkerInfo {
             url: url,
             user: user,
@@ -78,10 +78,10 @@ impl WorkerInfo {
 
     /// Creates a unique key for this WorkerInfo.
     pub fn key(&self) -> String {
-        WorkerInfo::key_from(&self.url, self.user)
+        WorkerInfo::key_from(self.user, &self.url)
     }
 
-    pub fn key_from(url: &str, user: User) -> String {
+    pub fn key_from(user: User, url: &str) -> String {
         use std::hash::{Hash, Hasher, SipHasher};
 
         let mut hasher = SipHasher::new();

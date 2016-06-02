@@ -6,15 +6,15 @@ extern crate serde_json;
 extern crate mio;
 
 use adapters::AdapterManager;
+use foxbox_core::broker::{ MessageBroker, SharedBroker };
 use foxbox_core::config_store::ConfigService;
+use foxbox_core::jsworkers::Message;
 use foxbox_core::profile_service::{ ProfilePath, ProfileService };
 use foxbox_core::traits::Controller;
 use foxbox_core::upnp::UpnpManager;
 use foxbox_taxonomy::manager::AdapterManager as TaxoManager;
 use foxbox_users::UsersManager;
 use http_server::HttpServer;
-use jsworkers::broker::{ MessageBroker, SharedBroker };
-use jsworkers::message::Message;
 use jsworkers::runtime::Runtime;
 use std::collections::hash_map::HashMap;
 use std::io;
