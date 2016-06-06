@@ -1,10 +1,12 @@
 'use strict';
 const fs = require('fs');
+const find = require('find');
 const path = require('path');
 const Config = require('config-js');
 const chakram = require('chakram'), expect = chakram.expect;
 
 const spawn = require('child_process').spawn;
+const PROFILE_PATH = path.join(process.env.HOME, '.local/share/foxbox/');
 
 var config = new Config('./test/integration/lib/config/foxbox.js');
 var FOXBOX_STARTUP_WAIT_TIME_IN_MS = 5000;
@@ -19,22 +21,11 @@ var foxbox_process_manager = (function() {
   var getterURL = serviceURL + '/channels/get';
   var setterURL = serviceURL + '/channels/set';
 
-  function _removeFileIfItExists(filename,errMsg) {
-    try {
-      fs.unlinkSync(path.join(process.env.HOME, 
-      filename));
-    } catch (e) {
-      if (e.code === 'ENOENT') {
-        console.log(errMsg);
-      }
-    }
-  }
-
-  function removeUsersDB() {
-    _removeFileIfItExists('/.local/share/foxbox/users_db.sqlite',
-      'User DB not found!');
-    _removeFileIfItExists('/.local/share/foxbox/webpush.sqlite',
-      'webpush DB not found!');
+  function cleanData() {
+    var files = find.fileSync(/^((?!\.pem).)*$/, PROFILE_PATH);
+    files.forEach(function(entry) {
+      fs.unlinkSync(entry);
+    });  
   }
 
   function fullOptionStart() {
@@ -88,7 +79,7 @@ var foxbox_process_manager = (function() {
   }
 
   return {setupURL, loginURL, serviceURL, serviceListURL, getterURL, setterURL,
-    removeUsersDB, fullOptionStart, foxboxLogin, killFoxBox, 
+    cleanData, fullOptionStart, foxboxLogin, killFoxBox, 
     getLatestIPFromPingSrv};
 })();
 

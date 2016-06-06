@@ -77,9 +77,9 @@ Prepper.makeSuite('Control lights locally',function(){
     .then(function(cmdResponse) {
       expect(cmdResponse).to.have.status(200);
       expect(cmdResponse.body[lights[0]].Error.ParseError.TypeError.expected)
-        .equals("a number in [0, 1]");
+        .equals('a number in [0, 1]');
       expect(cmdResponse.body[lights[0]].Error.ParseError.TypeError.name)
-        .equals("s");
+        .equals('s');
     });
   });
 
@@ -97,9 +97,9 @@ Prepper.makeSuite('Control lights locally',function(){
     .then(function(cmdResponse) {
       expect(cmdResponse).to.have.status(200);
       expect(cmdResponse.body[lights[1]].Error.ParseError.TypeError.expected)
-        .equals("a number in [0, 1]");
+        .equals('a number in [0, 1]');
       expect(cmdResponse.body[lights[1]].Error.ParseError.TypeError.name)
-        .equals("v");
+        .equals('v');
     });
   });
 });

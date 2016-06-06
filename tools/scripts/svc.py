@@ -60,18 +60,31 @@ class Service:
         name = self.property('name')
         return name and value in name
 
+    def get_send_type(self, channel_key):
+        channel = self.channel(channel_key)
+        if channel and 'supports_send' in channel:
+            supports_send = channel['supports_send']
+            if 'accepts' in supports_send:
+                accepts = supports_send['accepts']
+                if 'requires' in accepts:
+                    return accepts['requires']
+
+    def get_fetch_type(self, channel_key):
+        channel = self.channel(channel_key)
+        if channel and 'supports_fetch' in channel:
+            supports_send = channel['supports_fetch']
+            if 'returns' in supports_send:
+                accepts = supports_send['returns']
+                if 'requires' in accepts:
+                    return accepts['requires']
+
     def fmt_response(self, channel_key, channel_req):
         if channel_req.headers['content-type'].startswith('application/json'):
             j = channel_req.json()
             if channel_key in j:
                 rsp = j[channel_key]
-                channel = self.channel(channel_key)
-                for type in rsp:
-                    kind = channel['kind']
-                    if kind in kind_map:
-                        kind = kind_map[kind]
-                    if type == kind:
-                        return rsp[type]
+                fetch_type = self.get_fetch_type(channel_key)
+                return rsp[fetch_type]
 
 def main():
     default_server = 'localhost'
@@ -271,10 +284,13 @@ def main():
             channel_key, channel = svc.channel_contains(set_name);
             if not channel:
                 continue
-            kind = channel['kind']
-            if kind in kind_map:
-                kind = kind_map[kind]
-            channel_data = json.dumps({'select': {'id': channel_key}, 'value': {kind: set_value}})
+
+            send_value = {}
+            send_type = svc.get_send_type(channel_key)
+            if send_type:
+                send_value[send_type] = set_value
+            channel_data = json.dumps({'select': {'id': channel_key}, 'value': send_value})
+
             if args.verbose:
                 print("Sending PUT to {} data={}".format(set_url, channel_data))
             channel_req = requests.put(set_url, headers=auth_header, data=bytes(channel_data, encoding='utf-8'))

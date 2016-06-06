@@ -196,6 +196,14 @@ fn start_including(ozw: &ZWaveManager, home_id: u32, value: &Value) -> Result<()
     }
 }
 
+fn start_excluding(ozw: &ZWaveManager, home_id: u32) -> Result<(), TaxoError> {
+    try!(
+         ozw.remove_node(home_id)
+            .map_err(|e| TaxoError::InternalError(InternalError::GenericError(format!("Error while excluding node on network {}: {}", home_id, e)))));
+    info!("[OpenZWaveAdapter] Controller on network {} is awaiting an exclude, please do the appropriate steps to exclude a device.", home_id);
+    Ok(())
+}
+
 type ValueCache = HashMap<TaxoId<Channel>, Value>;
 
 pub struct OpenzwaveAdapter {
@@ -211,6 +219,7 @@ pub struct OpenzwaveAdapter {
     value_cache: Arc<Mutex<ValueCache>>,
     controller_map: IdMap<ServiceId, Controller>,
     include_map: IdMap<Channel, Controller>,
+    exclude_map: IdMap<Channel, Controller>,
 }
 
 fn ensure_directory<T: AsRef<Path> + ?Sized>(directory: &T) -> Result<(), Error> {
@@ -269,6 +278,7 @@ impl OpenzwaveAdapter {
             value_cache: Arc::new(Mutex::new(HashMap::new())),
             controller_map: IdMap::new(),
             include_map: IdMap::new(),
+            exclude_map: IdMap::new(),
         });
 
         try!(box_manager.add_adapter(adapter.clone()));
@@ -287,6 +297,7 @@ impl OpenzwaveAdapter {
         let mut setter_map = self.setter_map.clone();
         let mut controller_map = self.controller_map.clone();
         let mut include_map = self.include_map.clone();
+        let mut exclude_map = self.exclude_map.clone();
 
         let watchers = self.watchers.clone();
         let value_cache = self.value_cache.clone();
@@ -324,6 +335,21 @@ impl OpenzwaveAdapter {
                         }).unwrap_or_else(|e| {
                             error!("Couldn't add the setter {}: {}", include_setter_id, e);
                         });
+
+                        let exclude_setter_name = format!("OpenZWave-controller-{:08x}-exclude", home_id);
+                        let exclude_setter_id = TaxoId::new(&exclude_setter_name);
+                        exclude_map.push(exclude_setter_id.clone(), controller);
+
+                        box_manager.add_channel(Channel {
+                            feature: TaxoId::new("zwave/exclude"),
+                            supports_send: Some(Signature::nothing()),
+                            id: exclude_setter_id.clone(),
+                            service: service_id.clone(),
+                            adapter: adapter_id.clone(),
+                            .. Channel::default()
+                        }).unwrap_or_else(|e| {
+                            error!("Couldn't add the setter {}: {}", exclude_setter_id, e);
+                        });
                     }
                     ZWaveNotification::NodeNew(_node)               => {}
                     ZWaveNotification::NodeAdded(node)              => {
@@ -346,11 +372,17 @@ impl OpenzwaveAdapter {
                         // https://github.com/fxbox/taxonomy/issues/97
                         // When it's done we can move the properties change from above to here.
                     }
-                    ZWaveNotification::NodeRemoved(_node)           => {}
+                    ZWaveNotification::NodeRemoved(node)           => {
+                        if let Some(service_id) = node_map.remove_by_ozw(&node) {
+                            box_manager.remove_service(&service_id).unwrap_or_else(|e| {
+                                error!("Couldn't remove the service {}: {}", service_id, e);
+                            });
+                        }
+                    }
                     ZWaveNotification::ValueAdded(vid)              => {
                         if vid.get_genre() != ValueGenre::ValueGenre_User { continue }
 
-                        let value_id = format!("OpenZWave-{:08x}-{:016x} ({})", vid.get_home_id(), vid.get_id(), vid.get_label());
+                        let value_id = format!("OpenZWave-{:08x}-{:016x}", vid.get_home_id(), vid.get_id());
 
                         let node_id = node_map.find_taxo_id_from_ozw(&vid.get_node()).unwrap();
 
@@ -454,7 +486,18 @@ impl OpenzwaveAdapter {
                             }
                         }
                     }
-                    ZWaveNotification::ValueRemoved(_value)         => {}
+                    ZWaveNotification::ValueRemoved(vid)            => {
+                        if let Some(getter_id) = getter_map.remove_by_ozw(&vid) {
+                            box_manager.remove_channel(&getter_id).unwrap_or_else(|e| {
+                                error!("Unable to remove getter_id {}: {}", getter_id, e);
+                            });
+                        }
+                        if let Some(setter_id) = setter_map.remove_by_ozw(&vid) {
+                            box_manager.remove_channel(&setter_id).unwrap_or_else(|e| {
+                                error!("Unable to remove setter_id {}: {}", setter_id, e);
+                            });
+                        }
+                    }
                     ZWaveNotification::AwakeNodesQueried(ref controller) | ZWaveNotification::AllNodesQueried(ref controller) => {
                         debug!("[OpenzwaveAdapter] Writing the network config.");
                         controller.write_config();
@@ -504,6 +547,8 @@ impl taxonomy::adapter::Adapter for OpenzwaveAdapter {
                 (id, set_ozw_vid_from_taxo_value(&ozw_vid, value))
             } else if let Some(ozw_controller) = self.include_map.find_ozw_from_taxo_id(&id) {
                 (id, start_including(&self.ozw, ozw_controller.get_home_id(), &value))
+            } else if let Some(ozw_controller) = self.exclude_map.find_ozw_from_taxo_id(&id) {
+                (id, start_excluding(&self.ozw, ozw_controller.get_home_id()))
             } else {
                 (id.clone(), Err(TaxoError::InternalError(InternalError::NoSuchChannel(id))))
             }

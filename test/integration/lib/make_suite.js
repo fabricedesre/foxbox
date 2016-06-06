@@ -38,9 +38,12 @@ var make_suite = (function() {
       config.get('nupnp_server.port'));
   }
 
-  function turnOnHue(){
+  function turnOnHue(authentication){
+    authentication = authentication || false;
+
     hueSimulatorOn = true;
-    return philipshue_server.setup(config.get('philips_hue.port'));
+    return philipshue_server.setup(
+      config.get('philips_hue.port'),authentication);
   }
 
   function turnOnCamera() {
@@ -59,7 +62,7 @@ var make_suite = (function() {
   }
 
   function nupnpOff() {
-    nupnpSimulatorOn = false
+   nupnpSimulatorOn = false;
     return nupnp_server.stop();
   }
 
@@ -85,7 +88,7 @@ var make_suite = (function() {
       after(function() {
         var promises = [];
         foxboxManager.killFoxBox();
-        foxboxManager.removeUsersDB();
+        foxboxManager.cleanData();
 
         if (hueSimulatorOn){
           promises.push(nupnpOff());
@@ -104,7 +107,7 @@ var make_suite = (function() {
 
   return { makeSuite, turnOnAllSimulators,
     philipshue_server,ipcamera_server, webPush_server,
-    foxboxManager, turnOnFoxbox};
+    foxboxManager, turnOnFoxbox, turnOnHue, turnOnHueNupnp};
 })();
 
 module.exports = make_suite;

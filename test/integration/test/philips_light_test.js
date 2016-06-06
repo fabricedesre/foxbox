@@ -79,7 +79,8 @@ Prepper.makeSuite('Control lights locally',function(){
 
     it('Turn off all lights at once', function() {
 
-      var payload = {'select': {'feature': 'light/is-on'}, 'value': {'OnOff':'Off'}};
+      var payload = {'select': {'feature': 'light/is-on'}, 
+        'value': {'OnOff':'Off'}};
 
       return chakram.put(Prepper.foxboxManager.setterURL,payload)
       .then(function(cmdResponse) {
