@@ -94,7 +94,10 @@ impl<T: Controller> HttpServer<T> {
             (vec![Method::Get, Method::Post], "api/v1/channels".to_owned()),
             (vec![Method::Put], "api/v1/channels/get".to_owned()),
             (vec![Method::Put], "api/v1/channels/set".to_owned()),
-            (vec![Method::Post, Method::Delete], "api/v1/channels/tags".to_owned())
+            (vec![Method::Post, Method::Delete], "api/v1/channels/tags".to_owned()),
+
+            // jsworkers paths.
+            (vec![Method::Post], "jsworkers/v1/start".to_owned()),
         ]);
         chain.link_after(cors);
 

@@ -14,6 +14,7 @@ use self::url::Url;
 use serde::Serialize;
 use serde_json;
 use std::cell::Cell;
+use std::cell::RefCell;
 use std::fmt::Debug;
 use std::io::Error as IoError;
 use std::process::Command;
@@ -36,6 +37,7 @@ struct RuntimeWsHandler {
     pub out: Sender,
     broker: SharedBroker<BrokerMessage>,
     mode: Cell<ClientType>,
+    id: RefCell<Option<String>>,
 }
 
 impl RuntimeWsHandler {
@@ -44,6 +46,7 @@ impl RuntimeWsHandler {
             out: out,
             broker: broker,
             mode: Cell::new(ClientType::Unknown),
+            id: RefCell::new(None),
         }
     }
 
@@ -85,7 +88,11 @@ impl Handler for RuntimeWsHandler {
             guard.send_message("workers", BrokerMessage::RunnerWS { out: self.out.clone() });
         }
 
-        if resource == "/client/" {
+        // Client urls are "/client/:id" so we extract the id here.
+        if resource.starts_with("/client/") {
+            let id = resource.split('/').last().unwrap();
+            *self.id.borrow_mut() = Some(id.to_string());
+            info!("WS client connection for id {}", id);
             self.mode.set(ClientType::Browser);
         }
 
@@ -172,8 +179,9 @@ impl Runtime {
                                                     &workers.get_worker_info(worker.user, worker.url.clone()));
 
                                     // Return the ws url for the client side.
+                                    // TODO: don't hardcode `localhost`
                                     tx.send(BrokerMessage::ClientEndpoint {
-                                        ws_url: format!("ws://locahost:2016/client/{}", worker.key()),
+                                        ws_url: format!("ws://localhost:2016/client/{}", worker.key()),
                                     }).unwrap_or(());
                                 } else {
                                     // TODO: queue the requests and drain them when the runtime
