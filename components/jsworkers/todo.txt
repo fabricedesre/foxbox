@@ -1,11 +1,15 @@
 TODO:
 
 Foxbox:
-- Start worker
-- Stop worker
-- client ws
+- Manage multiple clients connected to the same worker.
+- Persistence in workers.rs
+- Turn into an adapter?
+- More tests.
 
 Gecko:
-- Start worker
-- Stop worker
-- onmessage / postmessage
+- JS object <-> typed array
+- Tests.
+
+Client library:
+- JS object <-> typed array
+- Better Worker() api reimplementation.

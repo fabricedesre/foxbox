@@ -33,8 +33,8 @@ impl JsWorkers {
         }
     }
 
-    pub fn has_worker(&self, user: User, url: Url) -> bool {
-        self.workers.contains_key(&WorkerInfo::key_from(user, &url))
+    pub fn has_worker(&self, info: &WorkerInfo) -> bool {
+        self.workers.contains_key(&info.key())
     }
 
     /// Returns the current info for this worker.
@@ -62,30 +62,30 @@ impl JsWorkers {
     }
 
     /// TODO: improve error case.
-    pub fn add_worker(&mut self, user: User, url: Url) -> Result<(), ()> {
-        if self.has_worker(user, url.clone()) {
+    pub fn add_worker(&mut self, info: &WorkerInfo) -> Result<(), ()> {
+        if self.has_worker(info) {
             return Err(());
         }
 
-        let info = WorkerInfo::new(user, url, WorkerState::Stopped);
-        self.workers.insert(info.key(), info);
+        let new_worker = info.clone();
+        new_worker.state.set(WorkerState::Stopped);
+        self.workers.insert(new_worker.key(), new_worker);
         Ok(())
     }
 
     /// TODO: improve error case.
-    pub fn remove_worker(&mut self, user: User, url: Url) -> Result<(), ()> {
-        if !self.has_worker(user, url.clone()) {
+    pub fn remove_worker(&mut self, info: &WorkerInfo) -> Result<(), ()> {
+        if !self.has_worker(info) {
             return Err(());
         }
 
-        let key = WorkerInfo::key_from(user, &url);
-        self.workers.remove(&key);
+        self.workers.remove(&info.key());
         Ok(())
     }
 
     /// TODO: improve error case.
-    pub fn stop_worker(&self, user: User, url: Url) -> Result<(), ()> {
-        if let Some(worker_info) = self.get_worker_info(user, url.clone()) {
+    pub fn stop_worker(&self, info: &WorkerInfo) -> Result<(), ()> {
+        if let Some(worker_info) = self.get_worker_info(info.user, info.url.clone()) {
             if worker_info.state.get() == WorkerState::Stopped {
                 return Err(());
             }
@@ -101,8 +101,8 @@ impl JsWorkers {
     }
 
     /// TODO: improve error case.
-    pub fn start_worker(&self, user: User, url: Url) -> Result<(), ()> {
-        if let Some(worker_info) = self.get_worker_info(user, url.clone()) {
+    pub fn start_worker(&self, info: &WorkerInfo) -> Result<(), ()> {
+        if let Some(worker_info) = self.get_worker_info(info.user, info.url.clone()) {
             if worker_info.state.get() == WorkerState::Running {
                 return Err(());
             }
@@ -125,7 +125,7 @@ impl JsWorkers {
 
 #[test]
 fn test_workers() {
-    use broker::MessageBroker;
+    use foxbox_core::broker::MessageBroker;
     use serde_json;
 
     let mut list = JsWorkers::new("", &MessageBroker::new_shared());
@@ -135,12 +135,17 @@ fn test_workers() {
     let user2: User = 1;
     let user3: User = 2;
 
+    let info1 = WorkerInfo::default(user1, url.clone());
+    let info1_2 = WorkerInfo::default(user1, url2.clone());
+    let info2 = WorkerInfo::default(user2, url.clone());
+    let info3 = WorkerInfo::default(user3, url.clone());
+
     // Start with an empty set.
     assert_eq!(list.count(), 0);
 
     {
         // Add one worker.
-        list.add_worker(user1, url.clone()).unwrap();
+        list.add_worker(&info1).unwrap();
         assert_eq!(list.count(), 1);
 
         // Check that we don't get anything for another user.
@@ -151,25 +156,25 @@ fn test_workers() {
         assert_eq!(info.state.get(), WorkerState::Stopped);
 
         // Start the worker and check the new state.
-        list.start_worker(user1, url.clone()).unwrap();
+        list.start_worker(&info1).unwrap();
         assert_eq!(info.state.get(), WorkerState::Running);
 
         // Check error when starting an already running worker.
-        assert_eq!(list.start_worker(user1, url.clone()).is_err(), true);
+        assert_eq!(list.start_worker(&info1).is_err(), true);
         assert_eq!(info.state.get(), WorkerState::Running);
 
         // Stop the worker an check state.
-        list.stop_worker(user1, url.clone()).unwrap();
+        list.stop_worker(&info1).unwrap();
         assert_eq!(info.state.get(), WorkerState::Stopped);
 
         // Check error when stopping an already stopped worker.
-        assert_eq!(list.stop_worker(user1, url.clone()).is_err(), true);
+        assert_eq!(list.stop_worker(&info1).is_err(), true);
         assert_eq!(info.state.get(), WorkerState::Stopped);
     }
 
     {
         // Start the worker again and check that stop_all works.
-        list.start_worker(user1, url.clone()).unwrap();
+        list.start_worker(&info1).unwrap();
         let info = list.get_worker_info(user1, url.clone()).unwrap();
         assert_eq!(info.state.get(), WorkerState::Running);
         list.stop_all();
@@ -177,25 +182,25 @@ fn test_workers() {
     }
 
     // Check errors when starting or stopping a non-existant worker.
-    assert_eq!(list.start_worker(user3, url.clone()).is_err(), true);
-    assert_eq!(list.stop_worker(user3, url.clone()).is_err(), true);
+    assert_eq!(list.start_worker(&info3).is_err(), true);
+    assert_eq!(list.stop_worker(&info3).is_err(), true);
 
     // Check error when removing a non-existant worker.
-    assert_eq!(list.remove_worker(user2, url.clone()).is_err(), true);
+    assert_eq!(list.remove_worker(&info2).is_err(), true);
     assert_eq!(list.count(), 1);
 
     // Remove the worker we actually added.
-    list.remove_worker(user1, url.clone()).unwrap();
+    list.remove_worker(&info1).unwrap();
     assert_eq!(list.count(), 0);
 
     // Check that we can add several workers.
-    list.add_worker(user1, url.clone()).unwrap();
+    list.add_worker(&info1).unwrap();
     assert_eq!(list.count(), 1);
-    list.add_worker(user2, url.clone()).unwrap();
+    list.add_worker(&info2).unwrap();
     assert_eq!(list.count(), 2);
-    list.add_worker(user3, url.clone()).unwrap();
+    list.add_worker(&info3).unwrap();
     assert_eq!(list.count(), 3);
-    list.add_worker(user1, url2.clone()).unwrap();
+    list.add_worker(&info1_2).unwrap();
     assert_eq!(list.count(), 4);
 
     // Check the workers per user list.
@@ -208,12 +213,12 @@ fn test_workers() {
                r#"[{"url":"http://example.com/worker.js","user":1,"state":"Stopped","id":"15634489503557940443"}]"#);
 
     // ... and remove them, out of order.
-    list.remove_worker(user2, url.clone()).unwrap();
+    list.remove_worker(&info2).unwrap();
     assert_eq!(list.count(), 3);
-    list.remove_worker(user1, url.clone()).unwrap();
+    list.remove_worker(&info1).unwrap();
     assert_eq!(list.count(), 2);
-    list.remove_worker(user3, url.clone()).unwrap();
+    list.remove_worker(&info3).unwrap();
     assert_eq!(list.count(), 1);
-    list.remove_worker(user1, url2.clone()).unwrap();
+    list.remove_worker(&info1_2).unwrap();
     assert_eq!(list.count(), 0);
 }

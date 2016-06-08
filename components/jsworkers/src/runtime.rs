@@ -224,11 +224,10 @@ impl Runtime {
                                 if let Some(ref out) = runtime_ws_out {
                                     // If we don't already run this worker, add it to our set
                                     // as a running one.
-                                    // TODO: just pass WorkerInfo objects around.
-                                    if !workers.has_worker(worker.user, worker.url.clone()) {
-                                        workers.add_worker(worker.user, worker.url.clone());
+                                    if !workers.has_worker(worker) {
+                                        workers.add_worker(worker);
                                     }
-                                    workers.start_worker(worker.user, worker.url.clone());
+                                    workers.start_worker(worker);
 
                                     send_json_to_ws(out,
                                                     "StartWorker",
