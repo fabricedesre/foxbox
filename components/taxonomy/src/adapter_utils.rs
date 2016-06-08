@@ -83,7 +83,7 @@ impl RawAdapter for RawAdapterForAdapter {
     fn stop(&self) {
         self.adapter.stop()
     }
-    fn fetch_values(&self, mut target: Vec<(Id<Channel>, Type)>, user: User) -> ResultMap<Id<Channel>, Option<(Payload, Type)>, Error> {
+    fn fetch_values(&self, mut target: Vec<(Id<Channel>, Arc<Format>)>, user: User) -> OpResult<(Payload, Arc<Format>)> {
         let types : HashMap<_, _> = target.iter().cloned().collect();
         let channels : Vec<_> = target.drain(..).map(|(id, _)| id).collect();
         let values = self.adapter.fetch_values(channels, user);
@@ -103,7 +103,7 @@ impl RawAdapter for RawAdapterForAdapter {
         }).collect()
     }
 
-    fn send_values(&self, mut values: HashMap<Id<Channel>, (Payload, Type)>, user: User) -> ResultMap<Id<Channel>, (), Error> {
+    fn send_values(&self, mut values: HashMap<Id<Channel>, (Payload, Arc<Format>)>, user: User) -> ResultMap<Id<Channel>, (), Error> {
         let mut send = HashMap::new();
         let mut failures = HashMap::new();
         for (id, (payload, type_)) in values.drain() {

@@ -2,10 +2,11 @@
 
 use foxbox_taxonomy::api::{ Error, InternalError, User };
 use foxbox_taxonomy::channel::*;
+use foxbox_taxonomy::io;
 use foxbox_taxonomy::manager::*;
 use foxbox_taxonomy::services::{ AdapterId, ServiceId, Service };
 use foxbox_taxonomy::util::{ Id, Maybe };
-use foxbox_taxonomy::values::{ Duration, Type, Value, TypeError, OnOff };
+use foxbox_taxonomy::values::{ format, Duration, Value, TypeError, OnOff };
 
 use foxbox_thinkerbell::compile::ExecutableDevEnv;
 use foxbox_thinkerbell::manager::{ ScriptManager, ScriptId, Error as ScriptManagerError };
@@ -246,10 +247,7 @@ impl ThinkerbellAdapter {
                                 }
                             },
                             _ => {
-                                let _ = tx.send(Err(Error::TypeError(TypeError {
-                                    expected: Type::ThinkerbellRule.name(),
-                                    got: value.get_type().name()
-                                })));
+                                let _ = tx.send(Err(Error::TypeError(TypeError::new(&THINKERBELL_RULE, &value))));
                             }
                         }
                     } else {
@@ -267,10 +265,7 @@ impl ThinkerbellAdapter {
                                         let _ = tx.send(script_manager.set_enabled(&rule.script_id, false).map_err(sm_error));
                                     },
                                     _ => {
-                                        let _ = tx.send(Err(Error::TypeError(TypeError {
-                                            expected: Type::OnOff.name(),
-                                            got: value.get_type().name()
-                                        })));
+                                        let _ = tx.send(Err(Error::TypeError(TypeError::new(&format::ON_OFF, &value))));
                                     },
                                 }
                                 continue 'recv;
@@ -304,8 +299,8 @@ impl ThinkerbellAdapter {
 
         try!(self.adapter_manager.add_channel(Channel {
             feature: self.feature_rule_on.clone(),
-            supports_fetch: Some(Signature::returns(Maybe::Required(Type::OnOff))),
-            supports_send: Some(Signature::accepts(Maybe::Required(Type::OnOff))),
+            supports_fetch: Some(Signature::returns(Maybe::Required(format::ON_OFF.clone()))),
+            supports_send: Some(Signature::accepts(Maybe::Required(format::ON_OFF.clone()))),
             id: rule.channel_is_enabled_id.clone(),
             service: service_id.clone(),
             adapter: self.adapter_id.clone(),
@@ -315,7 +310,7 @@ impl ThinkerbellAdapter {
         // Add getter for script source
         try!(self.adapter_manager.add_channel(Channel {
             feature: self.feature_source.clone(),
-            supports_fetch: Some(Signature::returns(Maybe::Required(Type::String))),
+            supports_fetch: Some(Signature::returns(Maybe::Required(format::STRING.clone()))),
             id: rule.getter_source_id.clone(),
             service: service_id.clone(),
             adapter: self.adapter_id.clone(),
@@ -387,7 +382,7 @@ impl ThinkerbellAdapter {
         try!(manager.add_service(Service::empty(&root_service_id, &adapter_id)));
         try!(manager.add_channel(Channel {
             feature: feature_add_rule,
-            supports_send: Some(Signature::accepts(Maybe::Required(Type::ThinkerbellRule))),
+            supports_send: Some(Signature::accepts(Maybe::Required(THINKERBELL_RULE.clone()))),
             id: setter_add_rule_id,
             service: root_service_id.clone(),
             adapter: adapter_id.clone(),
@@ -411,4 +406,17 @@ impl ThinkerbellAdapter {
 
         Ok(())
     }
+}
+
+
+/// Placeholder implementation.
+struct ThinkerbellRuleFormat;
+impl io::Format for ThinkerbellRuleFormat {
+    fn description(&self) -> String {
+        "Thinkerbell Rule".to_owned()
+    }
+}
+
+lazy_static! {
+    pub static ref THINKERBELL_RULE: Arc<io::Format> = Arc::new(ThinkerbellRuleFormat);
 }

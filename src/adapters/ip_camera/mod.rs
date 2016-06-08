@@ -17,7 +17,8 @@ use foxbox_taxonomy::api::{Error, InternalError, User};
 use foxbox_taxonomy::channel::*;
 use foxbox_taxonomy::manager::*;
 use foxbox_taxonomy::services::*;
-use foxbox_taxonomy::values::{ Value, Json, Binary, Type, TypeError};
+use foxbox_taxonomy::values::{ Binary, Json, TypeError, Value };
+use foxbox_taxonomy::values::format;
 use self::api::*;
 use self::upnp_listener::IpCameraUpnpListener;
 use std::collections::HashMap;
@@ -118,7 +119,7 @@ impl IPCameraAdapter {
         let getter_image_list_id = create_channel_id("image_list", udn);
         try!(adapt.add_channel(Channel {
             feature: Id::new("camera/x-image-list"),
-            supports_fetch: Some(Signature::returns(Maybe::Required(Type::Json))),
+            supports_fetch: Some(Signature::returns(Maybe::Required(format::JSON.clone()))),
             id: getter_image_list_id.clone(),
             service: service_id.clone(),
             adapter: adapter_id.clone(),
@@ -128,7 +129,7 @@ impl IPCameraAdapter {
         let getter_image_newest_id = create_channel_id("image_newest", udn);
         try!(adapt.add_channel(Channel {
             feature: Id::new("camera/x-latest-image"),
-            supports_fetch: Some(Signature::returns(Maybe::Required(Type::Binary))),
+            supports_fetch: Some(Signature::returns(Maybe::Required(format::BINARY.clone()))),
             id: getter_image_newest_id.clone(),
             service: service_id.clone(),
             adapter: adapter_id.clone(),
@@ -245,8 +246,8 @@ impl Adapter for IPCameraAdapter {
                     return (id, Ok(()));
                 }
                 return (id, Err(Error::TypeError(TypeError {
-                                got:value.get_type().name(),
-                                expected: Type::String.name()
+                                got: value.description(),
+                                expected: format::STRING.description()
                             })))
             }
 
@@ -256,8 +257,8 @@ impl Adapter for IPCameraAdapter {
                     return (id, Ok(()));
                 }
                 return (id, Err(Error::TypeError(TypeError {
-                                got:value.get_type().name(),
-                                expected: Type::String.name()
+                                got: value.description(),
+                                expected: format::STRING.description()
                             })))
             }
 

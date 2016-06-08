@@ -192,7 +192,7 @@ fn start_including(ozw: &ZWaveManager, home_id: u32, value: &Value) -> Result<()
             info!("[OpenZWaveAdapter] Controller on network {} is awaiting an include in {} mode, please do the appropriate steps to include a device.", home_id, is_secure);
             Ok(())
         }
-        _ => Err(TaxoError::TypeError(TypeError { expected: Type::IsSecure.name(), got: value.get_type().name() }))
+        _ => Err(TaxoError::TypeError(TypeError::new(&format::IS_SECURE, &value)))
     }
 }
 
@@ -327,7 +327,7 @@ impl OpenzwaveAdapter {
 
                         box_manager.add_channel(Channel {
                             feature: TaxoId::new("zwave/include"),
-                            supports_send: Some(Signature::accepts(Maybe::Required(Type::IsSecure))),
+                            supports_send: Some(Signature::accepts(Maybe::Required(format::IS_SECURE.clone()))),
                             id: include_setter_id.clone(),
                             service: service_id.clone(),
                             adapter: adapter_id.clone(),

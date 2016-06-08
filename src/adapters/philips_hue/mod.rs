@@ -22,7 +22,7 @@ use foxbox_taxonomy::api::{ Error, InternalError, User };
 use foxbox_taxonomy::channel::*;
 use foxbox_taxonomy::manager::*;
 use foxbox_taxonomy::services::*;
-use foxbox_taxonomy::values::{ Color, OnOff, Type, TypeError, Value };
+use foxbox_taxonomy::values::{ format, Color, OnOff, TypeError, Value };
 
 use std::collections::HashMap;
 use std::sync::{ Arc, Mutex };
@@ -270,10 +270,7 @@ impl<C: Controller> Adapter for PhilipsHueAdapter<C> {
                     Value::OnOff(OnOff::On)  => { light.set_power(true); },
                     Value::OnOff(OnOff::Off) => { light.set_power(false); },
                     _ => {
-                        return (id, Err(Error::TypeError(TypeError {
-                                        got: value.get_type().name(),
-                                        expected: Type::OnOff.name()
-                                    })));
+                        return (id, Err(Error::TypeError(TypeError::new(&format::ON_OFF, &value))));
                     }
                 }
                 return (id, Ok(()));
@@ -282,10 +279,7 @@ impl<C: Controller> Adapter for PhilipsHueAdapter<C> {
                 match value {
                     Value::Color(Color::HSV(h, s, v)) => { light.set_color((h, s, v)); },
                     _ => {
-                        return (id, Err(Error::TypeError(TypeError {
-                                        got: value.get_type().name(),
-                                        expected: Type::Color.name()
-                                    })));
+                        return (id, Err(Error::TypeError(TypeError::new(&format::COLOR, &value) )));
                     }
                 }
                 return (id, Ok(()));

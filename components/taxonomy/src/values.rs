@@ -1,6 +1,7 @@
 //!
 //! Values manipulated by services
 //!
+use io;
 use parse::*;
 use util::*;
 
@@ -25,6 +26,15 @@ pub struct TypeError {
     pub got: String,
 }
 
+impl TypeError {
+    pub fn new(expected: &Arc<io::Format>, got: &Value) -> Self {
+        TypeError {
+            expected: expected.description(),
+            got: got.description()
+        }
+    }
+}
+
 impl fmt::Display for TypeError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Expected {:?} but got {:?}", self.expected, self.got)
@@ -38,140 +48,6 @@ impl error::Error for TypeError {
 
     fn cause(&self) -> Option<&error::Error> {
         None
-    }
-}
-
-///
-/// The type of values manipulated by endpoints.
-///
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord)]
-pub enum Type {
-    ///
-    /// # Trivial values
-    ///
-
-    /// An empty value. Used for instance to inform that a countdown
-    /// has reached 0 or that a device is ready.
-    Unit,
-
-    ///
-    /// # Boolean values
-    ///
-
-    /// A boolean on/off state. Used for various two-states switches.
-    OnOff,
-
-    /// A boolean open/closed state. Used for instance for doors,
-    /// windows, etc.
-    OpenClosed,
-
-    /// A boolean locked/unlocked states. Used for door locks.
-    DoorLocked,
-
-    /// A boolean secure/insecure states. Used for zwave pairing and zwave secure devices.
-    IsSecure,
-
-    ///
-    /// # Time
-    ///
-
-    /// A duration. Used for instance in countdowns.
-    Duration,
-
-    /// A precise timestamp. Used for instance to determine when an
-    /// event has taken place.
-    TimeStamp,
-
-    ThinkerbellRule,
-
-    WebPushNotify,
-
-    Temperature,
-    String,
-    ///
-    /// ...
-    ///
-    Color,
-    Json,
-    Binary,
-
-    ExtBool,
-    ExtNumeric,
-    Range,
-}
-impl Parser<Type> for Type {
-    fn description() -> String {
-        "Type".to_owned()
-    }
-    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
-        use self::Type::*;
-        match *source {
-            JSON::String(ref string) => match &*string as &str {
-                "Unit" => Ok(Unit),
-                "OnOff" => Ok(OnOff),
-                "OpenClosed" => Ok(OpenClosed),
-                "DoorLocked" => Ok(DoorLocked),
-                "IsSecure" => Ok(IsSecure),
-                "Duration" => Ok(Duration),
-                "TimeStamp" => Ok(TimeStamp),
-                "Temperature" => Ok(Temperature),
-                "ThinkerbellRule" => Ok(ThinkerbellRule),
-                "WebPushNotify" => Ok(WebPushNotify),
-                "String" => Ok(String),
-                "Color" => Ok(Color),
-                "Json" => Ok(Json),
-                "Binary" => Ok(Binary),
-                "ExtBool" => Ok(ExtBool),
-                "ExtNumeric" => Ok(ExtNumeric),
-                "Range" => Ok(Range),
-                _ => Err(ParseError::unknown_constant(string, &path))
-            },
-            _ => Err(ParseError::type_error("Type", &path, "string"))
-        }
-    }
-}
-impl ToJSON for Type {
-    fn to_json(&self) -> JSON {
-        JSON::String(self.name())
-    }
-}
-
-impl Type {
-    /// Determine whether using `Range::Eq` for this type is
-    /// appropriate. Typically, using `Range::Eq` for a floating point
-    /// number is a bad idea.
-    pub fn supports_eq(&self) -> bool {
-        use self::Type::*;
-        match *self {
-            Duration | TimeStamp | Temperature | ExtNumeric | Color | ThinkerbellRule => false,
-            WebPushNotify | Unit | String | Json | Binary | OnOff | OpenClosed |
-            IsSecure | DoorLocked | ExtBool => true,
-            Range => false,
-        }
-    }
-
-    pub fn name(&self) -> String {
-        use self::Type::*;
-        let key = match *self {
-            Unit => "Unit",
-            OnOff => "OnOff",
-            OpenClosed => "OpenClosed",
-            DoorLocked => "DoorLocked",
-            IsSecure => "IsSecure",
-            Duration => "Duration",
-            TimeStamp => "TimeStamp",
-            Temperature => "Temperature",
-            ThinkerbellRule => "ThinkerbellRule",
-            WebPushNotify => "WebPushNotify",
-            String => "String",
-            Color => "Color",
-            Json => "Json",
-            Binary => "Binary",
-            ExtBool => "ExtBool",
-            ExtNumeric => "ExtNumeric",
-            Range => "Range",
-        };
-        key.to_owned()
     }
 }
 
@@ -335,6 +211,7 @@ impl ToJSON for OpenClosed {
         }
     }
 }
+
 impl Into<Value> for OpenClosed {
     fn into(self) -> Value {
         Value::OpenClosed(self)
@@ -710,6 +587,7 @@ pub enum Color {
     /// ```
     HSV(f64, f64, f64)
 }
+
 impl Parser<Color> for Color {
     fn description() -> String {
         "Color".to_owned()
@@ -1400,7 +1278,30 @@ pub enum Value {
     Binary(Binary),
     Range(Box<Range>)
 }
-
+impl Value {
+    pub fn description(&self) -> String {
+        use self::Value::*;
+        match *self {
+            Unit => "Unit",
+            OnOff(_) => "On/Off",
+            OpenClosed(_) => "Open/Closed",
+            DoorLocked(_) => "Locked/Unlocked",
+            IsSecure(_) => "Insecure/Secure",
+            TimeStamp(_) => "TimeStamp",
+            Duration(_) => "Duration",
+            Temperature(_) => "Temperature",
+            Color(_) => "Color",
+            String(_) => "String",
+            ThinkerbellRule(_) => "Thinkerbell Rule",
+            WebPushNotify(_) => "WebPush Notify",
+            ExtBool(_) => "bool",
+            ExtNumeric(_) => "number",
+            Json(_) => "JSON",
+            Binary(_) => "Binary",
+            Range(_) => "Range"
+        }.to_owned()
+    }
+}
 
 lazy_static! {
     static ref VALUE_PARSER:
@@ -1532,28 +1433,6 @@ impl ToJSON for Value {
 
 
 impl Value {
-    pub fn get_type(&self) -> Type {
-        match *self {
-            Value::Unit => Type::Unit,
-            Value::OnOff(_) => Type::OnOff,
-            Value::OpenClosed(_) => Type::OpenClosed,
-            Value::DoorLocked(_) => Type::DoorLocked,
-            Value::IsSecure(_) => Type::IsSecure,
-            Value::String(_) => Type::String,
-            Value::Duration(_) => Type::Duration,
-            Value::TimeStamp(_) => Type::TimeStamp,
-            Value::Temperature(_) => Type::Temperature,
-            Value::Color(_) => Type::Color,
-            Value::Json(_) => Type::Json,
-            Value::Binary(_) => Type::Binary,
-            Value::ExtBool(_) => Type::ExtBool,
-            Value::ExtNumeric(_) => Type::ExtNumeric,
-            Value::ThinkerbellRule(_) => Type::ThinkerbellRule,
-            Value::WebPushNotify(_) => Type::WebPushNotify,
-            Value::Range(_) => Type::Range,
-        }
-    }
-
     pub fn as_timestamp(&self) -> Result<&TimeStamp, TypeError> {
         match *self {
             Value::TimeStamp(ref x) => Ok(x),
@@ -1905,5 +1784,116 @@ impl From<ChronoDuration> for Duration {
 impl Into<ChronoDuration> for Duration {
     fn into(self) -> ChronoDuration {
         self.0
+    }
+}
+
+
+pub mod format {
+    use io::*;
+
+    use std::sync::Arc;
+
+    /// Placeholder implementation.
+    struct OnOffFormat;
+    impl Format for OnOffFormat {
+        fn description(&self) -> String {
+            "On/Off".to_owned()
+        }
+    }
+
+    /// Placeholder implementation.
+    struct OpenClosedFormat;
+    impl Format for OpenClosedFormat {
+        fn description(&self) -> String {
+            "Open/Closed".to_owned()
+        }
+    }
+
+    /// Placeholder implementation.
+    struct IsSecureFormat;
+    impl Format for IsSecureFormat {
+        fn description(&self) -> String {
+            "Insecure/Secure".to_owned()
+        }
+    }
+
+    /// Placeholder implementation.
+    struct ColorFormat;
+    impl Format for ColorFormat {
+        fn description(&self) -> String {
+            "Color {h, s, v}".to_owned()
+        }
+    }
+
+
+    /// Placeholder implementation.
+    struct JsonFormat;
+    impl Format for JsonFormat {
+        fn description(&self) -> String {
+            "JSON".to_owned()
+        }
+    }
+
+    /// Placeholder implementation.
+    struct RangeFormat;
+    impl Format for RangeFormat {
+        fn description(&self) -> String {
+            "Range".to_owned()
+        }
+    }
+
+    /// Placeholder implementation.
+    struct StringFormat;
+    impl Format for StringFormat {
+        fn description(&self) -> String {
+            "String".to_owned()
+        }
+    }
+
+    /// Placeholder implementation.
+    struct UnitFormat;
+    impl Format for UnitFormat {
+        fn description(&self) -> String {
+            "Nothing".to_owned()
+        }
+    }
+
+    /// Placeholder implementation.
+    struct BinaryFormat;
+    impl Format for BinaryFormat {
+        fn description(&self) -> String {
+            "Binary".to_owned()
+        }
+    }
+
+    /// Placeholder implementation.
+    struct DurationFormat;
+    impl Format for DurationFormat {
+        fn description(&self) -> String {
+            "Duration (s)".to_owned()
+        }
+    }
+
+    /// Placeholder implementation.
+    struct TimeStampFormat;
+    impl Format for TimeStampFormat {
+        fn description(&self) -> String {
+            "TimeStamp".to_owned()
+        }
+    }
+
+
+    lazy_static! {
+        pub static ref ON_OFF : Arc<Format> = Arc::new(OnOffFormat);
+        pub static ref OPEN_CLOSED : Arc<Format> = Arc::new(OpenClosedFormat);
+        pub static ref IS_SECURE : Arc<Format> = Arc::new(IsSecureFormat);
+        pub static ref COLOR : Arc<Format> = Arc::new(ColorFormat);
+        pub static ref JSON: Arc<Format> = Arc::new(JsonFormat);
+        pub static ref RANGE : Arc<Format> = Arc::new(RangeFormat);
+        pub static ref STRING : Arc<Format> = Arc::new(StringFormat);
+        pub static ref UNIT : Arc<Format> = Arc::new(UnitFormat);
+        pub static ref BINARY : Arc<Format> = Arc::new(BinaryFormat);
+        pub static ref TIMESTAMP : Arc<Format> = Arc::new(TimeStampFormat);
+        pub static ref DURATION : Arc<Format> = Arc::new(DurationFormat);
     }
 }

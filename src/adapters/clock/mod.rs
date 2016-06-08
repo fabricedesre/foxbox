@@ -5,7 +5,7 @@ use foxbox_taxonomy::api::{ Error, InternalError, Operation, User };
 use foxbox_taxonomy::channel::*;
 use foxbox_taxonomy::manager::*;
 use foxbox_taxonomy::services::*;
-use foxbox_taxonomy::values::{ Duration as ValDuration, Range, TimeStamp, Type, Value };
+use foxbox_taxonomy::values::{ format, Duration as ValDuration, Range, TimeStamp, Value };
 
 use transformable_channels::mpsc::*;
 
@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::sync::{ Arc, Mutex };
 
 use chrono;
-use chrono::*;
+use chrono::{ DateTime, Duration, Local, NaiveTime, Timelike };
 use timer;
 
 static ADAPTER_NAME: &'static str = "Clock adapter (built-in)";
@@ -334,10 +334,10 @@ impl Clock {
         try!(adapt.add_service(service));
         try!(adapt.add_channel(Channel {
             feature: Id::new("clock/time-of-day-seconds"),
-            supports_fetch: Some(Signature::returns(Maybe::Required(Type::Duration))),
+            supports_fetch: Some(Signature::returns(Maybe::Required(format::DURATION.clone()))),
             supports_watch: Some(Signature {
-                accepts: Maybe::Required(Type::Duration),
-                returns: Maybe::Required(Type::Duration)
+                accepts: Maybe::Required(format::DURATION.clone()),
+                returns: Maybe::Required(format::DURATION.clone())
             }),
             id: getter_time_of_day_id,
             service: service_clock_id.clone(),
@@ -346,10 +346,10 @@ impl Clock {
         }));
         try!(adapt.add_channel(Channel {
             feature: Id::new("clock/time-timestamp-rfc-3339"),
-            supports_fetch: Some(Signature::returns(Maybe::Required(Type::TimeStamp))),
+            supports_fetch: Some(Signature::returns(Maybe::Required(format::TIMESTAMP.clone()))),
             supports_watch: Some(Signature {
-                accepts: Maybe::Required(Type::TimeStamp),
-                returns: Maybe::Required(Type::TimeStamp)
+                accepts: Maybe::Required(format::TIMESTAMP.clone()),
+                returns: Maybe::Required(format::TIMESTAMP.clone())
             }),
             id: getter_timestamp_id,
             service: service_clock_id.clone(),
@@ -359,8 +359,8 @@ impl Clock {
         try!(adapt.add_channel(Channel {
             feature: Id::new("clock/time-interval-seconds"),
             supports_watch: Some(Signature {
-                accepts: Maybe::Required(Type::Duration),
-                returns: Maybe::Required(Type::TimeStamp)
+                accepts: Maybe::Required(format::DURATION.clone()),
+                returns: Maybe::Required(format::TIMESTAMP.clone())
             }),
             id: getter_interval_id,
             service: service_clock_id.clone(),

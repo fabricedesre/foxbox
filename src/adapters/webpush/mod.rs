@@ -17,9 +17,11 @@ mod db;
 
 use foxbox_taxonomy::api::{ Error, InternalError, User };
 use foxbox_taxonomy::channel::*;
+use foxbox_taxonomy::io;
 use foxbox_taxonomy::manager::*;
 use foxbox_taxonomy::services::*;
-use foxbox_taxonomy::values::{ Type, TypeError, Value, Json, WebPushNotify };
+use foxbox_taxonomy::values::{ TypeError, Value, Json, WebPushNotify };
+use foxbox_taxonomy::values::format;
 
 use hyper::header::{ ContentEncoding, Encoding, Authorization };
 use hyper::Client;
@@ -277,19 +279,13 @@ impl<C: Controller> Adapter for WebPush<C> {
                             Err(err) => return (id, Err(Error::InternalError(InternalError::GenericError(format!("Database error: {}", err)))))
                         }
                     },
-                   _ => return (id, Err(Error::TypeError(TypeError {
-                            expected: Type::WebPushNotify.name(),
-                            got: value.get_type().name()
-                    })))
+                   _ => return (id, Err(Error::TypeError(TypeError::new(&WEBPUSH_NOTIFY, &value))))
                 }
             }
 
             let arc_json_value = match value {
                 Value::Json(v) => v,
-                _ => return (id, Err(Error::TypeError(TypeError {
-                    expected: Type::Json.name(),
-                    got: value.get_type().name()
-                })))
+                _ => return (id, Err(Error::TypeError(TypeError::new(&format::JSON, &value))))
             };
             let Json(ref json_value) = *arc_json_value;
 
@@ -337,30 +333,30 @@ impl<C: Controller> WebPush<C> {
 
         try!(adapt.add_channel(Channel {
             feature: Id::new("webpush/notify-msg"),
-            supports_send: Some(Signature::accepts(Maybe::Required(Type::WebPushNotify))),
+            supports_send: Some(Signature::accepts(Maybe::Required(WEBPUSH_NOTIFY.clone()))),
             id: channel_notify_id,
             ..template.clone()
         }));
 
         try!(adapt.add_channel(Channel {
             feature: Id::new("webpush/resource"),
-            supports_fetch: Some(Signature::returns(Maybe::Required(Type::Json))), // FIXME: Turn this into a more specific type?
-            supports_send: Some(Signature::accepts(Maybe::Required(Type::Json))), // FIXME: Turn this into a more specific type?
+            supports_fetch: Some(Signature::returns(Maybe::Required(format::JSON.clone()))), // FIXME: Turn this into a more specific type?
+            supports_send: Some(Signature::accepts(Maybe::Required(format::JSON.clone()))), // FIXME: Turn this into a more specific type?
             id: channel_resource_id,
             ..template.clone()
         }));
 
         try!(adapt.add_channel(Channel {
             feature: Id::new("webpush/subscribe"),
-            supports_fetch: Some(Signature::returns(Maybe::Required(Type::Json))), // FIXME: Turn this into a more specific type?
-            supports_send: Some(Signature::accepts(Maybe::Required(Type::Json))), // FIXME: Turn this into a more specific type?
+            supports_fetch: Some(Signature::returns(Maybe::Required(format::JSON.clone()))), // FIXME: Turn this into a more specific type?
+            supports_send: Some(Signature::accepts(Maybe::Required(format::JSON.clone()))), // FIXME: Turn this into a more specific type?
             id: channel_subscribe_id,
             ..template.clone()
         }));
 
         try!(adapt.add_channel(Channel {
             feature: Id::new("webpush/unsubscribe"),
-            supports_send: Some(Signature::accepts(Maybe::Required(Type::Json))), // FIXME: Turn this into a more specific type?
+            supports_send: Some(Signature::accepts(Maybe::Required(format::JSON.clone()))), // FIXME: Turn this into a more specific type?
             id: channel_unsubscribe_id,
             ..template.clone()
         }));
@@ -436,4 +432,16 @@ impl<C: Controller> WebPush<C> {
         }
         Ok(())
     }
+}
+
+/// Placeholder implementation.
+struct WebPushNotifyFormat;
+impl io::Format for WebPushNotifyFormat {
+    fn description(&self) -> String {
+        "WebPushNotify".to_owned()
+    }
+}
+
+lazy_static! {
+    static ref WEBPUSH_NOTIFY : Arc<io::Format> = Arc::new(WebPushNotifyFormat);
 }

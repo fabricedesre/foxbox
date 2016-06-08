@@ -9,7 +9,7 @@ use selector::*;
 use services::*;
 use tag_storage::TagStorage;
 use transact::InsertInMap;
-use values::*;
+use values::format;
 
 use sublock::atomlock::*;
 use transformable_channels::mpsc::*;
@@ -41,13 +41,13 @@ macro_rules! log_debug_assert {
 pub type AdapterRequest<T> = HashMap<Id<AdapterId>, (Arc<RawAdapter>, T)>;
 
 /// A request to an adapter, for performing a `fetch` operation.
-pub type FetchRequest = AdapterRequest<HashMap<Id<Channel>, Type>>;
+pub type FetchRequest = AdapterRequest<HashMap<Id<Channel>, Arc<Format>>>;
 
 /// A request to an adapter, for performing a `send` operation.
-pub type SendRequest = AdapterRequest<HashMap<Id<Channel>, (Payload, Type)>>;
+pub type SendRequest = AdapterRequest<HashMap<Id<Channel>, (Payload, Arc<Format>)>>;
 
 /// A request to an adapter, for performing a `watch` operation.
-pub type WatchRequest = AdapterRequest<Vec<(Id<Channel>, Option<(Payload, Type)>, /*values*/Type, Weak<WatcherData>)>>;
+pub type WatchRequest = AdapterRequest<Vec<(Id<Channel>, Option<(Payload, Arc<Format>)>, /*values*/Arc<Format>, Weak<WatcherData>)>>;
 
 pub type WatchGuardCommit = Vec<(Weak<WatcherData>, Vec<(Id<Channel>, Box<AdapterWatchGuard>)>)>;
 
@@ -232,7 +232,7 @@ impl Tagged for ChannelData {
 /// yet. The `WatcherData` is materialized as a `WatchGuard` in userland.
 pub struct WatcherData {
     /// The criteria for watching.
-    watch: TargetMap<ChannelSelector, Exactly<(Payload, Type)>>,
+    watch: TargetMap<ChannelSelector, Exactly<(Payload, Arc<Format>)>>,
 
     /// The listener for this watch.
     on_event: Mutex<Box<ExtSender<WatchEvent>>>,
@@ -263,7 +263,7 @@ impl PartialEq for WatcherData {
 }
 
 impl WatcherData {
-    fn new(liveness: &Arc<Liveness>, key: WatchKey, watch:TargetMap<ChannelSelector, Exactly<(Payload, Type)>>, on_event: Box<ExtSender<WatchEvent>>) -> Self {
+    fn new(liveness: &Arc<Liveness>, key: WatchKey, watch:TargetMap<ChannelSelector, Exactly<(Payload, Arc<Format>)>>, on_event: Box<ExtSender<WatchEvent>>) -> Self {
         WatcherData {
             key: key,
             on_event: Mutex::new(on_event),
@@ -300,7 +300,7 @@ impl WatchMap {
             liveness: liveness.clone()
         }
     }
-    fn create(&mut self, watch:TargetMap<ChannelSelector, Exactly<(Payload, Type)>>, on_event: Box<ExtSender<WatchEvent>>) -> Arc<WatcherData> {
+    fn create(&mut self, watch:TargetMap<ChannelSelector, Exactly<(Payload, Arc<Format>)>>, on_event: Box<ExtSender<WatchEvent>>) -> Arc<WatcherData> {
         let id = WatchKey(self.counter);
         self.counter += 1;
         let watcher = Arc::new(WatcherData::new(&self.liveness, id, watch, on_event));
@@ -935,7 +935,7 @@ impl State {
                 };
                 let value = match sig.accepts {
                     Maybe::Required(ref typ) => (payload.clone(), typ.clone()),
-                    Maybe::Nothing => (Payload::empty(), Type::Unit),
+                    Maybe::Nothing => (Payload::empty(), format::UNIT.clone()),
                     _ => {
                         log_debug_assert!(false, "[prepare_send_values] Signature kind is not implemented yet: {:?}", sig);
                         return
@@ -967,7 +967,7 @@ impl State {
 
     fn aux_start_channel_watch(watcher: &mut Arc<WatcherData>,
         getter_data: &mut ChannelData,
-        filter: &Exactly<(Payload, Type)>,
+        filter: &Exactly<(Payload, Arc<Format>)>,
         adapter_by_id: &HashMap<Id<AdapterId>, AdapterData>,
         per_adapter: &mut WatchRequest)
     {
@@ -1031,7 +1031,7 @@ impl State {
         insert_in_getter.commit();
     }
 
-    pub fn prepare_channel_watch(&mut self, mut watch: TargetMap<ChannelSelector, Exactly<(Payload, Type)>>,
+    pub fn prepare_channel_watch(&mut self, mut watch: TargetMap<ChannelSelector, Exactly<(Payload, Arc<Format>)>>,
         on_event: Box<ExtSender<WatchEvent>>) -> (WatchRequest, WatchKey, Arc<AtomicBool>)
     {
         // Prepare the watcher and store it. Once we leave the lock, every time a channel is
@@ -1143,17 +1143,17 @@ impl State {
                         return None;
                     }
                     Some(match event {
-                        AdapterWatchEvent::Enter { id, value: (payload, type_) } =>
+                        AdapterWatchEvent::Enter { id, value: (payload, format) } =>
                             WatchEvent::EnterRange {
                                 channel: id,
                                 value: payload,
-                                type_: type_
+                                format: format
                             },
-                        AdapterWatchEvent::Exit { id, value: (payload, type_) } =>
+                        AdapterWatchEvent::Exit { id, value: (payload, format) } =>
                             WatchEvent::ExitRange {
                                 channel: id,
                                 value: payload,
-                                type_: type_
+                                format: format
                             },
                         AdapterWatchEvent::Error { id, error } =>
                             WatchEvent::Error {

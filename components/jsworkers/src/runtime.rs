@@ -6,15 +6,15 @@
 
 extern crate url;
 
-use bitsparrow::Encoder;
+use bitsparrow::{Decoder, Encoder};
 use foxbox_core::broker::SharedBroker;
 use foxbox_core::managed_process::ManagedProcess;
 use foxbox_core::jsworkers::Message as BrokerMessage;
 use self::url::Url;
 use serde::Serialize;
 use serde_json;
-use std::cell::Cell;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::io::Error as IoError;
 use std::process::Command;
@@ -33,6 +33,7 @@ enum ClientType {
 }
 
 /// Handles the jsworkers websocket server.
+// TODO: split that in two different handlers for the runtime and browser ws connections.
 struct RuntimeWsHandler {
     pub out: Sender,
     broker: SharedBroker<BrokerMessage>,
@@ -92,8 +93,10 @@ impl Handler for RuntimeWsHandler {
         if resource.starts_with("/client/") {
             let id = resource.split('/').last().unwrap();
             *self.id.borrow_mut() = Some(id.to_string());
-            info!("WS client connection for id {}", id);
+            info!("WS browser connection for id {}", id);
             self.mode.set(ClientType::Browser);
+            let mut guard = self.broker.lock().unwrap();
+            guard.send_message("workers", BrokerMessage::BrowserWS { id: id.to_string(), out: self.out.clone() });
         }
 
         // Wrong resource path, rejecting connection.
@@ -107,6 +110,56 @@ impl Handler for RuntimeWsHandler {
     fn on_message(&mut self, msg: Message) -> WsResult<()> {
         info!("Message from jsworkers ws: {}", msg);
 
+        if self.is_runtime() {
+            // Relay the payload to the right browser ws.
+            let mut decoder = Decoder::new(msg.into_data());
+            let id = decoder.string();
+            if id.is_err() {
+                error!("Unable to decode `id` in runtime web socket message.");
+                return Ok(());
+            }
+
+            let payload = decoder.bytes();
+            if payload.is_err() {
+                error!("Unable to decode `payload` in runtime web socket message.");
+                return Ok(());
+            }
+
+            if !decoder.end() {
+                error!("Unexpected data after `payload` in runtime web socket message.");
+                return Ok(());
+            }
+
+            // Message decoding is ok, let's forward it to the right WS.
+            let mut guard = self.broker.lock().unwrap();
+            guard.send_message("workers",
+                               BrokerMessage::SendToBrowser {
+                                   id: id.unwrap(),
+                                   data: payload.unwrap(),
+                               });
+        } else {
+            // Relay the message to the runtime.
+            let mut decoder = Decoder::new(msg.into_data());
+            let payload = decoder.bytes();
+            if payload.is_err() {
+                error!("Unable to decode `payload` in browser web socket message.");
+                return Ok(());
+            }
+
+            if !decoder.end() {
+                error!("Unexpected data after `payload` in browser web socket message.");
+                return Ok(());
+            }
+
+            // Message decoding is ok, let's forward it to the runtime WS.
+            let id = self.id.borrow().clone().unwrap_or("".to_owned());
+            let mut guard = self.broker.lock().unwrap();
+            guard.send_message("workers",
+                               BrokerMessage::SendToRuntime {
+                                   id: id.clone(),
+                                   data: payload.unwrap(),
+                               });
+        }
         Ok(())
     }
 
@@ -119,6 +172,8 @@ impl Handler for RuntimeWsHandler {
 
         if self.is_runtime() {
             self.broker.lock().unwrap().broadcast_message(BrokerMessage::StopAll);
+        } else {
+            // TODO: Send a message to remove the browser ws.
         }
     }
 
@@ -160,6 +215,7 @@ impl Runtime {
                     // We keep track of ws senders here to save us from spawing a extra thread
                     // for each connection to send messages.
                     let mut runtime_ws_out: Option<Sender> = None;
+                    let mut browser_ws_out: HashMap<String, Sender> = HashMap::new();
 
                     loop {
                         let res = rx.recv().unwrap();
@@ -212,6 +268,39 @@ impl Runtime {
                             BrokerMessage::RunnerWS { ref out } => {
                                 info!("jsrunner WS is ready.");
                                 runtime_ws_out = Some(out.clone());
+                            }
+                            BrokerMessage::BrowserWS { ref out, ref id } => {
+                                info!("browser WS is ready for {}.", id);
+                                browser_ws_out.insert(id.clone(), out.clone());
+                            }
+                            BrokerMessage::SendToBrowser { ref id, ref data } => {
+                                // TODO: should we buffer the messages waiting for the
+                                // browser ws to be ready?
+                                if browser_ws_out.contains_key(id) {
+                                    if let Some(sender) = browser_ws_out.get(id) {
+                                        sender.send(Message::Binary(data.clone()));
+                                    } else {
+                                        error!("Unable to relay message to id {}", id);
+                                    }
+                                } else {
+                                    error!("Can't relay a message to unknown id {}", id);
+                                }
+                            }
+                            BrokerMessage::SendToRuntime { ref id, ref data } => {
+                                if let Some(ref out) = runtime_ws_out {
+                                    // Send the message and the payload to the runtime.
+                                    let buffer = Encoder::new()
+                                                    .string("Message")
+                                                    .string(id)
+                                                    .bytes(data)
+                                                    .end()
+                                                    .unwrap();
+                                    out.send(Message::Binary(buffer));
+                                } else {
+                                    // TODO: queue the requests and drain them when the runtime
+                                    // comes up.
+                                    error!("Can't relay message to runtime worker because runtime is not up yet!");
+                                }
                             }
                             _ => {
                                 info!("Unexpected message by the  `workers` actor {:?}", res);

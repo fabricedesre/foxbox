@@ -13,7 +13,6 @@ use io::*;
 use selector::*;
 use services::*;
 use util::is_sync;
-use values::Type;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -248,8 +247,7 @@ impl API for AdapterManager {
     }
 
     /// Read the latest value from a set of channels
-    fn fetch_values(&self, selectors: Vec<ChannelSelector>, user: User) ->
-        ResultMap<Id<Channel>, Option<(Payload, Type)>, Error>
+    fn fetch_values(&self, selectors: Vec<ChannelSelector>, user: User) -> OpResult<(Payload, Arc<Format>)>
     {
         // First, prepare the request.
         let mut request;
@@ -290,7 +288,7 @@ impl API for AdapterManager {
     }
 
     /// Watch for any change
-    fn watch_values(&self, watch: TargetMap<ChannelSelector, Exactly<(Payload, Type)>>,
+    fn watch_values(&self, watch: TargetMap<ChannelSelector, Exactly<(Payload, Arc<Format>)>>,
         on_event: Box<ExtSender<api::WatchEvent>>) -> Self::WatchGuard
     {
         let (request, watch_key, is_dropped) =

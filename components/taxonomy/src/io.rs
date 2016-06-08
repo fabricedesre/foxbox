@@ -5,6 +5,51 @@ use api::Error;
 use parse::*;
 use values::*;
 
+use std::error::Error as StdError;
+use std::fmt;
+use std::sync::Arc;
+
+/// Placeholder.
+pub struct BinarySource;
+
+/// Placeholder.
+pub struct BinaryTarget;
+
+/// Placeholder.
+#[derive(Clone, Debug, Serialize)]
+pub struct SerializeError;
+impl fmt::Display for SerializeError {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        (self as &fmt::Debug).fmt(formatter)
+    }
+}
+impl StdError for SerializeError {
+    fn description(&self) -> &str {
+        // Placeholder
+        ""
+    }
+}
+
+pub trait Format: Send + Sync + 'static {
+    fn description(&self) -> String;
+    fn parse(&self, source: &JSON, _binary: &BinarySource) -> Result<Value, ParseError> {
+        // Placeholder implementation
+        Value::parse(Path::new(), source)
+    }
+    fn serialize(&self, source: &Value, _binary: &BinaryTarget) -> Result<JSON, SerializeError> {
+        // Placeholder implementation
+        Ok(source.to_json())
+    }
+
+}
+
+impl fmt::Debug for Format {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        fmt.write_str(&self.description())
+    }
+}
+
+
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 pub struct Payload {
     json: JSON
@@ -27,24 +72,17 @@ impl Payload {
     }
 
     /// Serialize a `Value` into a `Payload`.
-    pub fn from_value(value: &Value, type_: &Type) -> Result<Payload, Error> {
-        // Placeholder implementation. Future versions will actually use `type_`
-        // for serialization purposes.
-        if value.get_type() != *type_ {
-            return Err(Error::TypeError(TypeError {expected: type_.name(), got: value.get_type().name()} ));
+    pub fn from_value(value: &Value, format: &Arc<Format>) -> Result<Payload, Error> {
+        match format.serialize(value, &BinaryTarget) {
+            Ok(json) => Ok(Payload {
+                json: json
+            }),
+            Err(err) => Err(Error::SerializeError(err))
         }
-        Ok(Payload {
-            json: value.to_json()
-        })
     }
-    pub fn to_value(&self, type_: &Type) -> Result<Value, Error> {
-        // Placeholder implementation. Future versions will actually use `type_`
-        // for deserialization purposes.
-        let value = try!(Value::parse(Path::new(), &self.json).map_err(Error::ParseError));
-        if value.get_type() != *type_ {
-            return Err(Error::TypeError(TypeError {expected: type_.name(), got: value.get_type().name()} ));
-        }
-        Ok(value)
+    pub fn to_value(&self, format: &Arc<Format>) -> Result<Value, Error> {
+        format.parse(&self.json, &BinarySource)
+            .map_err(Error::ParseError)
     }
 }
 
@@ -54,7 +92,7 @@ impl ToJSON for Payload {
     }
 }
 
-impl ToJSON for (Payload, Type) {
+impl ToJSON for (Payload, Arc<Format>) {
     fn to_json(&self) -> JSON {
         self.0.to_json()
     }
@@ -70,3 +108,4 @@ impl Parser<Payload> for Payload {
         })
     }
 }
+

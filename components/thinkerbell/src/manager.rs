@@ -14,7 +14,7 @@ use rusqlite;
 use transformable_channels::mpsc::{ channel, ExtSender, TransformableSender };
 
 /// A ScriptManager error.
-#[derive(Serialize, Debug)]
+#[derive(Debug)]
 pub enum Error {
     /// The script you requested (by ID) does not exist.
     NoSuchScriptError,

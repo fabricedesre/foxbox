@@ -1,19 +1,21 @@
+use io::*;
 use parse::*;
 use util::*;
-use values::Type;
+use values::*;
 
 use std::collections::HashSet;
 use std::hash::{ Hash, Hasher };
+use std::sync::Arc;
 
 
 #[derive(Debug, Clone)]
 pub struct Signature {
-    pub accepts: Maybe<Type>,
-    pub returns: Maybe<Type>
+    pub accepts: Maybe<Arc<Format>>,
+    pub returns: Maybe<Arc<Format>>
 }
 impl Signature {
     /// Shortcut for building a signature that accepts some arg, returns nothing.
-    pub fn accepts(spec: Maybe<Type>) -> Self {
+    pub fn accepts(spec: Maybe<Arc<Format>>) -> Self {
         Signature {
             accepts: spec,
             returns: Maybe::Nothing
@@ -21,7 +23,7 @@ impl Signature {
     }
 
     /// Shortcut for building a signature that accepts nothing, returns some value.
-    pub fn returns(spec: Maybe<Type>) -> Self {
+    pub fn returns(spec: Maybe<Arc<Format>>) -> Self {
         Signature {
             returns: spec,
             accepts: Maybe::Nothing
@@ -43,8 +45,12 @@ impl ToJSON for Signature {
             let spec;
             match *value {
                 Maybe::Nothing => continue,
-                Maybe::Required(ref type_) => spec = vec![("requires", type_.to_json())],
-                Maybe::Optional(ref type_) => spec = vec![("optional", type_.to_json())]
+                Maybe::Required(ref format) => {
+                    spec = vec![("requires", format.description())]
+                },
+                Maybe::Optional(ref format) => {
+                    spec = vec![("optional", format.description())]
+                }
             }
             vec.push((key, spec.to_json()))
         }
@@ -175,9 +181,9 @@ lazy_static! {
     /// - watch this channel to be informed when it is (un)locked.
     pub static ref DOOR_IS_LOCKED : Channel = Channel {
         feature: Id::new("door/is-locked"),
-        supports_send: Some(Signature::accepts(Maybe::Required(Type::OpenClosed))),
-        supports_fetch: Some(Signature::returns(Maybe::Required(Type::OpenClosed))),
-        supports_watch: Some(Signature::returns(Maybe::Required(Type::OpenClosed))),
+        supports_send: Some(Signature::accepts(Maybe::Required(format::OPEN_CLOSED.clone()))),
+        supports_fetch: Some(Signature::returns(Maybe::Required(format::OPEN_CLOSED.clone()))),
+        supports_watch: Some(Signature::returns(Maybe::Required(format::OPEN_CLOSED.clone()))),
         .. Channel::default()
     };
 
@@ -189,9 +195,9 @@ lazy_static! {
     /// - watch this channel to be informed when it is opened/closed.
     pub static ref DOOR_IS_OPEN : Channel = Channel {
         feature: Id::new("door/is-open"),
-        supports_send: Some(Signature::accepts(Maybe::Required(Type::OpenClosed))),
-        supports_fetch: Some(Signature::returns(Maybe::Required(Type::OpenClosed))),
-        supports_watch: Some(Signature::returns(Maybe::Required(Type::OpenClosed))),
+        supports_send: Some(Signature::accepts(Maybe::Required(format::OPEN_CLOSED.clone()))),
+        supports_fetch: Some(Signature::returns(Maybe::Required(format::OPEN_CLOSED.clone()))),
+        supports_watch: Some(Signature::returns(Maybe::Required(format::OPEN_CLOSED.clone()))),
         .. Channel::default()
     };
 
@@ -203,18 +209,18 @@ lazy_static! {
     /// - watch this channel to be informed when it is turned on/off.
     pub static ref LIGHT_IS_ON : Channel = Channel {
         feature: Id::new("light/is-on"),
-        supports_send: Some(Signature::accepts(Maybe::Required(Type::OnOff))),
-        supports_fetch: Some(Signature::returns(Maybe::Required(Type::OnOff))),
-        supports_watch: Some(Signature::returns(Maybe::Required(Type::OnOff))),
+        supports_send: Some(Signature::accepts(Maybe::Required(format::ON_OFF.clone()))),
+        supports_fetch: Some(Signature::returns(Maybe::Required(format::ON_OFF.clone()))),
+        supports_watch: Some(Signature::returns(Maybe::Required(format::ON_OFF.clone()))),
         .. Channel::default()
     };
 
     /// Standardized channel: determine the color of a light.
     pub static ref LIGHT_COLOR_HSV : Channel = Channel {
         feature: Id::new("light/color-hsv"),
-        supports_send: Some(Signature::accepts(Maybe::Required(Type::Color))),
-        supports_fetch: Some(Signature::returns(Maybe::Required(Type::Color))),
-        supports_watch: Some(Signature::returns(Maybe::Required(Type::Color))),
+        supports_send: Some(Signature::accepts(Maybe::Required(format::COLOR.clone()))),
+        supports_fetch: Some(Signature::returns(Maybe::Required(format::COLOR.clone()))),
+        supports_watch: Some(Signature::returns(Maybe::Required(format::COLOR.clone()))),
         .. Channel::default()
     };
 
@@ -224,30 +230,30 @@ lazy_static! {
     /// - send to this channel to log a string.
     pub static ref LOG: Channel = Channel {
         feature: Id::new("log/append-text"),
-        supports_send: Some(Signature::accepts(Maybe::Required(Type::String))),
+        supports_send: Some(Signature::accepts(Maybe::Required(format::STRING.clone()))),
         .. Channel::default()
     };
 
     /// Standardized channel: access the username of a device.
     pub static ref USERNAME: Channel = Channel {
         feature: Id::new("security/username"),
-        supports_send: Some(Signature::accepts(Maybe::Required(Type::String))),
-        supports_fetch: Some(Signature::returns(Maybe::Required(Type::String))),
+        supports_send: Some(Signature::accepts(Maybe::Required(format::STRING.clone()))),
+        supports_fetch: Some(Signature::returns(Maybe::Required(format::STRING.clone()))),
         .. Channel::default()
     };
 
     /// Standardized channel: access the password of a device.
     pub static ref PASSWORD: Channel = Channel {
         feature: Id::new("security/password"),
-        supports_send: Some(Signature::accepts(Maybe::Required(Type::String))),
-        supports_fetch: Some(Signature::returns(Maybe::Required(Type::String))),
+        supports_send: Some(Signature::accepts(Maybe::Required(format::STRING.clone()))),
+        supports_fetch: Some(Signature::returns(Maybe::Required(format::STRING.clone()))),
         .. Channel::default()
     };
 
     /// Standardized channel: determine whether a device is currently accessible.
     pub static ref AVAILABLE: Channel = Channel {
         feature: Id::new("device/available"),
-        supports_fetch: Some(Signature::returns(Maybe::Required(Type::OnOff))),
+        supports_fetch: Some(Signature::returns(Maybe::Required(format::ON_OFF.clone()))),
         .. Channel::default()
     };
 }

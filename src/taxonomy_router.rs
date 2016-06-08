@@ -9,7 +9,7 @@ use foxbox_taxonomy::manager::*;
 use foxbox_taxonomy::api::{ API, Error, TargetMap, User };
 use foxbox_taxonomy::channel::*;
 use foxbox_taxonomy::io::*;
-use foxbox_taxonomy::values::{ Binary, Type, Value };
+use foxbox_taxonomy::values::{ format, Binary, Value };
 use foxbox_taxonomy::selector::*;
 use foxbox_taxonomy::services::*;
 
@@ -32,7 +32,7 @@ pub struct TaxonomyRouter {
     api: Arc<AdapterManager>
 }
 
-type GetterResultMap = ResultMap<Id<Channel>, Option<(Payload, Type)>, Error>;
+type GetterResultMap = ResultMap<Id<Channel>, Option<(Payload, Arc<Format>)>, Error>;
 
 impl TaxonomyRouter {
     pub fn new(adapter_api: &Arc<AdapterManager>) -> Self {
@@ -65,7 +65,7 @@ impl TaxonomyRouter {
     }
 
     fn build_parse_error(&self, obj: &ParseError) -> IronResult<Response> {
-        let mut response = Response::with(format!("{}", obj));
+        let mut response = Response::with(itry!(serde_json::to_string(obj)));
         response.status = Some(Status::BadRequest);
         response.headers.set(ContentType::plaintext()); // FIXME: Should be JSON
         Ok(response)
@@ -86,16 +86,19 @@ impl TaxonomyRouter {
         }
 
         for map_value in map.values() {
-            if let Ok(Some((ref payload, Type::Binary))) = *map_value {
-                match payload.to_value(&Type::Binary) {
+            if let Ok(Some((ref payload, _))) = *map_value {
+                match payload.to_value(&format::BINARY) {
                     Ok(Value::Binary(ref data)) => {
                         return Some(Binary {
                             mimetype: (*data).mimetype.clone(),
                             data: (*data).data.clone()
                         });
                     }
-                    other => {
-                        warn!("get_binary could not convert data labelled as Type::Binary to Value::Binary {:?}", other);
+                    Ok(other) => {
+                        warn!("get_binary could not convert data labelled as format::BINARY to Value::Binary {:?}", other);
+                    }
+                    Err(_) => {
+                        // It's not a binary, proceed as usual.
                     }
                 }
             }
@@ -309,7 +312,7 @@ describe! taxonomy_router {
                                     Headers::new(),
                                     &mount).unwrap();
         let body = response::extract_body_to_string(response);
-        let s = r#"[{"adapter":"clock@link.mozilla.org","channels":{"getter:interval.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","feature":"clock/time-interval-seconds","id":"getter:interval.clock@link.mozilla.org","service":"service:clock@link.mozilla.org","supports_fetch":null,"supports_send":null,"tags":[]},"getter:timeofday.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","feature":"clock/time-of-day-seconds","id":"getter:timeofday.clock@link.mozilla.org","service":"service:clock@link.mozilla.org","supports_fetch":{"returns":{"requires":"Duration"}},"supports_send":null,"tags":[]},"getter:timestamp.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","feature":"clock/time-timestamp-rfc-3339","id":"getter:timestamp.clock@link.mozilla.org","service":"service:clock@link.mozilla.org","supports_fetch":{"returns":{"requires":"TimeStamp"}},"supports_send":null,"tags":[]}},"id":"service:clock@link.mozilla.org","properties":{"model":"Mozilla clock v1"},"tags":[]}]"#;
+        let s = r#"[{"adapter":"clock@link.mozilla.org","channels":{"getter:interval.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","feature":"clock/time-interval-seconds","id":"getter:interval.clock@link.mozilla.org","service":"service:clock@link.mozilla.org","supports_fetch":null,"supports_send":null,"tags":[]},"getter:timeofday.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","feature":"clock/time-of-day-seconds","id":"getter:timeofday.clock@link.mozilla.org","service":"service:clock@link.mozilla.org","supports_fetch":{"returns":{"requires":"Duration (s)"}},"supports_send":null,"tags":[]},"getter:timestamp.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","feature":"clock/time-timestamp-rfc-3339","id":"getter:timestamp.clock@link.mozilla.org","service":"service:clock@link.mozilla.org","supports_fetch":{"returns":{"requires":"TimeStamp"}},"supports_send":null,"tags":[]}},"id":"service:clock@link.mozilla.org","properties":{"model":"Mozilla clock v1"},"tags":[]}]"#;
 
         assert_eq!(body, s);
     }
@@ -320,7 +323,7 @@ describe! taxonomy_router {
                                     r#"[{"id":"service:clock@link.mozilla.org"}]"#,
                                     &mount).unwrap();
         let body = response::extract_body_to_string(response);
-        let s = r#"[{"adapter":"clock@link.mozilla.org","channels":{"getter:interval.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","feature":"clock/time-interval-seconds","id":"getter:interval.clock@link.mozilla.org","service":"service:clock@link.mozilla.org","supports_fetch":null,"supports_send":null,"tags":[]},"getter:timeofday.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","feature":"clock/time-of-day-seconds","id":"getter:timeofday.clock@link.mozilla.org","service":"service:clock@link.mozilla.org","supports_fetch":{"returns":{"requires":"Duration"}},"supports_send":null,"tags":[]},"getter:timestamp.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","feature":"clock/time-timestamp-rfc-3339","id":"getter:timestamp.clock@link.mozilla.org","service":"service:clock@link.mozilla.org","supports_fetch":{"returns":{"requires":"TimeStamp"}},"supports_send":null,"tags":[]}},"id":"service:clock@link.mozilla.org","properties":{"model":"Mozilla clock v1"},"tags":[]}]"#;
+        let s = r#"[{"adapter":"clock@link.mozilla.org","channels":{"getter:interval.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","feature":"clock/time-interval-seconds","id":"getter:interval.clock@link.mozilla.org","service":"service:clock@link.mozilla.org","supports_fetch":null,"supports_send":null,"tags":[]},"getter:timeofday.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","feature":"clock/time-of-day-seconds","id":"getter:timeofday.clock@link.mozilla.org","service":"service:clock@link.mozilla.org","supports_fetch":{"returns":{"requires":"Duration (s)"}},"supports_send":null,"tags":[]},"getter:timestamp.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","feature":"clock/time-timestamp-rfc-3339","id":"getter:timestamp.clock@link.mozilla.org","service":"service:clock@link.mozilla.org","supports_fetch":{"returns":{"requires":"TimeStamp"}},"supports_send":null,"tags":[]}},"id":"service:clock@link.mozilla.org","properties":{"model":"Mozilla clock v1"},"tags":[]}]"#;
 
         assert_eq!(body, s);
     }
@@ -347,7 +350,7 @@ describe! binary_getter {
         use foxbox_taxonomy::api::{ Error, InternalError, Operation, User };
         use foxbox_taxonomy::manager::AdapterManager;
         use foxbox_taxonomy::services::*;
-        use foxbox_taxonomy::values::{ Type, Value, Binary };
+        use foxbox_taxonomy::values::{ format, Value, Binary };
         use iron::Headers;
         use iron::headers::{ Authorization, Bearer, ContentLength, ContentType };
         use iron_test::{ request, response };
@@ -423,7 +426,7 @@ describe! binary_getter {
                 try!(adapt.add_service(Service::empty(&service_id, &adapter_id)));
                 try!(adapt.add_channel(Channel {
                     feature: Id::new("x-test/x-binary"),
-                    supports_fetch: Some(Signature::returns(Maybe::Required(Type::Binary))),
+                    supports_fetch: Some(Signature::returns(Maybe::Required(format::BINARY.clone()))),
                     id: Id::new("getter:binary@link.mozilla.org"),
                     service: service_id.clone(),
                     adapter: adapter_id.clone(),

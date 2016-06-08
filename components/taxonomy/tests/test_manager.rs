@@ -30,21 +30,21 @@ trait Transform<T> {
     fn transform(&self) -> T;
 }
 
-impl Transform<Value> for (Payload, Type) {
+impl Transform<Value> for (Payload, Arc<Format>) {
     fn transform(&self) -> Value {
         self.0.to_value(&self.1).unwrap()
     }
 }
 
-impl Transform<(Payload, Type)> for Value {
-    fn transform(&self) -> (Payload, Type) {
-        let type_ = self.get_type();
-        let payload = Payload::from_value(self, &type_).unwrap();
-        (payload, type_)
+/*
+impl Transform<(Payload, Arc<Format>)> for Value {
+    fn transform(&self) -> (Payload, Arc<Format>) {
+        Payload::from_value_auto(self)
     }
 }
+*/
 
-impl<'a> Transform<Option<Result<Option<Value>, Error>>> for Option<&'a Result<Option<(Payload, Type)>, Error>> {
+impl<'a> Transform<Option<Result<Option<Value>, Error>>> for Option<&'a Result<Option<(Payload, Arc<Format>)>, Error>> {
     fn transform(&self) -> Option<Result<Option<Value>, Error>> {
         match *self {
             None => None,
@@ -105,13 +105,13 @@ fn test_tags_in_db() {
 
     let fetcher_light_on = Channel {
         feature: feature_light_on.clone(),
-        supports_fetch: Some(Signature::returns(Maybe::Required(Type::OnOff))),
+        supports_fetch: Some(Signature::returns(Maybe::Required(format::ON_OFF.clone()))),
         .. Channel::default()
     };
 
     let sender_light_on = Channel {
         feature: feature_light_on.clone(),
-        supports_send: Some(Signature::accepts(Maybe::Required(Type::OnOff))),
+        supports_send: Some(Signature::accepts(Maybe::Required(format::ON_OFF.clone()))),
         .. Channel::default()
     };
 
@@ -403,13 +403,13 @@ fn test_add_remove_services() {
 
         let fetcher_light_on = Channel {
             feature: feature_light_on.clone(),
-            supports_fetch: Some(Signature::returns(Maybe::Required(Type::OnOff))),
+            supports_fetch: Some(Signature::returns(Maybe::Required(format::ON_OFF.clone()))),
             .. Channel::default()
         };
 
         let sender_light_on = Channel {
             feature: feature_light_on.clone(),
-            supports_send: Some(Signature::accepts(Maybe::Required(Type::OnOff))),
+            supports_send: Some(Signature::accepts(Maybe::Required(format::ON_OFF.clone()))),
             .. Channel::default()
         };
 
@@ -662,13 +662,13 @@ fn test_add_remove_tags() {
 
         let fetcher_light_on = Channel {
             feature: feature_light_on.clone(),
-            supports_fetch: Some(Signature::returns(Maybe::Required(Type::OnOff))),
+            supports_fetch: Some(Signature::returns(Maybe::Required(format::ON_OFF.clone()))),
             .. Channel::default()
         };
 
         let sender_light_on = Channel {
             feature: feature_light_on.clone(),
-            supports_send: Some(Signature::accepts(Maybe::Required(Type::OnOff))),
+            supports_send: Some(Signature::accepts(Maybe::Required(format::ON_OFF.clone()))),
             .. Channel::default()
         };
 
@@ -995,7 +995,7 @@ fn test_fetch() {
 
         let fetcher_light_on = Channel {
             feature: feature_light_on.clone(),
-            supports_fetch: Some(Signature::returns(Maybe::Required(Type::OnOff))),
+            supports_fetch: Some(Signature::returns(Maybe::Required(format::ON_OFF.clone()))),
             .. Channel::default()
         };
 
@@ -1099,30 +1099,6 @@ fn test_fetch() {
             other => panic!("Unexpected result, {:?}", other)
         }
 
-        println!("* Fetching a value that causes an internal type error returns that error.");
-        tweak_1(Tweak::InjectGetterValue(getter_id_1_1.clone(), Ok(Some(Value::OpenClosed(OpenClosed::Open)))));
-        let data = manager.fetch_values(vec![ChannelSelector::new()], User::None);
-        assert_eq!(data.len(), 4);
-        match data.get(&getter_id_1_1).transform() {
-            Some(Err(Error::TypeError(TypeError {
-                ref got,
-                ref expected,
-            }))) if &got as &str == "OpenClosed" && &expected as &str == "OnOff" => {},
-            other => panic!("Unexpected result, {:?}", other)
-        }
-        match data.get(&getter_id_1_2).transform() {
-            Some(Ok(Some(Value::OnOff(OnOff::Off)))) => {},
-            other => panic!("Unexpected result, {:?}", other)
-        }
-        match data.get(&getter_id_1_3).transform() {
-            Some(Ok(None)) => {},
-            other => panic!("Unexpected result, {:?}", other)
-        }
-        match data.get(&getter_id_2).transform() {
-            Some(Ok(None)) => {},
-            other => panic!("Unexpected result, {:?}", other)
-        }
-
         if clear {
             println!("* Clearing does not break the manager.");
             manager.stop();
@@ -1159,7 +1135,7 @@ fn test_send() {
 
         let sender_light_on = Channel {
             feature: feature_light_on.clone(),
-            supports_send: Some(Signature::accepts(Maybe::Required(Type::OnOff))),
+            supports_send: Some(Signature::accepts(Maybe::Required(format::ON_OFF.clone()))),
             .. Channel::default()
         };
 
@@ -1197,8 +1173,8 @@ fn test_send() {
         let rx_adapter_1 = adapter_1.take_rx();
         let rx_adapter_2 = adapter_2.take_rx();
 
-        let data_on = Payload::from_value(&Value::OnOff(OnOff::On), &Type::OnOff).unwrap();
-        let data_closed = Payload::from_value(&Value::OpenClosed(OpenClosed::Closed), &Type::OpenClosed).unwrap();
+        let data_on = Payload::from_value(&Value::OnOff(OnOff::On), &format::ON_OFF).unwrap();
+        let data_closed = Payload::from_value(&Value::OpenClosed(OpenClosed::Closed), &format::OPEN_CLOSED).unwrap();
 
         println!("* Without adapters, sending values to a selector that has no channels returns an empty vector.");
         let data = manager.send_values(target_map(vec![(vec![ChannelSelector::new()], data_on.clone())]), User::None);
@@ -1242,42 +1218,6 @@ fn test_send() {
             assert_eq!(id, setter_id_2);
         } else {
             panic!("Unexpected value {:?}", value)
-        }
-
-        println!("* No further value should have been received.");
-        assert_matches!(rx_adapter_1.try_recv(), Err(_));
-        assert_matches!(rx_adapter_2.try_recv(), Err(_));
-
-        println!("* Sending ill-typed values to channels will cause type errors.");
-        let data = manager.send_values(target_map(vec![
-            (vec![
-                ChannelSelector::new().with_id(&setter_id_1_1),
-                ChannelSelector::new().with_id(&setter_id_1_2),
-                ChannelSelector::new().with_id(&setter_id_2),
-            ], data_closed.clone()),
-            (vec![
-                ChannelSelector::new().with_id(&setter_id_1_3).clone()
-            ], data_on.clone())
-        ]), User::None);
-        assert_eq!(data.len(), 4);
-        for id in vec![&setter_id_1_1, &setter_id_1_2, &setter_id_2] {
-            match data.get(id) {
-                Some(&Err(Error::TypeError(TypeError {
-                    ref got,
-                    ref expected,
-                }))) if &got as &str == "OpenClosed" && &expected as &str == "OnOff" => {},
-                other => panic!("Unexpected result for {}: {:?}", id, other)
-            }
-        }
-        match data.get(&setter_id_1_3) {
-            Some(&Ok(())) => {},
-            other => panic!("Unexpected result for {}: {:?}", setter_id_1_3, other)
-        }
-
-        println!("* All the well-typed values should have been received.");
-        match rx_adapter_1.try_recv().unwrap() {
-            Effect::ValueSent(ref id, Value::OnOff(OnOff::On)) if *id == setter_id_1_3 => {},
-            effect => panic!("Unexpected effect {:?}", effect)
         }
 
         println!("* No further value should have been received.");
@@ -1358,8 +1298,8 @@ fn test_watch() {
         let watcher_light_on = Channel {
             feature: feature_light_on.clone(),
             supports_watch: Some(Signature {
-                accepts: Maybe::Required(Type::OnOff),
-                returns: Maybe::Required(Type::OnOff)
+                accepts: Maybe::Required(format::ON_OFF.clone()),
+                returns: Maybe::Required(format::ON_OFF.clone())
             }),
             .. Channel::default()
         };
@@ -1477,8 +1417,8 @@ fn test_watch() {
                 Event::EnterRange {
                     channel,
                     value,
-                    type_
-                } => (channel, (value, type_).transform()),
+                    format
+                } => (channel, (value, format).transform()),
                 other => panic!("Unexpected event {:?}", other)
             }
         }).collect();
@@ -1500,7 +1440,7 @@ fn test_watch() {
                 ChannelSelector::new()
                     .with_tags(vec![tag_1.clone()])
             ],
-            Exactly::Exactly(Value::Range(Box::new(Range::Eq(Value::OnOff(OnOff::On)))).transform())
+            Exactly::Exactly((Payload::from_value(&Value::Range(Box::new(Range::Eq(Value::OnOff(OnOff::On)))), &format::RANGE).unwrap(), format::RANGE.clone()))
         )]), Box::new(tx_watch_2)));
 
         println!("* Value changes are observed on both watchers");
@@ -1512,14 +1452,14 @@ fn test_watch() {
 
         let mut events : HashMap<_, _> = (0..4).map(|_| {
             match rx_watch.recv().unwrap() {
-                Event::EnterRange { channel, value, type_ } => (channel, (value, type_).transform() ),
+                Event::EnterRange { channel, value, format } => (channel, (value, format).transform() ),
                 other => panic!("Unexpected event {:?}", other)
             }
         }).collect();
 
         match rx_watch_2.recv().unwrap() {
-            Event::EnterRange { channel, value, type_ } => {
-                events.insert(channel, (value, type_).transform());
+            Event::EnterRange { channel, value, format } => {
+                events.insert(channel, (value, format).transform());
             }
             other => panic!("Unexpected event {:?}", other)
         }

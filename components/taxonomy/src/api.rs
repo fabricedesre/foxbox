@@ -18,15 +18,15 @@ use io::*;
 use services::*;
 use selector::*;
 pub use util::{ ResultMap, TargetMap, Targetted };
-use values::{ Type, TypeError };
+use values::{ format, TypeError };
 
 use transformable_channels::mpsc::*;
 
 use std::{ error, fmt };
 use std::error::Error as std_error;
+use std::sync::Arc;
 
-use serde::ser::Serialize;
-use serde_json::value::Serializer;
+use serde_json;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Operation {
@@ -44,11 +44,20 @@ impl fmt::Display for Operation {
         }
     }
 }
-
+impl ToJSON for Operation {
+    fn to_json(&self) -> JSON {
+        use self::Operation::*;
+        match *self {
+            Fetch => "Fetch",
+            Send => "Send",
+            Watch => "Watch",
+        }.to_json()
+    }
+}
 
 /// An error that arose during interaction with either a device, an adapter or the
 /// adapter manager
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub enum Error {
     /// Attempting to execute a value from a Channel that doesn't support this operation.
     OperationNotSupported(Operation, Id<Channel>),
@@ -71,17 +80,32 @@ pub enum Error {
 
     // An error happened while attempting to parse a value.
     ParseError(ParseError),
+
+    // An error happened while attempting to serialize a value.
+    SerializeError(SerializeError),
 }
 
 impl ToJSON for Error {
     fn to_json(&self) -> JSON {
-        let mut serializer = Serializer::new();
-        match self.serialize(&mut serializer) {
-            // FIXME: I don't think that this can explode, but there doesn't seem to
-            // be any way to check :/
-            Ok(()) => serializer.unwrap(),
-            Err(_) =>
-                vec![("Internal error while serializing", "")].to_json()
+        use self::Error::*;
+        match *self {
+            OperationNotSupported(ref op, ref id) => {
+                vec![("OperationNotSupported", vec![("operation", op.to_json()), ("channel", id.to_json())])].to_json()
+            },
+            GetterRequiresThresholdForWatching(ref id) => {
+                vec![("GetterRequiresThresholdForWatching", id.to_json())].to_json()
+            },
+            InvalidValue => "InvalidValue".to_json(),
+            InternalError(_) => "Internal Error".to_json(), // FIXME: Implement ToJSON for InternalError as well
+            ParseError(ref err) => {
+                vec![("ParseError", serde_json::to_value(err))].to_json()
+            },
+            SerializeError(ref err) => {
+                vec![("SerializeError", serde_json::to_value(err))].to_json()
+            },
+            TypeError(ref err) => {
+                vec![("TypeError", serde_json::to_value(err))].to_json()
+            }
         }
     }
 }
@@ -95,6 +119,7 @@ impl fmt::Display for Error {
             Error::InvalidValue => write!(f, "{}",self.description()),
             Error::InternalError(ref err) => write!(f, "{}: {:?}", self.description(), err), // TODO implement Display for InternalError as well
             Error::ParseError(ref err) => write!(f, "{}: {:?}", self.description(), err), // TODO implement Display for ParseError as well
+            Error::SerializeError(ref err) => write!(f, "{}: {:?}", self.description(), err), // TODO implement Display for ParseError as well
         }
     }
 }
@@ -107,7 +132,8 @@ impl error::Error for Error {
             Error::TypeError(_) => "Attempting to send a value with a wrong type",
             Error::InvalidValue => "Attempting to send an invalid value",
             Error::InternalError(_) => "Internal Error", // TODO implement Error for InternalError as well
-            Error::ParseError(ref err) => err.description()
+            Error::ParseError(ref err) => err.description(),
+            Error::SerializeError(ref err) => err.description()
         }
     }
 
@@ -162,7 +188,7 @@ pub enum WatchEvent {
         /// The actual value.
         value: Payload,
 
-        type_: Type,
+        format: Arc<Format>
     },
 
     /// If a range was specified when we registered for watching, `ExitRange` is fired whenever
@@ -174,7 +200,7 @@ pub enum WatchEvent {
         /// The actual value.
         value: Payload,
 
-        type_: Type,
+        format: Arc<Format>,
     },
 
     /// The set of devices being watched has changed, typically either
@@ -237,7 +263,7 @@ impl<K> Parser<Targetted<K, Payload>> for Targetted<K, Payload> where K: Parser<
     }
 }
 
-impl<K> Parser<Targetted<K, Exactly<(Payload, Type)>>> for Targetted<K, Exactly<(Payload, Type)>> where K: Parser<K> + Clone {
+impl<K> Parser<Targetted<K, Exactly<(Payload, Arc<Format>)>>> for Targetted<K, Exactly<(Payload, Arc<Format>)>> where K: Parser<K> + Clone {
     fn description() -> String {
         format!("Targetted<{}, range>", K::description())
     }
@@ -252,7 +278,7 @@ impl<K> Parser<Targetted<K, Exactly<(Payload, Type)>>> for Targetted<K, Exactly<
             }
         }
         let result = match path.push("range", |path| Exactly::<Payload>::take_opt(path, source, "range")) {
-            Some(Ok(Exactly::Exactly(payload))) => Exactly::Exactly((payload, Type::Range)),
+            Some(Ok(Exactly::Exactly(payload))) => Exactly::Exactly((payload, format::RANGE.clone())),
             Some(Ok(Exactly::Always)) | None => Exactly::Always,
             Some(Ok(Exactly::Never)) => Exactly::Never,
             Some(Err(err)) => return Err(err),
@@ -339,7 +365,7 @@ pub trait API: Send {
     fn remove_channel_tags(& self, selectors: Vec<ChannelSelector>, tags: Vec<Id<TagId>>) -> usize;
 
     /// Read the latest value from a set of channels
-    fn fetch_values(&self, Vec<ChannelSelector>, user: User) -> ResultMap<Id<Channel>, Option<(Payload, Type)>, Error>;
+    fn fetch_values(&self, Vec<ChannelSelector>, user: User) -> OpResult<(Payload, Arc<Format>)>;
 
     /// Send a bunch of values to a set of channels.
     ///
@@ -367,9 +393,11 @@ pub trait API: Send {
     /// Many devices may reject such requests.
     ///
     /// The watcher is disconnected once the `WatchGuard` returned by this method is dropped.
-    fn watch_values(& self, watch: TargetMap<ChannelSelector, Exactly<(Payload, Type)>>,
+    fn watch_values(& self, watch: TargetMap<ChannelSelector, Exactly<(Payload, Arc<Format>)>>,
             on_event: Box<ExtSender<WatchEvent>>) -> Self::WatchGuard;
 
     /// A value that causes a disconnection once it is dropped.
     type WatchGuard;
 }
+
+pub type OpResult<T> = ResultMap<Id<Channel>, Option<T>, Error>;

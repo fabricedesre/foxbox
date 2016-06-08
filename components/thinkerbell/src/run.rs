@@ -10,7 +10,8 @@ use foxbox_taxonomy::api::{ API, Error as APIError, Targetted, User, WatchEvent 
 use foxbox_taxonomy::channel::Channel;
 use foxbox_taxonomy::io::*;
 use foxbox_taxonomy::util::{ Exactly, Id };
-use foxbox_taxonomy::values::{ Duration, Type, Value };
+use foxbox_taxonomy::values::{ Duration, Value };
+use foxbox_taxonomy::values::format;
 
 use transformable_channels::mpsc::*;
 
@@ -264,7 +265,7 @@ impl<Env> ExecutionTask<Env> where Env: ExecutableDevEnv + Debug {
 
                 let rule_index = rule_index.clone();
                 let condition_index = condition_index.clone();
-                let payload_and_type = (Payload::from_value_auto(&Value::Range(Box::new(condition.range.clone()))), Type::Range);
+                let payload_and_type = (Payload::from_value_auto(&Value::Range(Box::new(condition.range.clone()))), format::RANGE.clone());
                 witnesses.push(
                     api.watch_values(
                         vec![Targetted {
@@ -498,14 +499,14 @@ impl<Env> Statement<CompiledCtx<Env>> where Env: ExecutableDevEnv {
 
 
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug)]
 pub enum StartStopError {
     AlreadyRunning,
     NotRunning,
     ThreadError,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug)]
 pub enum Error {
     CompileError(compile::Error),
     StartStopError(StartStopError),

@@ -93,6 +93,12 @@ impl WorkerInfo {
 
 #[derive(Clone, Debug, Serialize)]
 pub enum Message {
+    // Notifies that we have a browser connection established. WebSocket -> Runtime
+    BrowserWS {
+        #[serde(skip_serializing)]
+        out: WsSender,
+        id: String,
+    },
     // Result value when starting a worker, giving the url of the ws used.
     ClientEndpoint {
         ws_url: String,
@@ -111,6 +117,16 @@ pub enum Message {
     RunnerWS {
         #[serde(skip_serializing)]
         out: WsSender,
+    },
+    // Sends a payload to the browser for a given worker.
+    SendToBrowser {
+        data: Vec<u8>,
+        id: String,
+    },
+    // Sends a payload to the runtime for a given worker.
+    SendToRuntime {
+        data: Vec<u8>,
+        id: String,
     },
     // Notifies that the foxbox is shutting down. Broadcasted by the main controller.
     Shutdown,

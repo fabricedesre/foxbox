@@ -14,7 +14,7 @@ use foxbox_taxonomy::channel::*;
 use foxbox_taxonomy::io::*;
 use foxbox_taxonomy::selector::*;
 use foxbox_taxonomy::services::*;
-use foxbox_taxonomy::values::{ Duration, OnOff, Range, TimeStamp, Type, TypeError as APITypeError , Value };
+use foxbox_taxonomy::values::{ format, Duration, OnOff, OpenClosed, Range, TimeStamp, TypeError as APITypeError , Value };
 
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -78,7 +78,7 @@ fn test_run() {
     let env = FakeEnv::new(tx_env);
     let mut exec = Execution::<FakeEnv>::new();
 
-    let data_off = Payload::from_value(&Value::OnOff(OnOff::Off), &Type::OnOff).unwrap();
+    let data_off = Payload::from_value(&Value::OnOff(OnOff::Off), &format::ON_OFF).unwrap();
 
     println!("* Spawning thread.");
     thread::spawn(move || {
@@ -189,10 +189,7 @@ fn test_run() {
 
     println!("* Injecting an error does not trigger the send.");
     env.execute(Instruction::InjectGetterValues(vec![
-        (getter_id_1.clone(), Err(APIError::TypeError(APITypeError {
-            expected: Type::OnOff.name(),
-            got: Type::OpenClosed.name()
-        })))
+        (getter_id_1.clone(), Err(APIError::TypeError(APITypeError::new(&format::ON_OFF, &Value::OpenClosed(OpenClosed::Open)))))
     ]));
 
     rx_done.recv().unwrap();
@@ -429,10 +426,7 @@ fn test_run() {
     rx_send.try_recv().unwrap_err();
 
     env.execute(Instruction::InjectSetterErrors(vec![
-        (setter_id_1.clone(), Some(APIError::TypeError(APITypeError {
-            expected: Type::OnOff.name(),
-            got: Type::OpenClosed.name()
-        })))
+        (setter_id_1.clone(), Some(APIError::TypeError(APITypeError::new(&format::ON_OFF, &Value::OpenClosed(OpenClosed::Open)))))
     ]));
     rx_done.recv().unwrap();
     rx_send.try_recv().unwrap_err();
@@ -476,7 +470,7 @@ fn test_run_with_delay() {
     let env = FakeEnv::new(tx_env);
     let mut exec = Execution::<FakeEnv>::new();
 
-    let data_off = Payload::from_value(&Value::OnOff(OnOff::Off), &Type::OnOff).unwrap();
+    let data_off = Payload::from_value(&Value::OnOff(OnOff::Off), &format::ON_OFF).unwrap();
 
     thread::spawn(move || {
         for msg in rx {
@@ -657,10 +651,7 @@ fn test_run_with_delay() {
     rx_send.try_recv().unwrap_err();
 
     env.execute(Instruction::InjectGetterValues(vec![
-        (getter_id_1.clone(), Err(APIError::TypeError(APITypeError {
-            expected: Type::OnOff.name(),
-            got: Type::OpenClosed.name()
-        })))
+        (getter_id_1.clone(), Err(APIError::TypeError(APITypeError::new(&format::ON_OFF, &Value::OpenClosed(OpenClosed::Open)))))
     ]));
     rx_done.recv().unwrap();
     rx_send.try_recv().unwrap_err();

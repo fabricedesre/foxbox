@@ -115,12 +115,12 @@ pub trait RawAdapter: Send + Sync {
     /// reboots/reconnections.
     fn id(&self) -> Id<AdapterId>;
 
-    fn fetch_values(&self, mut target: Vec<(Id<Channel>, Type)>, _: User) -> ResultMap<Id<Channel>, Option<(Payload, Type)>, Error> {
+    fn fetch_values(&self, mut target: Vec<(Id<Channel>, Arc<Format>)>, _: User) -> ResultMap<Id<Channel>, Option<(Payload, Arc<Format>)>, Error> {
         target.drain(..).map(|(id, _)| {
             (id.clone(), Err(Error::OperationNotSupported(Operation::Watch, id)))
         }).collect()
     }
-    fn send_values(&self, mut values: HashMap<Id<Channel>, (Payload, Type)>, _: User) -> ResultMap<Id<Channel>, (), Error> {
+    fn send_values(&self, mut values: HashMap<Id<Channel>, (Payload, Arc<Format>)>, _: User) -> ResultMap<Id<Channel>, (), Error> {
         values.drain().map(|(id, _)| {
             (id.clone(), Err(Error::OperationNotSupported(Operation::Watch, id)))
         }).collect()
@@ -167,7 +167,7 @@ pub trait Adapter: Send + Sync {
     /// expects the adapter to attempt to minimize the connections with the actual devices.
     ///
     /// The AdapterManager is in charge of keeping track of the age of values.
-    fn fetch_values(&self, mut target: Vec<Id<Channel>>, _: User) -> ResultMap<Id<Channel>, Option<Value>, Error>
+    fn fetch_values(&self, mut target: Vec<Id<Channel>>, _: User) -> OpResult<Value>
     {
         target.drain(..).map(|id| {
             (id.clone(), Err(Error::OperationNotSupported(Operation::Watch, id)))
@@ -209,7 +209,8 @@ pub trait Adapter: Send + Sync {
     }
 }
 
-pub type RawWatchTarget = (Id<Channel>, /*condition*/Option<(Payload, Type)>, /*values*/Type, Box<ExtSender<WatchEvent</*result*/(Payload, Type)>>>);
+pub type OpResult<T> = ResultMap<Id<Channel>, Option<T>, Error>;
+pub type RawWatchTarget = (Id<Channel>, /*condition*/Option<(Payload, Arc<Format>)>, /*values*/Arc<Format>, Box<ExtSender<WatchEvent</*result*/(Payload, Arc<Format>)>>>);
 pub type WatchTarget = (Id<Channel>, /*condition*/Option<Value>, Box<ExtSender<WatchEvent</*result*/Value>>>);
 
 pub type WatchResult = Vec<(Id<Channel>, Result<Box<AdapterWatchGuard>, Error>)>;

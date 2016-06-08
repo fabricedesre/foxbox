@@ -13,7 +13,7 @@ use foxbox_taxonomy::api::{ Error, InternalError, User };
 use foxbox_taxonomy::channel::*;
 use foxbox_taxonomy::services::{ AdapterId, Id, Service, ServiceId };
 use foxbox_taxonomy::util::Maybe;
-use foxbox_taxonomy::values::{ Type, Value };
+use foxbox_taxonomy::values::{ format, Value };
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -89,7 +89,7 @@ pub fn init(adapt: &Arc<AdapterManager>) -> Result<(), Error> {
     try!(adapt.add_service(Service::empty(&service_id, &adapter_id)));
     try!(adapt.add_channel(Channel {
         feature: Id::new("speak/sentence"),
-        supports_send: Some(Signature::accepts(Maybe::Required(Type::String))),
+        supports_send: Some(Signature::accepts(Maybe::Required(format::STRING.clone()))),
         id: talk_setter_id,
         service: service_id,
         adapter: adapter_id,
