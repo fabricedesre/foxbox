@@ -1,15 +1,16 @@
 TODO:
 
 Foxbox:
-- Manage multiple clients connected to the same worker.
+- Manage multiple clients connected to the same worker (in runtime.rs).
 - Persistence in workers.rs
 - Turn into an adapter?
 - More tests.
 
 Gecko:
-- JS object <-> typed array
+- Create the worker with a per-usercontext principal.
+- JS object <-> typed array.
 - Tests.
 
 Client library:
-- JS object <-> typed array
+- JS object <-> typed array.
 - Better Worker() api reimplementation.
