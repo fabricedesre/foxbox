@@ -10,7 +10,7 @@
 (function(global) {
 
 function debug(aMsg) {
-  console.log("-*- ObjectEncoder: " + aMsg + "\n");
+  //console.log("-*- ObjectEncoder: " + aMsg + "\n");
 }
 
 const kTypeFlags = {
