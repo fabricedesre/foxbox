@@ -1,0 +1,20 @@
+<html>
+  <head>
+    <script src="objectencoder.js"> </script>
+    <script src="remoteworkers.js"> </script>
+    <script>
+function test() {
+  console.log("Starting test...");
+  FoxboxWorkers.set_base_url("http://localhost:3000");
+  var worker = FoxboxWorkers.start("http://localhost:8000/worker1.js");
+  worker.onmessage = function(event) {
+    console.log(`\\o/ the remote worker sent us ${event}`);
+  }
+}
+    </script>
+  </head>
+  <body>
+    <h1>RemoteWorkers sandbox</h1>
+    <button onclick="test()">Start</button>
+  </body>
+</html>

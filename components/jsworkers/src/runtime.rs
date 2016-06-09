@@ -108,9 +108,9 @@ impl Handler for RuntimeWsHandler {
     }
 
     fn on_message(&mut self, msg: Message) -> WsResult<()> {
-        info!("Message from jsworkers ws: {}", msg);
-
         if self.is_runtime() {
+            info!("Message from js runner ws: {}", msg);
+
             // Relay the payload to the right browser ws.
             let mut decoder = Decoder::new(msg.into_data());
             let id = decoder.string();
