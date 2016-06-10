@@ -8,7 +8,6 @@ Foxbox:
 
 Gecko:
 - Create the worker with a per-usercontext principal.
-- Make the logging look like foxbox's one.
 - Tests.
 
 Client library:

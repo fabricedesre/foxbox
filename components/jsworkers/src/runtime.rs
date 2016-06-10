@@ -115,13 +115,13 @@ impl Handler for RuntimeWsHandler {
             let mut decoder = Decoder::new(msg.into_data());
             let id = decoder.string();
             if id.is_err() {
-                error!("Unable to decode `id` in runtime web socket message.");
+                error!("Unable to decode `id` in runtime web socket message: {:?}", id.err());
                 return Ok(());
             }
 
             let payload = decoder.bytes();
             if payload.is_err() {
-                error!("Unable to decode `payload` in runtime web socket message.");
+                error!("Unable to decode `payload` in runtime web socket message: {:?}", payload.err());
                 return Ok(());
             }
 
@@ -138,26 +138,14 @@ impl Handler for RuntimeWsHandler {
                                    data: payload.unwrap(),
                                });
         } else {
-            // Relay the message to the runtime.
-            let mut decoder = Decoder::new(msg.into_data());
-            let payload = decoder.bytes();
-            if payload.is_err() {
-                error!("Unable to decode `payload` in browser web socket message.");
-                return Ok(());
-            }
-
-            if !decoder.end() {
-                error!("Unexpected data after `payload` in browser web socket message.");
-                return Ok(());
-            }
-
-            // Message decoding is ok, let's forward it to the runtime WS.
+            // We know which client this comes from so we don't need to wrap the message with
+            // bitsparrow.
             let id = self.id.borrow().clone().unwrap_or("".to_owned());
             let mut guard = self.broker.lock().unwrap();
             guard.send_message("workers",
                                BrokerMessage::SendToRuntime {
                                    id: id.clone(),
-                                   data: payload.unwrap(),
+                                   data: msg.into_data(),
                                });
         }
         Ok(())

@@ -9,6 +9,11 @@ const customerData = [
   { ssn: "555-55-5555", name: "Donna", age: 32, email: "donna@home.org" }
 ];
 
+onmessage = function(event) {
+  console.log(`Worker received ${event}`)
+  postMessage(`You send me: ${event.data}`);
+}
+
 var request = indexedDB.open(dbName, 2);
 
 request.onerror = function(event) {
@@ -16,7 +21,7 @@ request.onerror = function(event) {
 };
 
 request.onsuccess = function(event) {
-  debug("In onsuccess");
+  debug("In onsuccess: indexedDB opened!");
 };
 
 request.onupgradeneeded = function(event) {

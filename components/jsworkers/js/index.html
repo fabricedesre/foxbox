@@ -3,18 +3,33 @@
     <script src="objectencoder.js"> </script>
     <script src="remoteworkers.js"> </script>
     <script>
+var worker;
+
 function test() {
   console.log("Starting test...");
+  document.getElementById("inout").removeAttribute("style");
   FoxboxWorkers.set_base_url("http://localhost:3000");
-  var worker = FoxboxWorkers.start("http://localhost:8000/worker1.js");
+  worker = FoxboxWorkers.start("http://localhost:8000/worker1.js");
   worker.onmessage = function(event) {
-    console.log(`\\o/ the remote worker sent us ${event}`);
+    document.getElementById("output").innerHTML += ">> " + event + "\n";
   }
+}
+
+function send() {
+  let input = document.getElementById("input");
+  var text = input.value;
+  input.value = "";
+  worker.postMessage(text);
+  document.getElementById("output").innerHTML += "<< " + text + "\n";
 }
     </script>
   </head>
   <body>
     <h1>RemoteWorkers sandbox</h1>
     <button onclick="test()">Start</button>
+    <div id="inout" style="display:none;">
+      <input type="text" id="input"></input><button onclick="send()">Send</button>
+      <pre id="output"></pre>
+    </div>
   </body>
 </html>
