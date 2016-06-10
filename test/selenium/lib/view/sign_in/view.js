@@ -10,19 +10,20 @@ function SignInView() {
 }
 
 SignInView.prototype = Object.assign({
-  successLogin(password) {
+  successLogin(email, password) {
     password = password !== undefined ? password : PASSWORDS.valid;
-    return this._submitPassword(password)
+    return this._submitPassword(email, password)
       .then(() => this.instanciateNextView('signed_in'));
   },
 
-  failureLogin(password) {
-    return this._submitPassword(password)
+  failureLogin(email, password) {
+    return this._submitPassword(email, password)
     .then(() => new Alert(this.driver).message);
   },
 
-  _submitPassword(password) {
-    return this.accessor.passwordField.sendKeys(password)
+  _submitPassword(email, password) {
+    return this.accessor.emailField.sendKeys(email)
+      .then(() => this.accessor.passwordField.sendKeys(password))
       .then(() => this.accessor.submitButton.click());
   },
 

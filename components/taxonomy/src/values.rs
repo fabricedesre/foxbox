@@ -1,23 +1,27 @@
 //!
 //! Values manipulated by services
 //!
+
+#![allow(identity_op)] // Keep clippy happy with [De]serialize
+#![allow(transmute_ptr_to_ref)] // Keep clippy happy with mopaify
+
+use api::Error;
 use io;
+use io::{ BinaryTarget, BinarySource };
 use parse::*;
 use util::*;
 
 use std::cmp::{ PartialOrd, Ordering };
-use std::collections::HashMap;
 use std::fmt::Debug;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::{ error, fmt };
 
 use chrono::{ Duration as ChronoDuration, DateTime, Local, TimeZone, UTC };
-
+use mopa;
 use serde_json;
 
 /// Representation of a type error.
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct TypeError {
     /// The type we expected.
     pub expected: String,
@@ -51,6 +55,189 @@ impl error::Error for TypeError {
     }
 }
 
+/// Representation of an actual value that can be sent to/received
+/// from a service.
+///
+/// Values are designed to be cloned, rather than `Rc`/`Arc`-ed.
+#[derive(Debug, Clone)]
+pub struct Value {
+    content: Arc<ValueImpl>,
+}
+
+struct ValueImpl {
+    /// The data held by the value.
+    data: Box<Data>,
+
+    /// A closure for `T::description()`. We cannot store this directly in a Box<Data>
+    /// because `description()` has no receiver, hence cannot be turned into a virtual
+    /// method by Rust's trait system.
+    describe: Box<Fn() -> String + Send + Sync>,
+
+    /// A closure for `T::eq()` (from `PartialEq`). We cannot store this directly in a
+    /// Box<Data> because `eq()` uses the `Self` type, hence cannot be turned into a virtual
+    /// method by Rust's trait system.
+    eq: Box<Fn(&Data, &Data) -> bool + Send + Sync>,
+}
+impl ValueImpl {
+    fn new<T>(data: T) -> Self where T: Data + Debug + PartialEq + Sized {
+        let describe = || T::description();
+        let eq = |me: &Data, other: &Data| {
+            let me = me.downcast_ref::<T>().unwrap(); // By definition, `me` has type `T`.
+            match other.downcast_ref::<T>() {
+                None => false,
+                Some(other) => me.eq(other)
+            }
+        };
+        ValueImpl {
+            data: Box::new(data),
+            describe: Box::new(describe),
+            eq: Box::new(eq),
+        }
+    }
+}
+impl fmt::Debug for ValueImpl {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        self.data.fmt(f)
+    }
+}
+
+
+
+impl Value {
+    pub fn new<T>(data: T) -> Self where T: Data + Debug + PartialEq + Sized {
+        Value {
+            content: Arc::new(ValueImpl::new(data)),
+        }
+    }
+
+    pub fn cast<T>(&self) -> Result<&T, Error> where T: Data + Sized {
+        match self.content.data.downcast_ref::<T>() {
+            None => Err(Error::TypeError(TypeError {
+                expected: T::description(),
+                got: self.description()
+            })),
+            Some(r) => Ok(r)
+        }
+    }
+
+    pub fn downcast<T>(&self) -> Option<&T> where T: Data {
+        self.content.data.downcast_ref::<T>()
+    }
+
+    pub fn description(&self) -> String {
+        (self.content.describe)()
+    }
+}
+
+impl PartialEq for Value {
+    fn eq(&self, other: &Value) -> bool {
+        (self.content.eq)(&*self.content.data, &*other.content.data)
+    }
+}
+
+pub trait Data: Debug + Send + Sync + mopa::Any {
+    /// A human-readable description of the _type_ of the value.
+    ///
+    /// Used mainly in `TypeError` error messages.
+    fn description() -> String where Self: Sized;
+
+    /// Attempt to build a `Value` from a json `source` and `binary` components.
+    fn parse(path: Path, source: &JSON, binary: &BinarySource) -> Result<Self, Error> where Self: Sized;
+
+    /// Serialize a `Value` into a `JSON`, storing binary data in `binary`.
+    fn serialize(source: &Self, binary: &BinaryTarget) -> Result<JSON, Error> where Self: Sized;
+
+    /// Shorthand for parsing from a string.
+    ///
+    /// Used mainly for testing purposes.
+    fn parse_str(source: &str) -> Result<Self, Error> where Self: Sized {
+        serde_json::from_str(source)
+            .map_err(|err| Error::ParseError(ParseError::JSON(JSONError(err))))
+            .and_then(|json| Self::parse(Path::new(), &json, &BinarySource))
+    }
+
+    fn parse_vec(path: Path, source: &JSON, binary: &BinarySource) -> Result<Vec<Self>, Error> where Self: Sized {
+        match source.as_array() {
+            None => Err(Error::TypeError(TypeError {
+                expected: "array".to_owned(),
+                got: "something else".to_owned()
+            })),
+            Some(array) => {
+                let mut result = Vec::with_capacity(array.len());
+                for (item, i) in array.iter().zip(0..) {
+                    let got = try!(path.push_index(i, |path| Self::parse(path, item, binary)));
+                    result.push(got);
+                }
+                Ok(result)
+            }
+        }
+    }
+
+    fn parse_field(path: Path, source: &JSON, binary: &BinarySource, field_name: &str) -> Result<Self, Error> where Self: Sized {
+        match Self::parse_opt_field(path.clone(), source, binary, field_name) { // FIXME: Get rid of this `path.clone()`
+            Some(result) => result,
+            None => Err(Error::ParseError(ParseError::missing_field(field_name, &path)))
+        }
+    }
+
+    fn parse_opt_field(path: Path, source: &JSON, binary: &BinarySource, field_name: &str) -> Option<Result<Self, Error>> where Self: Sized {
+        if let JSON::Object(ref obj) = *source {
+            if let Some(v) = obj.get(field_name) {
+                Some(Self::parse(path, v, binary))
+            } else {
+                None
+            }
+        } else {
+            Some(Err(Error::ParseError(ParseError::type_error(field_name, &path, "object"))))
+        }
+    }
+}
+mopafy!(Data);
+
+impl<T> Parser<T> for T where T: Data {
+    fn description() -> String {
+        T::description()
+    }
+    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
+        match T::parse(path, source, &BinarySource) {
+            Ok(ok) => Ok(ok),
+            Err(Error::ParseError(err)) => Err(err),
+            Err(err) => Err(ParseError::InternalError(format!("{}", err)))
+        }
+    }
+}
+
+impl Data for String {
+    fn description() -> String {
+        "String".to_owned()
+    }
+    fn parse(path: Path, source: &JSON, _binary: &BinarySource) -> Result<String, Error> {
+        match source.as_string() {
+            None => Err(Error::ParseError(ParseError::type_error("String", &path, "string"))),
+            Some(s) => Ok(s.to_owned())
+        }
+    }
+
+    fn serialize(source: &String, _binary: &BinaryTarget) -> Result<JSON, Error> {
+        Ok(JSON::String(source.clone()))
+    }
+}
+
+impl Data for () {
+    fn description() -> String {
+        "Nothing".to_owned()
+    }
+    /// Attempt to build a `Value` from a json `source` and `binary` components.
+    fn parse(_: Path, _: &JSON, _: &BinarySource) -> Result<Self, Error> {
+        Ok(())
+    }
+
+    /// Serialize a `Value` into a `JSON`, storing binary data in `binary`.
+    fn serialize(_: &Self, _: &BinaryTarget) -> Result<JSON, Error> {
+        Ok(JSON::Null)
+    }
+}
+
 /// An on/off state.
 ///
 /// # JSON
@@ -63,13 +250,15 @@ pub enum OnOff {
     /// Represented by "On".
     ///
     /// ```
-    /// use foxbox_taxonomy::values::*;
+    /// use foxbox_taxonomy::api::Error;
+    /// use foxbox_taxonomy::io::*;
     /// use foxbox_taxonomy::parse::*;
+    /// use foxbox_taxonomy::values::*;
     ///
-    /// let parsed = OnOff::from_str("\"On\"").unwrap();
+    /// let parsed = OnOff::parse_str("\"On\"").unwrap();
     /// assert_eq!(parsed, OnOff::On);
     ///
-    /// let serialized: JSON = OnOff::On.to_json();
+    /// let serialized: JSON = OnOff::serialize(&OnOff::On, &BinaryTarget).unwrap();
     /// assert_eq!(serialized.as_string().unwrap(), "On");
     /// ```
     On,
@@ -79,13 +268,15 @@ pub enum OnOff {
     /// Represented by "Off".
     ///
     /// ```
-    /// use foxbox_taxonomy::values::*;
+    /// use foxbox_taxonomy::api::Error;
+    /// use foxbox_taxonomy::io::*;
     /// use foxbox_taxonomy::parse::*;
+    /// use foxbox_taxonomy::values::*;
     ///
-    /// let parsed = OnOff::from_str("\"Off\"").unwrap();
+    /// let parsed = OnOff::parse_str("\"Off\"").unwrap();
     /// assert_eq!(parsed, OnOff::Off);
     ///
-    /// let serialized: JSON = OnOff::Off.to_json();
+    /// let serialized: JSON = OnOff::serialize(&OnOff::Off, &BinaryTarget).unwrap();
     /// assert_eq!(serialized.as_string().unwrap(), "Off");
     /// ```
     Off,
@@ -97,34 +288,6 @@ impl OnOff {
             OnOff::On => true,
             OnOff::Off => false,
         }
-    }
-}
-
-impl Parser<OnOff> for OnOff {
-    fn description() -> String {
-        "OnOff".to_owned()
-    }
-    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
-        match source.as_string() {
-            Some("On") => Ok(OnOff::On),
-            Some("Off") => Ok(OnOff::Off),
-            Some(str) => Err(ParseError::unknown_constant(str, &path)),
-            None => Err(ParseError::type_error("OnOff", &path, "string"))
-        }
-    }
-}
-
-impl ToJSON for OnOff {
-    fn to_json(&self) -> JSON {
-        match *self {
-            OnOff::On => JSON::String("On".to_owned()),
-            OnOff::Off => JSON::String("Off".to_owned())
-        }
-    }
-}
-impl Into<Value> for OnOff {
-    fn into(self) -> Value {
-        Value::OnOff(self)
     }
 }
 
@@ -140,6 +303,29 @@ impl Ord for OnOff {
     }
 }
 
+impl Data for OnOff {
+    fn description() -> String {
+        "On/Off".to_owned()
+    }
+    fn parse(path: Path, source: &JSON, _binary: &BinarySource) -> Result<Self, Error> {
+        let result = match source.as_string() {
+            Some("On") => OnOff::On,
+            Some("Off") => OnOff::Off,
+            Some(str) => return Err(Error::ParseError(ParseError::unknown_constant(str, &path))),
+            None => return Err(Error::ParseError(ParseError::type_error("OnOff", &path, "string")))
+        };
+        Ok(result)
+    }
+
+    fn serialize(source: &Self, _binary: &BinaryTarget) -> Result<JSON, Error> {
+        let str = match *source {
+            OnOff::On => "On",
+            OnOff::Off => "Off",
+        };
+        Ok(JSON::String(str.to_owned()))
+    }
+}
+
 /// An open/closed state.
 ///
 /// # JSON
@@ -152,13 +338,15 @@ pub enum OpenClosed {
     /// Represented by "Open".
     ///
     /// ```
-    /// use foxbox_taxonomy::values::*;
+    /// use foxbox_taxonomy::api::Error;
+    /// use foxbox_taxonomy::io::*;
     /// use foxbox_taxonomy::parse::*;
+    /// use foxbox_taxonomy::values::*;
     ///
-    /// let parsed = OpenClosed::from_str("\"Open\"").unwrap();
+    /// let parsed = OpenClosed::parse_str("\"Open\"").unwrap();
     /// assert_eq!(parsed, OpenClosed::Open);
     ///
-    /// let serialized: JSON = OpenClosed::Open.to_json();
+    /// let serialized: JSON = OpenClosed::serialize(&OpenClosed::Open, &BinaryTarget).unwrap();
     /// assert_eq!(serialized.as_string().unwrap(), "Open");
     /// ```
     Open,
@@ -168,13 +356,15 @@ pub enum OpenClosed {
     /// Represented by "Closed".
     ///
     /// ```
-    /// use foxbox_taxonomy::values::*;
+    /// use foxbox_taxonomy::api::Error;
+    /// use foxbox_taxonomy::io::*;
     /// use foxbox_taxonomy::parse::*;
+    /// use foxbox_taxonomy::values::*;
     ///
-    /// let parsed = OpenClosed::from_str("\"Closed\"").unwrap();
+    /// let parsed = OpenClosed::parse_str("\"Closed\"").unwrap();
     /// assert_eq!(parsed, OpenClosed::Closed);
     ///
-    /// let serialized: JSON = OpenClosed::Closed.to_json();
+    /// let serialized: JSON = OpenClosed::serialize(&OpenClosed::Closed, &BinaryTarget).unwrap();
     /// assert_eq!(serialized.as_string().unwrap(), "Closed");
     /// ```
     Closed,
@@ -186,35 +376,6 @@ impl OpenClosed {
             OpenClosed::Open => true,
             OpenClosed::Closed => false,
         }
-    }
-}
-
-impl Parser<OpenClosed> for OpenClosed {
-    fn description() -> String {
-        "OpenClosed".to_owned()
-    }
-    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
-        match source.as_string() {
-            Some("Open") => Ok(OpenClosed::Open),
-            Some("Closed") => Ok(OpenClosed::Closed),
-            Some(str) => Err(ParseError::unknown_constant(str, &path)),
-            None => Err(ParseError::type_error("OpenClosed", &path, "string"))
-        }
-    }
-}
-
-impl ToJSON for OpenClosed {
-    fn to_json(&self) -> JSON {
-        match *self {
-            OpenClosed::Open => JSON::String("Open".to_owned()),
-            OpenClosed::Closed => JSON::String("Closed".to_owned())
-        }
-    }
-}
-
-impl Into<Value> for OpenClosed {
-    fn into(self) -> Value {
-        Value::OpenClosed(self)
     }
 }
 
@@ -230,6 +391,27 @@ impl Ord for OpenClosed {
     }
 }
 
+impl Data for OpenClosed {
+    fn description() -> String {
+        "Open/Closed".to_owned()
+    }
+    fn parse(path: Path, source: &JSON, _binary: &BinarySource) -> Result<Self, Error> {
+        let result = match source.as_string() {
+            Some("Open") => OpenClosed::Open,
+            Some("Closed") => OpenClosed::Closed,
+            Some(str) => return Err(Error::ParseError(ParseError::unknown_constant(str, &path))),
+            None => return Err(Error::ParseError(ParseError::type_error("OpenClosed", &path, "string")))
+        };
+        Ok(result)
+    }
+    fn serialize(source: &Self, _binary: &BinaryTarget) -> Result<JSON, Error> {
+        let str = match *source {
+            OpenClosed::Open => "Open",
+            OpenClosed::Closed => "Closed",
+        };
+        Ok(JSON::String(str.to_owned()))
+    }
+}
 
 /// An locked/unlocked state.
 ///
@@ -237,7 +419,7 @@ impl Ord for OpenClosed {
 ///
 /// Values of this type are represented by strings "Locked" | "Unlocked".
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub enum DoorLocked {
+pub enum IsLocked {
     /// # JSON
     ///
     /// Represented by "Locked".
@@ -246,10 +428,10 @@ pub enum DoorLocked {
     /// use foxbox_taxonomy::values::*;
     /// use foxbox_taxonomy::parse::*;
     ///
-    /// let parsed = DoorLocked::from_str("\"Locked\"").unwrap();
-    /// assert_eq!(parsed, DoorLocked::Locked);
+    /// let parsed = IsLocked::from_str("\"Locked\"").unwrap();
+    /// assert_eq!(parsed, IsLocked::Locked);
     ///
-    /// let serialized: JSON = DoorLocked::Locked.to_json();
+    /// let serialized: JSON = IsLocked::Locked.to_json();
     /// assert_eq!(serialized.as_string().unwrap(), "Locked");
     /// ```
     Locked,
@@ -262,59 +444,61 @@ pub enum DoorLocked {
     /// use foxbox_taxonomy::values::*;
     /// use foxbox_taxonomy::parse::*;
     ///
-    /// let parsed = DoorLocked::from_str("\"Unlocked\"").unwrap();
-    /// assert_eq!(parsed, DoorLocked::Unlocked);
+    /// let parsed = IsLocked::from_str("\"Unlocked\"").unwrap();
+    /// assert_eq!(parsed, IsLocked::Unlocked);
     ///
-    /// let serialized: JSON = DoorLocked::Unlocked.to_json();
+    /// let serialized: JSON = IsLocked::Unlocked.to_json();
     /// assert_eq!(serialized.as_string().unwrap(), "Unlocked");
     /// ```
     Unlocked,
 }
 
-impl DoorLocked {
+impl IsLocked {
     fn as_bool(&self) -> bool {
         match *self {
-            DoorLocked::Locked => true,
-            DoorLocked::Unlocked => false,
+            IsLocked::Locked => true,
+            IsLocked::Unlocked => false,
         }
     }
 }
 
-impl Parser<DoorLocked> for DoorLocked {
+impl Data for IsLocked {
     fn description() -> String {
-        "DoorLocked".to_owned()
+        "IsLocked".to_owned()
     }
-    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
+    fn parse(path: Path, source: &JSON, _binary: &BinarySource) -> Result<Self, Error> {
         match source.as_string() {
-            Some("Locked") => Ok(DoorLocked::Locked),
-            Some("Unlocked") => Ok(DoorLocked::Unlocked),
-            Some(str) => Err(ParseError::unknown_constant(str, &path)),
-            None => Err(ParseError::type_error("DoorLocked", &path, "string"))
+            Some("Locked") => Ok(IsLocked::Locked),
+            Some("Unlocked") => Ok(IsLocked::Unlocked),
+            Some(str) => Err(Error::ParseError(ParseError::unknown_constant(str, &path))),
+            None => Err(Error::ParseError(ParseError::type_error("IsLocked", &path, "string")))
         }
+    }
+    fn serialize(source: &Self, _binary: &BinaryTarget) -> Result<JSON, Error> {
+        let str = match *source {
+            IsLocked::Locked => "Locked",
+            IsLocked::Unlocked => "Unlocked"
+        };
+        Ok(JSON::String(str.to_owned()))
     }
 }
 
-impl ToJSON for DoorLocked {
+impl ToJSON for IsLocked {
     fn to_json(&self) -> JSON {
         match *self {
-            DoorLocked::Locked => JSON::String("Locked".to_owned()),
-            DoorLocked::Unlocked => JSON::String("Unlocked".to_owned())
+            IsLocked::Locked => JSON::String("Locked".to_owned()),
+            IsLocked::Unlocked => JSON::String("Unlocked".to_owned())
         }
     }
 }
-impl Into<Value> for DoorLocked {
-    fn into(self) -> Value {
-        Value::DoorLocked(self)
-    }
-}
 
-impl PartialOrd for DoorLocked {
+impl PartialOrd for IsLocked {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for DoorLocked {
+impl Ord for IsLocked {
     fn cmp(&self, other: &Self) -> Ordering {
         self.as_bool().cmp(&other.as_bool())
     }
@@ -333,13 +517,15 @@ pub enum IsSecure {
     /// Represented by "Insecure".
     ///
     /// ```
-    /// use foxbox_taxonomy::values::*;
+    /// use foxbox_taxonomy::api::Error;
+    /// use foxbox_taxonomy::io::*;
     /// use foxbox_taxonomy::parse::*;
+    /// use foxbox_taxonomy::values::*;
     ///
-    /// let parsed = IsSecure::from_str("\"Insecure\"").unwrap();
+    /// let parsed = IsSecure::parse_str("\"Insecure\"").unwrap();
     /// assert_eq!(parsed, IsSecure::Insecure);
     ///
-    /// let serialized: JSON = IsSecure::Insecure.to_json();
+    /// let serialized: JSON = IsSecure::serialize(&IsSecure::Insecure, &BinaryTarget).unwrap();
     /// assert_eq!(serialized.as_string().unwrap(), "Insecure");
     /// ```
     Insecure,
@@ -349,16 +535,40 @@ pub enum IsSecure {
     /// Represented by "Secure".
     ///
     /// ```
-    /// use foxbox_taxonomy::values::*;
+    /// use foxbox_taxonomy::api::Error;
+    /// use foxbox_taxonomy::io::*;
     /// use foxbox_taxonomy::parse::*;
+    /// use foxbox_taxonomy::values::*;
     ///
-    /// let parsed = IsSecure::from_str("\"Secure\"").unwrap();
+    /// let parsed = IsSecure::parse_str("\"Secure\"").unwrap();
     /// assert_eq!(parsed, IsSecure::Secure);
     ///
-    /// let serialized: JSON = IsSecure::Secure.to_json();
+    /// let serialized: JSON = IsSecure::serialize(&IsSecure::Secure, &BinaryTarget).unwrap();
     /// assert_eq!(serialized.as_string().unwrap(), "Secure");
     /// ```
     Secure,
+}
+
+impl Data for IsSecure {
+    fn description() -> String {
+        "Secure/Insecure".to_owned()
+    }
+    fn parse(path: Path, source: &JSON, _binary: &BinarySource) -> Result<Self, Error> {
+        let result = match source.as_string() {
+            Some("Secure") => IsSecure::Secure,
+            Some("Insecure") => IsSecure::Insecure,
+            Some(str) => return Err(Error::ParseError(ParseError::unknown_constant(str, &path))),
+            None => return Err(Error::ParseError(ParseError::type_error("IsSecure", &path, "string")))
+        };
+        Ok(result)
+    }
+    fn serialize(source: &Self, _binary: &BinaryTarget) -> Result<JSON, Error> {
+        let str = match *source {
+            IsSecure::Secure => "Secure",
+            IsSecure::Insecure => "Insecure",
+        };
+        Ok(JSON::String(str.to_owned()))
+    }
 }
 
 impl IsSecure {
@@ -370,19 +580,6 @@ impl IsSecure {
     }
 }
 
-impl Parser<IsSecure> for IsSecure {
-    fn description() -> String {
-        "IsSecure".to_string()
-    }
-    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
-        match source.as_string() {
-            Some("Insecure") => Ok(IsSecure::Insecure),
-            Some("Secure") => Ok(IsSecure::Secure),
-            Some(str) => Err(ParseError::unknown_constant(str, &path)),
-            None => Err(ParseError::type_error("IsSecure", &path, "string"))
-        }
-    }
-}
 
 impl ToJSON for IsSecure {
     fn to_json(&self) -> JSON {
@@ -390,11 +587,6 @@ impl ToJSON for IsSecure {
             IsSecure::Insecure => JSON::String("Insecure".to_owned()),
             IsSecure::Secure => JSON::String("Secure".to_owned())
         }
-    }
-}
-impl Into<Value> for IsSecure {
-    fn into(self) -> Value {
-        Value::IsSecure(self)
     }
 }
 
@@ -533,8 +725,10 @@ pub enum Color {
     /// v are between 0 and 1.
     ///
     /// ```
-    /// use foxbox_taxonomy::values::*;
+    /// use foxbox_taxonomy::api::Error;
+    /// use foxbox_taxonomy::io::*;
     /// use foxbox_taxonomy::parse::*;
+    /// use foxbox_taxonomy::values::*;
     ///
     /// println!("Testing parsing");
     /// let source = "{
@@ -543,14 +737,14 @@ pub enum Color {
     ///   \"v\": 0.4
     /// }";
     ///
-    /// let parsed = Color::from_str(source).unwrap();
+    /// let parsed = Color::parse_str(source).unwrap();
     /// let Color::HSV(h, s, v) = parsed;
     /// assert_eq!(h, 220.5);
     /// assert_eq!(s, 0.8);
     /// assert_eq!(v, 0.4);
     ///
     /// println!("Testing serialization");
-    /// let serialized : JSON = parsed.to_json();
+    /// let serialized : JSON = Color::serialize(&parsed, &BinaryTarget).unwrap();
     /// let h = serialized.find("h").unwrap().as_f64().unwrap();
     /// assert_eq!(h, 220.5);
     /// let s = serialized.find("s").unwrap().as_f64().unwrap();
@@ -567,8 +761,8 @@ pub enum Color {
     ///   \"v\": 0.4
     /// }";
     ///
-    /// match Color::from_str(source_2) {
-    ///   Err(ParseError::TypeError{..}) => {},
+    /// match Color::parse_str(source_2) {
+    ///   Err(Error::ParseError(ParseError::TypeError{..})) => {},
     ///   other => panic!("Unexpected result {:?}", other)
     /// }
     ///
@@ -580,93 +774,36 @@ pub enum Color {
     ///   \"v\": 0.2
     /// }";
     ///
-    /// match Color::from_str(source_4) {
-    ///   Err(ParseError::MissingField{ref name, ..}) if &name as &str == "h" => {},
+    /// match Color::parse_str(source_4) {
+    ///   Err(Error::ParseError(ParseError::MissingField{ref name, ..})) if &name as &str == "h" => {},
     ///   other => panic!("Unexpected result {:?}", other)
     /// }
     /// ```
     HSV(f64, f64, f64)
 }
-
-impl Parser<Color> for Color {
+impl Data for Color {
     fn description() -> String {
-        "Color".to_owned()
+        "Color {h, s, v}".to_owned()
     }
-    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
+    fn parse(path: Path, source: &JSON, _binary: &BinarySource) -> Result<Self, Error> {
         let h = try!(path.push("h", |path| f64::take(path, source, "h")));
         let s = try!(path.push("s", |path| f64::take(path, source, "s")));
         let v = try!(path.push("v", |path| f64::take(path, source, "v")));
         // h can be any hue angle, will be interpreted (mod 360) in [0, 360).
         for &(val, ref name) in &vec![(&s, "s"), (&v, "v")] {
             if *val < 0. || *val > 1. {
-                return Err(ParseError::type_error(name, &path, "a number in [0, 1]"));
+                return Err(Error::ParseError(ParseError::type_error(name, &path, "a number in [0, 1]")));
             }
         }
         Ok(Color::HSV(h, s, v))
     }
-}
-
-impl ToJSON for Color {
-    fn to_json(&self) -> JSON {
-        let Color::HSV(ref h, ref s, ref v) = *self;
-        let mut vec = vec![("h", h), ("s", s), ("v", v)];
-        let map = vec.drain(..)
-            .map(|(name, value)| (name.to_owned(), JSON::F64(*value)))
-            .collect();
-        JSON::Object(map)
+    fn serialize(source: &Self, _binary: &BinaryTarget) -> Result<JSON, Error> {
+        let &Color::HSV(ref h, ref s, ref v) = source;
+        let vec = vec![("h", h), ("s", s), ("v", v)];
+        Ok(vec.to_json())
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct WebPushNotify {
-    pub resource: String,
-    pub message: String,
-}
-
-impl Parser<WebPushNotify> for WebPushNotify {
-    fn description() -> String {
-        "WebPushNotify".to_owned()
-    }
-    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
-        let resource = try!(path.push("resource", |path| String::take(path, source, "resource")));
-        let message = try!(path.push("message", |path| String::take(path, source, "message")));
-        Ok(WebPushNotify { resource: resource, message: message})
-    }
-}
-
-impl ToJSON for WebPushNotify {
-    fn to_json(&self) -> JSON {
-        vec![
-            ("resource", &self.resource),
-            ("message", &self.message),
-        ].to_json()
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct ThinkerbellRule {
-    pub name: String,
-    pub source: String,
-}
-
-impl Parser<ThinkerbellRule> for ThinkerbellRule {
-    fn description() -> String {
-        "ThinkerbellRuleSource".to_owned()
-    }
-    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
-        let name = try!(path.push("name", |path| String::take(path, source, "name")));
-        let script_source = try!(path.push("source", |path| String::take(path, source, "source")));
-        Ok(ThinkerbellRule { name: name, source: script_source })
-    }
-}
-impl ToJSON for ThinkerbellRule {
-    fn to_json(&self) -> JSON {
-        vec![
-            ("name", &self.name),
-            ("source", &self.source),
-        ].to_json()
-    }
-}
 
 /// Representation of an object in JSON. It is often (albeit not
 /// always) possible to choose a more precise data structure for
@@ -675,14 +812,18 @@ impl ToJSON for ThinkerbellRule {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Json(pub serde_json::value::Value);
 
-impl Parser<Json> for Json {
+impl Data for Json {
     fn description() -> String {
-        "Json value".to_owned()
+        "JSON".to_owned()
     }
-    fn parse(_: Path, source: &JSON) -> Result<Self, ParseError> {
+    fn parse(_path: Path, source: &JSON, _binary: &BinarySource) -> Result<Self, Error> {
         Ok(Json(source.clone()))
     }
+    fn serialize(source: &Self, _binary: &BinaryTarget) -> Result<JSON, Error> {
+        Ok(source.0.clone())
+    }
 }
+
 impl ToJSON for Json {
     fn to_json(&self) -> JSON {
         self.0.clone()
@@ -696,112 +837,32 @@ impl PartialOrd for Json {
     }
 }
 
-/// A data structure holding a boolean value of a type that has not
-/// been standardized yet.
-#[derive(Debug, Clone)]
-pub struct ExtValue<T> where T: Debug + Clone + PartialEq + PartialOrd {
-    pub value: T,
-
-    /// The vendor. Used for namespacing purposes, to avoid
-    /// confusing two incompatible extensions with similar
-    /// names. For instance, "foxlink@mozilla.com".
-    pub vendor: Id<VendorId>,
-
-    /// Identification of the adapter introducing this value.
-    /// Designed to aid with tracing and debugging.
-    pub adapter: Id<AdapterId>,
-
-    /// A string describing the nature of the value, designed to
-    /// aid with type-checking.
-    ///
-    /// Examples: `"PresenceDetected"`.
-    pub kind: Id<KindId>,
-}
-
-impl<T> Parser<ExtValue<T>> for ExtValue<T>
-    where T: Debug + Clone + PartialEq + PartialOrd + Parser<T>
-{
-    fn description() -> String {
-        format!("ExtValue<{}>", T::description())
-    }
-    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
-        let vendor = try!(path.push("vendor", |path| Id::take(path, source, "vendor")));
-        let adapter = try!(path.push("adapter", |path| Id::take(path, source, "adapter")));
-        let kind = try!(path.push("kind", |path| Id::take(path, source, "kind")));
-        let value = try!(path.push("value", |path| T::take(path, source, "value")));
-        Ok(ExtValue {
-            vendor: vendor,
-            adapter: adapter,
-            kind: kind,
-            value: value
-        })
-    }
-}
-
-impl<T> ToJSON for ExtValue<T>
-    where T: Debug + Clone + PartialEq + PartialOrd + ToJSON
-{
-    fn to_json(&self) -> JSON {
-        let mut source = vec![
-            ("value", self.value.to_json()),
-            ("vendor", JSON::String(self.vendor.to_string())),
-            ("adapter", JSON::String(self.adapter.to_string())),
-            ("kind", JSON::String(self.kind.to_string())),
-        ];
-        let map = source.drain(..)
-            .map(|(key, value)| (key.to_owned(), value))
-            .collect();
-        JSON::Object(map)
-    }
-}
-
-impl<T> PartialEq<ExtValue<T>> for ExtValue<T>
-    where T: Debug + Clone + PartialEq + PartialOrd
-{
-    fn eq(&self, other: &Self) -> bool {
-        if self.vendor != other.vendor
-        || self.kind != other.kind {
-            false
-        } else {
-            self.value.eq(&other.value)
-        }
-    }
-}
-
-impl<T> PartialOrd<ExtValue<T>> for ExtValue<T>
-    where T: Debug + Clone + PartialEq + PartialOrd
-{
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        if self.vendor != other.vendor
-        || self.kind != other.kind {
-            None
-        } else {
-            self.value.partial_cmp(&other.value)
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
+/// A (probably large) binary value.
+///
+/// Since this value is considered large, `clone()` is not implemented.
+#[derive(Debug, PartialEq)]
 pub struct Binary {
-   /// The actual data. We put it behind an `Arc` to make sure
-   /// that cloning remains inexpensive.
-   pub data: Arc<Vec<u8>>,
+    /// The binary data.
+   pub data: Vec<u8>,
 
-   /// The mime type. Should probably be an Id<MimeTypeId>.
+   /// The mime type.
    pub mimetype: Id<MimeTypeId>,
 }
 
-impl Parser<Binary> for Binary {
+impl Data for Binary {
     fn description() -> String {
         "Binary".to_owned()
     }
-    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
-        let data = try!(path.push("data", |path| Vec::<u8>::take(path, source, "data")));
-        let mimetype = try!(path.push("mimetype", |path| Id::take(path, source, "mimetype")));
+    fn parse(path: Path, source: &JSON, _binary: &BinarySource) -> Result<Self, Error> {
+        let data = try!(path.push("data", |path| Vec::<u8>::take(path, source, "data").map_err(Error::ParseError)));
+        let mimetype = try!(path.push("mimetype", |path| Id::take(path, source, "mimetype").map_err(Error::ParseError)));
         Ok(Binary {
-            data: Arc::new(data),
+            data: data,
             mimetype: mimetype
         })
+    }
+    fn serialize(source: &Self, _binary: &BinaryTarget) -> Result<JSON, Error> {
+        Ok(source.to_json())
     }
 }
 
@@ -818,699 +879,6 @@ impl ToJSON for Binary {
     }
 }
 
-/// Representation of an actual value that can be sent to/received
-/// from a service.
-///
-/// # JSON
-///
-/// Values of this state are represented by an object `{ key: value }`, where key is one of
-/// `Unit`, `OnOff`, `OpenClosed`, ... The `value` for `Unit` is ignored.
-///
-/// # Other forms of (de)serialization
-///
-/// Values of this state are represented by an object `{ key: value }`, where key is one of
-/// `Unit`, `OnOff`, `OpenClosed`, ... The `value` for `Unit` is ignored.
-#[derive(Debug, Clone, PartialEq)]
-pub enum Value {
-    /// An absolute time and date.
-    ///
-    /// # JSON
-    ///
-    /// Represented as `{"TimeStamp": string}`, where `string` is formatted as RFC 3339 such as
-    /// `"2014-11-28T21:45:59.324310806+09:00"`.
-    ///
-    /// ```
-    /// extern crate foxbox_taxonomy;
-    ///
-    /// use foxbox_taxonomy::values::*;
-    /// use foxbox_taxonomy::parse::*;
-    ///
-    /// # fn main() {
-    ///
-    /// let source = "{
-    ///   \"Unit\": []
-    /// }";
-    ///
-    /// let parsed = Value::from_str(source).unwrap();
-    /// if let Value::Unit = parsed {
-    ///   // ok
-    /// } else {
-    ///   panic!();
-    /// }
-    ///
-    ///
-    /// let serialized: JSON = parsed.to_json();
-    /// if let JSON::Object(ref obj) = serialized {
-    ///   let serialized = obj.get("Unit").unwrap();
-    ///   assert!(serialized.is_null());
-    /// }
-    /// # }
-    /// ```
-    Unit,
-
-    /// An on/off value.
-    ///
-    /// # JSON
-    ///
-    /// Represented as `{"OnOff": string}`, where `string` is "On" or "Off".
-    ///
-    /// ```
-    /// extern crate foxbox_taxonomy;
-    ///
-    /// use foxbox_taxonomy::values::*;
-    /// use foxbox_taxonomy::parse::*;
-    ///
-    /// # fn main() {
-    ///
-    /// let source = "{
-    ///   \"OnOff\": \"On\"
-    /// }";
-    ///
-    /// let parsed = Value::from_str(source).unwrap();
-    /// if let Value::OnOff(OnOff::On) = parsed {
-    ///   // ok
-    /// } else {
-    ///   panic!();
-    /// }
-    ///
-    ///
-    /// let serialized: JSON = parsed.to_json();
-    /// if let JSON::Object(ref obj) = serialized {
-    ///   let serialized = obj.get("OnOff").unwrap();
-    ///   assert_eq!(serialized.as_string().unwrap(), "On");
-    /// }
-    /// # }
-    /// ```
-    OnOff(OnOff),
-
-    /// An open/closed value.
-    ///
-    /// # JSON
-    ///
-    /// Represented as `{"OpenClosed": string}`, where `string` is "Open" or "Closed".
-    ///
-    /// ```
-    /// extern crate foxbox_taxonomy;
-    ///
-    /// use foxbox_taxonomy::values::*;
-    /// use foxbox_taxonomy::parse::*;
-    ///
-    /// # fn main() {
-    ///
-    /// let source = "{
-    ///   \"OpenClosed\": \"Open\"
-    /// }";
-    ///
-    /// let parsed = Value::from_str(source).unwrap();
-    /// if let Value::OpenClosed(OpenClosed::Open) = parsed {
-    ///   // ok
-    /// } else {
-    ///   panic!();
-    /// }
-    ///
-    ///
-    /// let serialized: JSON = parsed.to_json();
-    /// if let JSON::Object(ref obj) = serialized {
-    ///   let serialized = obj.get("OpenClosed").unwrap();
-    ///   assert_eq!(serialized.as_string().unwrap(), "Open");
-    /// }
-    /// # }
-    /// ```
-    OpenClosed(OpenClosed),
-
-    /// An locked/unlocked value.
-    ///
-    /// # JSON
-    ///
-    /// Represented as `{"DoorLocked": string}`, where `string` is "Locked" or "Unlocked".
-    ///
-    /// ```
-    /// extern crate foxbox_taxonomy;
-    ///
-    /// use foxbox_taxonomy::values::*;
-    /// use foxbox_taxonomy::parse::*;
-    ///
-    /// # fn main() {
-    ///
-    /// let source = "{
-    ///   \"DoorLocked\": \"Locked\"
-    /// }";
-    ///
-    /// let parsed = Value::from_str(source).unwrap();
-    /// if let Value::DoorLocked(DoorLocked::Locked) = parsed {
-    ///   // ok
-    /// } else {
-    ///   panic!();
-    /// }
-    ///
-    ///
-    /// let serialized: JSON = parsed.to_json();
-    /// if let JSON::Object(ref obj) = serialized {
-    ///   let serialized = obj.get("DoorLocked").unwrap();
-    ///   assert_eq!(serialized.as_string().unwrap(), "Locked");
-    /// }
-    /// # }
-    /// ```
-    DoorLocked(DoorLocked),
-
-    /// A secure/insecure value.
-    ///
-    /// # JSON
-    ///
-    /// Represented as `{"IsSecure": string}` where `string` is "Secure" or "Insecure".
-    ///
-    /// ```
-    /// extern crate foxbox_taxonomy;
-    ///
-    /// use foxbox_taxonomy::values::*;
-    /// use foxbox_taxonomy::parse::*;
-    ///
-    /// # fn main() {
-    ///
-    /// let source = "{
-    ///   \"IsSecure\": \"Secure\"
-    /// }";
-    ///
-    /// let parsed = Value::from_str(source).unwrap();
-    /// if let Value::IsSecure(IsSecure::Secure) = parsed {
-    ///   // ok
-    /// } else {
-    ///   panic!();
-    /// }
-    ///
-    /// let serialized: JSON = parsed.to_json();
-    /// if let JSON::Object(ref obj) = serialized {
-    ///   let serialized = obj.get("IsSecure").unwrap();
-    ///   assert_eq!(serialized.as_string().unwrap(), "Secure");
-    /// }
-    /// # }
-    /// ```
-    IsSecure(IsSecure),
-
-    /// An absolute time and date.
-    ///
-    /// # JSON
-    ///
-    /// Represented as `{"TimeStamp": string}`, where `string` is formatted as RFC 3339 such as
-    /// `"2014-11-28T21:45:59.324310806+09:00"`.
-    ///
-    /// ```
-    /// extern crate chrono;
-    /// extern crate foxbox_taxonomy;
-    ///
-    /// use foxbox_taxonomy::values::*;
-    /// use foxbox_taxonomy::parse::*;
-    /// use chrono::Datelike;
-    ///
-    /// # fn main() {
-    ///
-    /// let source = "{
-    ///   \"TimeStamp\": \"2014-11-28T21:45:59.324310806+09:00\"
-    /// }";
-    ///
-    /// let parsed = Value::from_str(source).unwrap();
-    /// if let Value::TimeStamp(ref ts) = parsed {
-    ///   let date_time = ts.as_datetime();
-    ///   assert_eq!(date_time.year(), 2014);
-    ///   assert_eq!(date_time.month(), 11);
-    ///   assert_eq!(date_time.day(), 28);
-    /// } else {
-    ///   panic!();
-    /// }
-    ///
-    ///
-    /// let serialized: JSON = parsed.to_json();
-    /// if let JSON::Object(ref obj) = serialized {
-    ///   let serialized = obj.get("TimeStamp").unwrap();
-    ///   assert!(serialized.as_string().unwrap().starts_with("2014-11-28"));
-    /// } else {
-    ///   panic!();
-    /// }
-    /// # }
-    /// ```
-    TimeStamp(TimeStamp),
-
-    /// A duration, also used to represent a time of day.
-    ///
-    /// # JSON
-    ///
-    /// Represented by `{Duration: float}`, where the number, is a (floating-point)
-    /// number of seconds. If this value use used for time of day, the duration is
-    /// since the start of the day, in local time.
-    ///
-    /// ```
-    /// extern crate foxbox_taxonomy;
-    /// extern crate chrono;
-    ///
-    /// use foxbox_taxonomy::values::*;
-    /// use foxbox_taxonomy::parse::*;
-    /// use chrono::Duration as ChronoDuration;
-    ///
-    /// # fn main() {
-    ///
-    /// let parsed = Value::from_str("{\"Duration\": 60.01}").unwrap();
-    /// if let Value::Duration(d) = parsed.clone() {
-    ///   let duration : ChronoDuration = d.into();
-    ///   assert_eq!(duration.num_seconds(), 60);
-    ///   assert_eq!(duration.num_milliseconds(), 60010);
-    /// } else {
-    ///   panic!();
-    /// }
-    ///
-    ///
-    /// let serialized: JSON = parsed.to_json();
-    /// if let JSON::Object(ref obj) = serialized {
-    ///   let serialized = obj.get("Duration").unwrap();
-    ///   assert!(serialized.as_f64().unwrap() >= 60. && serialized.as_f64().unwrap() < 61.);
-    /// } else {
-    ///   panic!();
-    /// }
-    /// # }
-    /// ```
-    Duration(Duration),
-
-    /// A temperature.
-    ///
-    /// # JSON
-    ///
-    /// Represented by `{Temperature: {C: float}}` or `{Temperature: {F: float}}`.
-    ///
-    /// ```
-    /// extern crate foxbox_taxonomy;
-    /// extern crate chrono;
-    ///
-    /// use foxbox_taxonomy::values::*;
-    /// use foxbox_taxonomy::parse::*;
-    ///
-    /// # fn main() {
-    ///
-    /// let source = "{
-    ///   \"Temperature\": {
-    ///     \"C\": 2.0
-    ///   }
-    /// }";
-    /// let parsed = Value::from_str(source).unwrap();
-    /// if let Value::Temperature(Temperature::C(ref val)) = parsed {
-    ///   assert_eq!(*val, 2.0);
-    /// } else {
-    ///   panic!();
-    /// }
-    ///
-    ///
-    /// let serialized: JSON = parsed.to_json();
-    /// let val = serialized.find_path(&["Temperature", "C"]).unwrap().as_f64().unwrap();
-    /// assert_eq!(val, 2.0);
-    /// # }
-    /// ```
-    Temperature(Temperature),
-
-    /// A color.
-    ///
-    /// # JSON
-    ///
-    /// Represented by `{Color: {h: float, s: float, v: float}}`,
-    /// where s and v are in [0, 1] and h will be interpreted (mod 360) in [0, 360).
-    ///
-    /// ```
-    /// extern crate foxbox_taxonomy;
-    ///
-    /// use foxbox_taxonomy::values::*;
-    /// use foxbox_taxonomy::parse::*;
-    ///
-    /// # fn main() {
-    ///
-    /// let source = "{
-    ///   \"Color\": {
-    ///     \"h\": 23.5,
-    ///     \"s\": 0.2,
-    ///     \"v\": 0.4
-    ///   }
-    /// }";
-    /// let parsed = Value::from_str(source).unwrap();
-    /// if let Value::Color(Color::HSV(23.5, 0.2, 0.4)) = parsed {
-    ///   // Ok.
-    /// } else {
-    ///   panic!();
-    /// }
-    ///
-    ///
-    /// let serialized: JSON = parsed.to_json();
-    /// let val = serialized.find_path(&["Color", "s"]).unwrap().as_f64().unwrap();
-    /// assert_eq!(val, 0.2);
-    /// # }
-    /// ```
-    Color(Color),
-
-    /// A string.
-    ///
-    /// # JSON
-    ///
-    /// Represented by `{String: string}`.
-    ///
-    /// ```
-    /// extern crate foxbox_taxonomy;
-    /// extern crate chrono;
-    ///
-    /// use foxbox_taxonomy::values::*;
-    /// use foxbox_taxonomy::parse::*;
-    ///
-    /// # fn main() {
-    ///
-    /// let source = "{
-    ///   \"String\": \"foobar\"
-    /// }";
-    /// let parsed = Value::from_str(source).unwrap();
-    /// if let Value::String(ref str) = parsed {
-    ///   assert_eq!(&*str as &str, "foobar");
-    /// } else {
-    ///   panic!();
-    /// }
-    ///
-    ///
-    /// let serialized: JSON = parsed.to_json();
-    /// let val = serialized.find_path(&["String"]).unwrap().as_string().unwrap();
-    /// assert_eq!(&val as &str, "foobar");
-    /// # }
-    /// ```
-    String(Arc<String>),
-
-    // FIXME: Add more as we identify needs
-
-    ThinkerbellRule(ThinkerbellRule),
-    WebPushNotify(WebPushNotify),
-
-    /// A boolean value representing a unit that has not been
-    /// standardized yet into the API.
-    ExtBool(ExtValue<bool>),
-
-    /// A numeric value representing a unit that has not been
-    /// standardized yet into the API.
-    ExtNumeric(ExtValue<f64>),
-
-    /// A Json value. We put it behind an `Arc` to make sure that
-    /// cloning remains inexpensive.
-    ///
-    /// # JSON
-    ///
-    /// Represented by `{Json: JSON}` where `JSON` is a JSON object.
-    ///
-    /// ```
-    /// extern crate foxbox_taxonomy;
-    /// extern crate chrono;
-    ///
-    /// use foxbox_taxonomy::values::*;
-    /// use foxbox_taxonomy::parse::*;
-    ///
-    /// # fn main() {
-    ///
-    /// let source = "{
-    ///   \"Json\": { \"foo\": \"bar\" }
-    /// }";
-    /// let parsed = Value::from_str(source).unwrap();
-    /// if let Value::Json(ref obj) = parsed {
-    ///   assert_eq!(obj.0.find_path(&["foo"]).unwrap().as_string().unwrap(), "bar")
-    /// } else {
-    ///   panic!();
-    /// }
-    ///
-    ///
-    /// let serialized: JSON = parsed.to_json();
-    /// let val = serialized.find_path(&["Json", "foo"]).unwrap().as_string().unwrap();
-    /// assert_eq!(val, "bar");
-    /// # }
-    /// ```
-    Json(Arc<Json>),
-
-    /// Binary data.
-    ///
-    /// # JSON
-    ///
-    /// Represented by `{Binary: {data: array, mimetype: string}}`.
-    ///
-    /// **This representation is likely to change in the future.**
-    ///
-    /// ```
-    /// extern crate foxbox_taxonomy;
-    /// extern crate chrono;
-    ///
-    /// use foxbox_taxonomy::values::*;
-    /// use foxbox_taxonomy::parse::*;
-    ///
-    /// # fn main() {
-    ///
-    /// let source = "{
-    ///   \"Binary\": { \"data\": [0, 1, 2], \"mimetype\": \"binary/raw\" }
-    /// }";
-    /// let parsed = Value::from_str(source).unwrap();
-    /// if let Value::Binary(ref obj) = parsed {
-    ///   assert_eq!(obj.mimetype.to_string(), "binary/raw".to_owned());
-    ///   assert_eq!(*obj.data, vec![0, 1, 2]);
-    /// } else {
-    ///   panic!();
-    /// }
-    ///
-    ///
-    /// let serialized: JSON = parsed.to_json();
-    /// let val = serialized.find_path(&["Binary", "mimetype"]).unwrap().as_string().unwrap();
-    /// assert_eq!(val, "binary/raw");
-    /// # }
-    /// ```
-    Binary(Binary),
-    Range(Box<Range>)
-}
-impl Value {
-    pub fn description(&self) -> String {
-        use self::Value::*;
-        match *self {
-            Unit => "Unit",
-            OnOff(_) => "On/Off",
-            OpenClosed(_) => "Open/Closed",
-            DoorLocked(_) => "Locked/Unlocked",
-            IsSecure(_) => "Insecure/Secure",
-            TimeStamp(_) => "TimeStamp",
-            Duration(_) => "Duration",
-            Temperature(_) => "Temperature",
-            Color(_) => "Color",
-            String(_) => "String",
-            ThinkerbellRule(_) => "Thinkerbell Rule",
-            WebPushNotify(_) => "WebPush Notify",
-            ExtBool(_) => "bool",
-            ExtNumeric(_) => "number",
-            Json(_) => "JSON",
-            Binary(_) => "Binary",
-            Range(_) => "Range"
-        }.to_owned()
-    }
-}
-
-lazy_static! {
-    static ref VALUE_PARSER:
-        HashMap<&'static str, Box<Fn(Path, &JSON) -> Result<Value, ParseError> + Sync>> =
-    {
-        use self::Value::*;
-        use std::string::String as StdString;
-        let mut map : HashMap<&'static str, Box<Fn(Path, &JSON) -> Result<Value, ParseError> + Sync>> = HashMap::new();
-        map.insert("Unit", Box::new(|_, _| Ok(Unit)));
-        map.insert("OnOff", Box::new(|path, v| {
-            let value = try!(path.push("OnOff", |path| self::OnOff::parse(path, v)));
-            Ok(OnOff(value))
-        }));
-        map.insert("OpenClosed", Box::new(|path, v| {
-            let value = try!(path.push("OpenClosed", |path| self::OpenClosed::parse(path, v)));
-            Ok(OpenClosed(value))
-        }));
-        map.insert("DoorLocked", Box::new(|path, v| {
-            let value = try!(path.push("DoorLocked", |path| self::DoorLocked::parse(path, v)));
-            Ok(DoorLocked(value))
-        }));
-        map.insert("IsSecure", Box::new(|path, v| {
-            let value = try!(path.push("IsSecure", |path| self::IsSecure::parse(path, v)));
-            Ok(IsSecure(value))
-        }));
-        map.insert("Duration", Box::new(|path, v| {
-            let value = try!(path.push("Duration", |path| self::Duration::parse(path, v)));
-            Ok(Duration(value))
-        }));
-        map.insert("TimeStamp", Box::new(|path, v| {
-            let value = try!(path.push("TimeStamp", |path| self::TimeStamp::parse(path, v)));
-            Ok(TimeStamp(value))
-        }));
-        map.insert("Temperature", Box::new(|path, v| {
-            let value = try!(path.push("Temperature", |path| self::Temperature::parse(path, v)));
-            Ok(Temperature(value))
-        }));
-        map.insert("ThinkerbellRule", Box::new(|path, v| {
-            let value = try!(path.push("ThinkerbellRule", |path| self::ThinkerbellRule::parse(path, v)));
-            Ok(ThinkerbellRule(value))
-        }));
-        map.insert("WebPushNotify", Box::new(|path, v| {
-            let value = try!(path.push("WebPushNotify", |path| self::WebPushNotify::parse(path, v)));
-            Ok(WebPushNotify(value))
-        }));
-        map.insert("Color", Box::new(|path, v| {
-            let value = try!(path.push("Color", |path| self::Color::parse(path, v)));
-            Ok(Color(value))
-        }));
-        map.insert("String", Box::new(|path, v| {
-            let value = try!(path.push("String", |path| Arc::<StdString>::parse(path, v)));
-            Ok(String(value))
-        }));
-        map.insert("Json", Box::new(|path, v| {
-            let value = try!(path.push("Json", |path| Arc::<self::Json>::parse(path, v)));
-            Ok(Json(value))
-        }));
-        map.insert("ExtBool", Box::new(|path, v| {
-            let value = try!(path.push("ExtBool", |path| self::ExtValue::<bool>::parse(path, v)));
-            Ok(ExtBool(value))
-        }));
-        map.insert("ExtNumeric", Box::new(|path, v| {
-            let value = try!(path.push("ExtNumeric", |path| self::ExtValue::<f64>::parse(path, v)));
-            Ok(ExtNumeric(value))
-        }));
-        map.insert("Binary", Box::new(|path, v| {
-            let value = try!(path.push("Binary", |path| self::Binary::parse(path, v)));
-            Ok(Binary(value))
-        }));
-        map.insert("Range", Box::new(|path, v| {
-            let value = try!(path.push("Range", |path| self::Range::parse(path, v)));
-            Ok(Range(Box::new(value)))
-        }));
-        map
-    };
-    static ref VALUE_KEYS: String = {
-        let vec : Vec<_> = VALUE_PARSER.keys().cloned().collect();
-        format!("{:?}", vec)
-    };
-}
-
-impl Parser<Value> for Value {
-    fn description() -> String {
-        "Value".to_owned()
-    }
-    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
-        match *source {
-            JSON::Null => Ok(Value::Unit),
-            JSON::String(ref str) if &*str == "Unit" => Ok(Value::Unit),
-            JSON::Object(ref obj) if obj.len() == 1 => {
-                let mut vec : Vec<_> = obj.iter().collect();
-                let (k, v) = vec.pop().unwrap(); // We checked the length just above.
-                match VALUE_PARSER.get(k as &str) {
-                    None => Err(ParseError::type_error("Value", &path, &*self::VALUE_KEYS)),
-                    Some(parser) => path.push(k, |path| parser(path, v))
-                }
-            }
-            _ => Err(ParseError::type_error("Value", &path, "object with a single field"))
-        }
-    }
-}
-
-impl ToJSON for Value {
-    fn to_json(&self) -> JSON {
-        use self::Value::*;
-        let (key, value) = match *self {
-            Unit => ("Unit", JSON::Null),
-            OnOff(ref val) => ("OnOff", val.to_json()),
-            OpenClosed(ref val) => ("OpenClosed", val.to_json()),
-            DoorLocked(ref val) => ("DoorLocked", val.to_json()),
-            IsSecure(ref val) => ("IsSecure", val.to_json()),
-            Duration(ref val) => ("Duration", val.to_json()),
-            TimeStamp(ref val) => ("TimeStamp", val.to_json()),
-            Color(ref val) => ("Color", val.to_json()),
-            String(ref val) => ("String", val.to_json()),
-            Json(ref val) => ("Json", val.to_json()),
-            Binary(ref val) => ("Binary", val.to_json()),
-            Temperature(ref val) => ("Temperature", val.to_json()),
-            ThinkerbellRule(ref val) => ("ThinkerbellRule", val.to_json()),
-            WebPushNotify(ref val) => ("WebPushNotify", val.to_json()),
-            ExtBool(ref val) => ("ExtBool", val.to_json()),
-            ExtNumeric(ref val) => ("ExtNumeric", val.to_json()),
-            Range(ref val) => ("Range", val.to_json()),
-        };
-        let source = vec![(key.to_owned(), value)];
-        JSON::Object(source.iter().cloned().collect())
-    }
-}
-
-
-impl Value {
-    pub fn as_timestamp(&self) -> Result<&TimeStamp, TypeError> {
-        match *self {
-            Value::TimeStamp(ref x) => Ok(x),
-            _ => Err(TypeError {expected: "TimeStamp".to_owned(), got: unimplemented!()})
-        }
-    }
-
-    pub fn as_duration(&self) -> Result<&Duration, TypeError> {
-        match *self {
-            Value::Duration(ref x) => Ok(x),
-            _ => Err(TypeError {expected: "Duration".to_owned(), got: unimplemented!()})
-        }
-    }
-}
-
-impl PartialOrd for Value {
-    /// Two values of the same type can be compared using the usual
-    /// comparison for values of this type. Two values of distinct
-    /// types cannot be compared.
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        use self::Value::*;
-        use std::cmp::Ordering::*;
-        match (self, other) {
-            (&Unit, &Unit) => Some(Equal),
-            (&Unit, _) => None,
-
-            (&OnOff(ref a), &OnOff(ref b)) => a.partial_cmp(b),
-            (&OnOff(_), _) => None,
-
-            (&OpenClosed(ref a), &OpenClosed(ref b)) => a.partial_cmp(b),
-            (&OpenClosed(_), _) => None,
-
-            (&DoorLocked(ref a), &DoorLocked(ref b)) => a.partial_cmp(b),
-            (&DoorLocked(_), _) => None,
-
-            (&IsSecure(ref a), &IsSecure(ref b)) => a.partial_cmp(b),
-            (&IsSecure(_), _) => None,
-
-            (&Duration(ref a), &Duration(ref b)) => a.partial_cmp(b),
-            (&Duration(_), _) => None,
-
-            (&TimeStamp(ref a), &TimeStamp(ref b)) => a.partial_cmp(b),
-            (&TimeStamp(_), _) => None,
-
-            (&Temperature(ref a), &Temperature(ref b)) => a.partial_cmp(b),
-            (&Temperature(_), _) => None,
-
-            (&Color(ref a), &Color(ref b)) => a.partial_cmp(b),
-            (&Color(_), _) => None,
-
-            (&ExtBool(ref a), &ExtBool(ref b)) => a.partial_cmp(b),
-            (&ExtBool(_), _) => None,
-
-            (&ExtNumeric(ref a), &ExtNumeric(ref b)) => a.partial_cmp(b),
-            (&ExtNumeric(_), _) => None,
-
-            (&String(ref a), &String(ref b)) => a.partial_cmp(b),
-            (&String(_), _) => None,
-
-            (&Json(ref a), &Json(ref b)) => a.partial_cmp(b),
-            (&Json(_), _) => None,
-
-            (&ThinkerbellRule(ref a), &ThinkerbellRule(ref b)) => a.name.partial_cmp(&b.name),
-            (&ThinkerbellRule(_), _) => None,
-
-            (&WebPushNotify(ref a), &WebPushNotify(ref b)) => a.resource.partial_cmp(&b.resource),
-            (&WebPushNotify(_), _) => None,
-
-            (&Binary(self::Binary {mimetype: ref a_mimetype, data: ref a_data}),
-             &Binary(self::Binary {mimetype: ref b_mimetype, data: ref b_data})) if a_mimetype == b_mimetype => a_data.partial_cmp(b_data),
-            (&Binary(_), _) => None,
-
-            (&Range(_), &Range(_)) => None,
-            (&Range(_), _) => None,
-        }
-    }
-}
-
 /// An absolute time and date.
 ///
 /// # JSON
@@ -1522,20 +890,23 @@ impl PartialOrd for Value {
 /// extern crate chrono;
 /// extern crate foxbox_taxonomy;
 ///
-/// use foxbox_taxonomy::values::*;
+/// use foxbox_taxonomy::api::Error;
+/// use foxbox_taxonomy::io::*;
 /// use foxbox_taxonomy::parse::*;
+/// use foxbox_taxonomy::values::*;
+///
 /// use chrono::Datelike;
 ///
 /// # fn main() {
 ///
-/// let parsed = TimeStamp::from_str("\"2014-11-28T21:45:59.324310806+09:00\"").unwrap();
-/// let date_time = parsed.as_datetime().clone();
+/// let ts = TimeStamp::parse_str("\"2014-11-28T21:45:59.324310806+09:00\"").unwrap();
+/// let date_time = ts.as_datetime();
 /// assert_eq!(date_time.year(), 2014);
 /// assert_eq!(date_time.month(), 11);
 /// assert_eq!(date_time.day(), 28);
 ///
 ///
-/// let serialized: JSON = parsed.to_json();
+/// let serialized: JSON = TimeStamp::serialize(&ts, &BinaryTarget).unwrap();
 /// assert!(serialized.as_string().unwrap().starts_with("2014-11-28"));
 ///
 /// # }
@@ -1556,19 +927,26 @@ impl TimeStamp {
         TimeStamp(date)
     }
 }
-impl Parser<TimeStamp> for TimeStamp {
+
+impl Data for TimeStamp {
     fn description() -> String {
-        "TimeStamp".to_owned()
+        "TimeStamp (RFC 3339)".to_owned()
     }
-    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
+    fn parse(path: Path, source: &JSON, _binary: &BinarySource) -> Result<Self, Error> {
+        use chrono::{ DateTime, UTC };
+        use std::str::FromStr;
         if let JSON::String(ref str) = *source {
             if let Ok(dt) = DateTime::<UTC>::from_str(str) {
                 return Ok(TimeStamp(dt));
             }
         }
-        Err(ParseError::type_error("TimeStamp", &path, "date string"))
+        Err(Error::ParseError(ParseError::type_error("TimeStamp", &path, "date string (RFC 3339)")))
+    }
+    fn serialize(source: &Self, _binary: &BinaryTarget) -> Result<JSON, Error> {
+         Ok(JSON::String(source.0.to_rfc3339()))
     }
 }
+
 impl ToJSON for TimeStamp {
     fn to_json(&self) -> JSON {
         JSON::String(self.0.to_rfc3339())
@@ -1590,14 +968,15 @@ impl<T> From<DateTime<T>> for TimeStamp where T: TimeZone {
     }
 }
 
+
 /// A comparison between two values.
 ///
 /// # JSON
 ///
 /// A range is an object with one field `{key: value}`.
 ///
-#[derive(Clone, Debug, PartialEq)]
-pub enum Range {
+#[derive(Clone, Debug, PartialOrd, PartialEq)]
+pub enum Range<T> where T: Data + PartialOrd + PartialEq {
     /// Leq(x) accepts any value v such that v <= x.
     ///
     /// # JSON
@@ -1606,122 +985,130 @@ pub enum Range {
     /// extern crate foxbox_taxonomy;
     /// extern crate serde_json;
     ///
-    /// use foxbox_taxonomy::values::*;
+    /// use foxbox_taxonomy::io::*;
     /// use foxbox_taxonomy::parse::*;
+    /// use foxbox_taxonomy::values::*;
     ///
     /// # fn main() {
     ///
     /// let source = "{
-    ///   \"Leq\": { \"OnOff\": \"On\" }
+    ///   \"Leq\": \"On\"
     /// }";
     ///
-    /// let parsed = Range::from_str(source).unwrap();
-    /// if let Range::Leq(ref leq) = parsed {
-    ///   assert_eq!(*leq, Value::OnOff(OnOff::On));
+    /// let parsed = Range::<OnOff>::from_str(source).unwrap();
+    /// if let Range::Leq(OnOff::On) = parsed {
+    ///   // Ok
     /// } else {
     ///   panic!();
     /// }
     ///
-    /// let as_json = parsed.to_json();
+    /// let as_json = Range::<OnOff>::serialize(&parsed, &BinaryTarget).unwrap();
     /// let as_string = serde_json::to_string(&as_json).unwrap();
-    /// assert_eq!(as_string, "{\"Leq\":{\"OnOff\":\"On\"}}");
+    /// assert_eq!(as_string, "{\"Leq\":\"On\"}");
     ///
     /// # }
     /// ```
-    Leq(Value),
+    Leq(T),
 
     /// Geq(x) accepts any value v such that v >= x.
-    Geq(Value),
+    Geq(T),
 
     /// BetweenEq {min, max} accepts any value v such that `min <= v`
     /// and `v <= max`. If `max < min`, it never accepts anything.
-    BetweenEq { min:Value, max:Value },
+    BetweenEq { min:T, max:T },
 
     /// OutOfStrict {min, max} accepts any value v such that `v < min`
     /// or `max < v`
-    OutOfStrict { min:Value, max:Value },
+    OutOfStrict { min:T, max:T },
 
     /// Eq(x) accespts any value v such that v == x
-    Eq(Value),
+    Eq(T),
 }
 
-impl Parser<Range> for Range {
-    fn description() -> String {
-        "Range".to_owned()
-    }
-    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
-        use self::Range::*;
-        match *source {
-            JSON::Object(ref obj) if obj.len() == 1 => {
-                if let Some(leq) = obj.get("Leq") {
-                    return Ok(Leq(try!(path.push("Leq", |path| Value::parse(path, leq)))))
-                }
-                if let Some(geq) = obj.get("Geq") {
-                    return Ok(Geq(try!(path.push("Geq", |path| Value::parse(path, geq)))))
-                }
-                if let Some(eq) = obj.get("Eq") {
-                    return Ok(Eq(try!(path.push("eq", |path| Value::parse(path, eq)))))
-                }
-                if let Some(between) = obj.get("BetweenEq") {
-                    let mut bounds = try!(path.push("BetweenEq", |path| Vec::<Value>::parse(path, between)));
-                    if bounds.len() == 2 {
-                        let max = bounds.pop().unwrap();
-                        let min = bounds.pop().unwrap();
-                        return Ok(BetweenEq {
-                            min: min,
-                            max: max
-                        })
-                    } else {
-                        return Err(ParseError::type_error("BetweenEq", &path, "an array of two values"))
-                    }
-                }
-                if let Some(outof) = obj.get("OutOfStrict") {
-                    let mut bounds = try!(path.push("OutOfStrict", |path| Vec::<Value>::parse(path, outof)));
-                    if bounds.len() == 2 {
-                        let max = bounds.pop().unwrap();
-                        let min = bounds.pop().unwrap();
-                        return Ok(OutOfStrict {
-                            min: min,
-                            max: max
-                        })
-                    } else {
-                        return Err(ParseError::type_error("OutOfStrict", &path, "an array of two values"))
-                    }
-                }
-                Err(ParseError::type_error("Range", &path, "a field Eq, Leq, Geq, BetweenEq or OutOfStrict"))
-            }
-            _ => Err(ParseError::type_error("Range", &path, "object"))
-        }
-    }
-}
 
-impl ToJSON for Range {
-    fn to_json(&self) -> JSON {
-        let (key, value) = match *self {
-            Range::Eq(ref val) => ("Eq", val.to_json()),
-            Range::Geq(ref val) => ("Geq", val.to_json()),
-            Range::Leq(ref val) => ("Leq", val.to_json()),
-            Range::BetweenEq { ref min, ref max } => ("BetweenEq", JSON::Array(vec![min.to_json(), max.to_json()])),
-            Range::OutOfStrict { ref min, ref max } => ("OutOfStrict", JSON::Array(vec![min.to_json(), max.to_json()])),
-        };
-        vec![(key, value)].to_json()
-    }
-}
-
-impl Range {
+impl<T> Range<T> where T: Data + PartialOrd + PartialEq {
     /// Determine if a value is accepted by this range.
     pub fn contains(&self, value: &Value) -> bool {
         use self::Range::*;
+        let content = if let Some(content) = value.downcast::<T>() {
+            content
+        } else {
+            return false;
+        };
         match *self {
-            Leq(ref max) => value <= max,
-            Geq(ref min) => value >= min,
-            BetweenEq { ref min, ref max } => min <= value && value <= max,
-            OutOfStrict { ref min, ref max } => value < min || max < value,
-            Eq(ref val) => value == val,
+            Leq(ref max) => content <= max,
+            Geq(ref min) => content >= min,
+            BetweenEq { ref min, ref max } => min <= content && content <= max,
+            OutOfStrict { ref min, ref max } => content < min || max < content,
+            Eq(ref val) => content == val,
         }
     }
 }
 
+impl<T> Data for Range<T> where T: Data + PartialOrd + PartialEq {
+    fn description() -> String {
+        format!("Range of {}", T::description())
+    }
+    fn parse(path: Path, source: &JSON, binary: &BinarySource) -> Result<Self, Error> {
+        use self::Range::*;
+        match *source {
+            JSON::Object(ref obj) if obj.len() == 1 => {
+                let result = if let Some(v) = obj.get("Leq") {
+                    Leq(try!(path.push("Leq", |path| T::parse(path, v, binary))))
+                } else if let Some(v) = obj.get("Geq") {
+                    Geq(try!(path.push("Geq", |path| T::parse(path, v, binary))))
+                } else if let Some(v) = obj.get("Eq") {
+                    Eq(try!(path.push("eq", |path| T::parse(path, v, binary))))
+                } else if let Some(v) = obj.get("BetweenEq") {
+                    let mut bounds = try!(path.push("BetweenEq", |path| T::parse_vec(path, v, binary)));
+                    if bounds.len() == 2 {
+                        let max = bounds.pop().unwrap();
+                        let min = bounds.pop().unwrap();
+                        BetweenEq {
+                            min: min,
+                            max: max
+                        }
+                    } else {
+                        return Err(Error::ParseError(ParseError::type_error("BetweenEq", &path, "an array of two values")))
+                    }
+                } else if let Some(v) = obj.get("OutOfStrict") {
+                    let mut bounds = try!(path.push("OutOfStrict", |path| T::parse_vec(path, v, binary)));
+                    if bounds.len() == 2 {
+                        let max = bounds.pop().unwrap();
+                        let min = bounds.pop().unwrap();
+                        OutOfStrict {
+                            min: min,
+                            max: max
+                        }
+                    } else {
+                        return Err(Error::ParseError(ParseError::type_error("OutOfStrict", &path, "an array of two values")))
+                    }
+                } else {
+                    return Err(Error::ParseError(ParseError::type_error("Range", &path, "a field Eq, Leq, Geq, BetweenEq or OutOfStrict")))
+                };
+                Ok(result)
+            }
+            _ => Err(Error::ParseError(ParseError::type_error("Range", &path, "object")))
+        }
+    }
+
+    fn serialize(source: &Self, binary: &BinaryTarget) -> Result<JSON, Error> {
+        let (key, value) = match *source {
+            Range::Eq(ref val) => ("Eq", try!(T::serialize(val, binary))),
+            Range::Geq(ref val) => ("Geq", try!(T::serialize(val, binary))),
+            Range::Leq(ref val) => ("Leq", try!(T::serialize(val, binary))),
+            Range::BetweenEq { ref min, ref max } => ("BetweenEq", JSON::Array(vec![
+                try!(T::serialize(min, binary)),
+                try!(T::serialize(max, binary))
+            ])),
+            Range::OutOfStrict { ref min, ref max } => ("OutOfStrict", JSON::Array(vec![
+                try!(T::serialize(min, binary)),
+                try!(T::serialize(max, binary))
+            ])),
+        };
+        Ok(vec![(key, value)].to_json())
+    }
+}
 
 /// A duration, also used to represent a time of day.
 ///
@@ -1753,26 +1140,30 @@ impl Range {
 #[derive(Clone, Debug, PartialOrd, Ord, PartialEq, Eq)]
 pub struct Duration(ChronoDuration);
 
-impl Parser<Duration> for Duration {
-    fn description() -> String {
-        "Duration".to_owned()
-    }
-    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
-        let val = try!(f64::parse(path, source));
-        Ok(Duration(ChronoDuration::milliseconds((val * 1000.) as i64)))
+impl Duration {
+    pub fn as_duration(&self) -> ChronoDuration {
+        self.0
     }
 }
+
+impl Data for Duration {
+    fn description() -> String {
+        "Duration (s)".to_owned()
+    }
+    fn parse(path: Path, source: &JSON, _binary: &BinarySource) -> Result<Self, Error> {
+        let val = try!(f64::parse(path, source).map_err(Error::ParseError));
+        Ok(Duration(ChronoDuration::milliseconds((val * 1000.) as i64)))
+    }
+    fn serialize(source: &Self, _binary: &BinaryTarget) -> Result<JSON, Error> {
+        Ok(source.to_json())
+    }
+}
+
 
 impl ToJSON for Duration {
     fn to_json(&self) -> JSON {
         let val = self.0.num_milliseconds() as f64 / 1000 as f64;
         JSON::F64(val)
-    }
-}
-
-impl Into<Value> for Duration {
-    fn into(self) -> Value {
-        Value::Duration(self)
     }
 }
 
@@ -1788,112 +1179,23 @@ impl Into<ChronoDuration> for Duration {
 }
 
 
+/// A library of standardized instances of `Format` for most common cases.
 pub mod format {
     use io::*;
-
+    use values::*;
     use std::sync::Arc;
 
-    /// Placeholder implementation.
-    struct OnOffFormat;
-    impl Format for OnOffFormat {
-        fn description(&self) -> String {
-            "On/Off".to_owned()
-        }
-    }
-
-    /// Placeholder implementation.
-    struct OpenClosedFormat;
-    impl Format for OpenClosedFormat {
-        fn description(&self) -> String {
-            "Open/Closed".to_owned()
-        }
-    }
-
-    /// Placeholder implementation.
-    struct IsSecureFormat;
-    impl Format for IsSecureFormat {
-        fn description(&self) -> String {
-            "Insecure/Secure".to_owned()
-        }
-    }
-
-    /// Placeholder implementation.
-    struct ColorFormat;
-    impl Format for ColorFormat {
-        fn description(&self) -> String {
-            "Color {h, s, v}".to_owned()
-        }
-    }
-
-
-    /// Placeholder implementation.
-    struct JsonFormat;
-    impl Format for JsonFormat {
-        fn description(&self) -> String {
-            "JSON".to_owned()
-        }
-    }
-
-    /// Placeholder implementation.
-    struct RangeFormat;
-    impl Format for RangeFormat {
-        fn description(&self) -> String {
-            "Range".to_owned()
-        }
-    }
-
-    /// Placeholder implementation.
-    struct StringFormat;
-    impl Format for StringFormat {
-        fn description(&self) -> String {
-            "String".to_owned()
-        }
-    }
-
-    /// Placeholder implementation.
-    struct UnitFormat;
-    impl Format for UnitFormat {
-        fn description(&self) -> String {
-            "Nothing".to_owned()
-        }
-    }
-
-    /// Placeholder implementation.
-    struct BinaryFormat;
-    impl Format for BinaryFormat {
-        fn description(&self) -> String {
-            "Binary".to_owned()
-        }
-    }
-
-    /// Placeholder implementation.
-    struct DurationFormat;
-    impl Format for DurationFormat {
-        fn description(&self) -> String {
-            "Duration (s)".to_owned()
-        }
-    }
-
-    /// Placeholder implementation.
-    struct TimeStampFormat;
-    impl Format for TimeStampFormat {
-        fn description(&self) -> String {
-            "TimeStamp".to_owned()
-        }
-    }
-
-
     lazy_static! {
-        pub static ref ON_OFF : Arc<Format> = Arc::new(OnOffFormat);
-        pub static ref OPEN_CLOSED : Arc<Format> = Arc::new(OpenClosedFormat);
-        pub static ref IS_SECURE : Arc<Format> = Arc::new(IsSecureFormat);
-        pub static ref COLOR : Arc<Format> = Arc::new(ColorFormat);
-        pub static ref JSON: Arc<Format> = Arc::new(JsonFormat);
-        pub static ref RANGE : Arc<Format> = Arc::new(RangeFormat);
-        pub static ref STRING : Arc<Format> = Arc::new(StringFormat);
-        pub static ref UNIT : Arc<Format> = Arc::new(UnitFormat);
-        pub static ref BINARY : Arc<Format> = Arc::new(BinaryFormat);
-        pub static ref TIMESTAMP : Arc<Format> = Arc::new(TimeStampFormat);
-        pub static ref DURATION : Arc<Format> = Arc::new(DurationFormat);
+        pub static ref ON_OFF : Arc<Format> = Arc::new(Format::new::<OnOff>());
+        pub static ref OPEN_CLOSED : Arc<Format> = Arc::new(Format::new::<OpenClosed>());
+        pub static ref IS_SECURE : Arc<Format> = Arc::new(Format::new::<IsSecure>());
+        pub static ref IS_LOCKED : Arc<Format> = Arc::new(Format::new::<IsLocked>());
+        pub static ref COLOR : Arc<Format> = Arc::new(Format::new::<Color>());
+        pub static ref JSON: Arc<Format> = Arc::new(Format::new::<Json>());
+        pub static ref STRING : Arc<Format> = Arc::new(Format::new::<String>());
+        pub static ref UNIT : Arc<Format> = Arc::new(Format::new::<()>());
+        pub static ref BINARY : Arc<Format> = Arc::new(Format::new::<Binary>());
+        pub static ref TIMESTAMP : Arc<Format> = Arc::new(Format::new::<TimeStamp>());
+        pub static ref DURATION : Arc<Format> = Arc::new(Format::new::<Duration>());
     }
 }

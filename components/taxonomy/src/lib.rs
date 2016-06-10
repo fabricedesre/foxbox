@@ -4,6 +4,7 @@
 #![plugin(clippy)]
 // To prevent clippy being noisy with derive(...)
 #![allow(used_underscore_binding)]
+#![allow(let_unit_value)] // For some reason, clippy decides to display this warning, without any hint as to *where* it applies.
 
 #[macro_use]
 extern crate lazy_static;
@@ -12,6 +13,8 @@ extern crate chrono;
 extern crate libc;
 #[macro_use]
 extern crate log;
+#[macro_use]
+extern crate mopa;
 extern crate odds;
 extern crate rusqlite;
 extern crate serde;

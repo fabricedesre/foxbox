@@ -64,7 +64,7 @@ impl<Env, T> ScriptManager<Env, T>
     ///   id, // Record identifier. Primary key.
     ///   source, // Script source. Defines the behavior of the rule.
     ///   is_enabled, // Boolean flag that indicates if the rule is enabled or disabled.
-    ///   owner // User identifier (i32) of the owner of the rule. Defaults to no user (-1).
+    ///   owner // User identifier (String) of the owner of the rule. Defaults to no user.
     /// }
     ///
     /// The database stores the raw script source, but only after the source has been parsed
@@ -76,7 +76,7 @@ impl<Env, T> ScriptManager<Env, T>
             id          TEXT NOT NULL PRIMARY KEY,
             source      TEXT NOT NULL,
             is_enabled  BOOL NOT NULL DEFAULT 1,
-            owner       INTEGER NOT NULL DEFAULT -1
+            owner       TEXT
         )", &[]));
 
         Ok(ScriptManager {
@@ -100,10 +100,11 @@ impl<Env, T> ScriptManager<Env, T>
             let id: Id<ScriptId> = Id::new(&id_string);
             let source: String = try!(row.get_checked(1));
             let is_enabled: bool = try!(row.get_checked(2));
-            let owner_value: i32 = try!(row.get_checked(3));
-            let owner: User = match owner_value {
-                -1 => User::None,
-                _ => User::Id(owner_value)
+            let owner_value: String = try!(row.get_checked(3));
+            let owner: User = if owner_value.is_empty() {
+                User::None
+            } else {
+                User::Id(owner_value)
             };
 
             if is_enabled {
@@ -120,15 +121,15 @@ impl<Env, T> ScriptManager<Env, T>
     /// Attempt to add a new script.
     /// The script will be executed and persisted to disk.
     /// The ID is chosen by the consumer and must be unique.
-    /// The script may have (User::Id(i32)) or may not have a owner (User::None).
+    /// The script may have (User::Id(String)) or may not have a owner (User::None).
     /// If the script has owner, this value will be propagated to Thinkerbell's
     /// adapter.
     pub fn put(&mut self, id: &Id<ScriptId>, source: &String, owner: &User) -> Result<(), Error> {
         try!(self.start_script(&id, &source, &owner));
 
-        let owner_value: i32 = match *owner {
-            User::Id(id) => id,
-            User::None => -1
+        let owner_value: String = match *owner {
+            User::Id(ref id) => id.clone(),
+            User::None       => String::from("")
         };
 
         let connection = try!(rusqlite::Connection::open(&self.path));
@@ -215,10 +216,11 @@ impl<Env, T> ScriptManager<Env, T>
         let mut rows = try!(stmt.query(&[&id.to_string()]));
         let first_row = try!(try!(rows.nth(0).ok_or(Error::NoSuchScriptError)));
         let source = try!(first_row.get_checked(0));
-        let owner_value = try!(first_row.get_checked(1));
-        let owner = match owner_value {
-            -1 => User::None,
-            _ => User::Id(owner_value)
+        let owner_value: String = try!(first_row.get_checked(1));
+        let owner = if owner_value.is_empty() {
+            User::None
+        } else {
+            User::Id(owner_value)
         };
         Ok((source, owner))
     }

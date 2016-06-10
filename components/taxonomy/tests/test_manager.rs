@@ -26,12 +26,12 @@ fn target_map<K, T>(mut source: Vec<(Vec<K>, T)>) -> TargetMap<K, T> where K: Cl
     source.drain(..).map(|(v, t)| Targetted::new(v, t)).collect()
 }
 
-trait Transform<T> {
-    fn transform(&self) -> T;
+trait AsValue {
+    fn as_value(&self) -> Value;
 }
 
-impl Transform<Value> for (Payload, Arc<Format>) {
-    fn transform(&self) -> Value {
+impl AsValue for (Payload, Arc<Format>) {
+    fn as_value(&self) -> Value {
         self.0.to_value(&self.1).unwrap()
     }
 }
@@ -44,17 +44,19 @@ impl Transform<(Payload, Arc<Format>)> for Value {
 }
 */
 
-impl<'a> Transform<Option<Result<Option<Value>, Error>>> for Option<&'a Result<Option<(Payload, Arc<Format>)>, Error>> {
-    fn transform(&self) -> Option<Result<Option<Value>, Error>> {
+trait AsData {
+    fn as_cast<T>(&self) -> Option<Result<Option<T>, Error>> where T: Data + Clone;
+}
+
+impl <'a> AsData for Option<&'a Result<Option<(Payload, Arc<Format>)>, Error>> {
+    fn as_cast<T>(&self) -> Option<Result<Option<T>, Error>> where T: Data + Clone {
         match *self {
             None => None,
             Some(&Err(ref err)) => Some(Err(err.clone())),
             Some(&Ok(None)) => Some(Ok(None)),
-            Some(&Ok(Some((ref payload, ref type_)))) => {
-                match payload.to_value(type_) {
-                    Err(err) => Some(Err(err)),
-                    Ok(ok) => Some(Ok(Some(ok)))
-                }
+            Some(&Ok(Some(ref data))) => match data.as_value().cast::<T>() {
+                Err(err) => Some(Err(err)),
+                Ok(ok) => Some(Ok(Some(ok.clone())))
             }
         }
     }
@@ -1057,23 +1059,23 @@ fn test_fetch() {
         }
 
         println!("* Fetching values returns the right values.");
-        tweak_1(Tweak::InjectGetterValue(getter_id_1_1.clone(), Ok(Some(Value::OnOff(OnOff::On)))));
-        tweak_1(Tweak::InjectGetterValue(getter_id_1_2.clone(), Ok(Some(Value::OnOff(OnOff::Off)))));
+        tweak_1(Tweak::InjectGetterValue(getter_id_1_1.clone(), Ok(Some(Value::new(OnOff::On)))));
+        tweak_1(Tweak::InjectGetterValue(getter_id_1_2.clone(), Ok(Some(Value::new(OnOff::Off)))));
         let data = manager.fetch_values(vec![ChannelSelector::new()], User::None);
         assert_eq!(data.len(), 4);
-        match data.get(&getter_id_1_1).transform() {
-            Some(Ok(Some(Value::OnOff(OnOff::On)))) => {},
+        match data.get(&getter_id_1_1).as_cast() {
+            Some(Ok(Some(OnOff::On))) => {},
             other => panic!("Unexpected result, {:?}", other)
         }
-        match data.get(&getter_id_1_2).transform() {
-            Some(Ok(Some(Value::OnOff(OnOff::Off)))) => {},
+        match data.get(&getter_id_1_2).as_cast() {
+            Some(Ok(Some(OnOff::Off))) => {},
             other => panic!("Unexpected result, {:?}", other)
         }
-        match data.get(&getter_id_1_3).transform() {
+        match data.get(&getter_id_1_3).as_cast::<OnOff>() {
             Some(Ok(None)) => {},
             other => panic!("Unexpected result, {:?}", other)
         }
-        match data.get(&getter_id_2).transform() {
+        match data.get(&getter_id_2).as_cast::<OnOff>() {
             Some(Ok(None)) => {},
             other => panic!("Unexpected result, {:?}", other)
         }
@@ -1082,19 +1084,19 @@ fn test_fetch() {
         tweak_1(Tweak::InjectGetterValue(getter_id_1_1.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(getter_id_1_1.clone())))));
         let data = manager.fetch_values(vec![ChannelSelector::new()], User::None);
         assert_eq!(data.len(), 4);
-        match data.get(&getter_id_1_1).transform() {
+        match data.get(&getter_id_1_1).as_cast::<OnOff>() {
             Some(Err(Error::InternalError(InternalError::NoSuchChannel(ref id)))) if *id == getter_id_1_1 => {},
             other => panic!("Unexpected result, {:?}", other)
         }
-        match data.get(&getter_id_1_2).transform() {
-            Some(Ok(Some(Value::OnOff(OnOff::Off)))) => {},
+        match data.get(&getter_id_1_2).as_cast::<OnOff>() {
+            Some(Ok(Some(OnOff::Off))) => {},
             other => panic!("Unexpected result, {:?}", other)
         }
-        match data.get(&getter_id_1_3).transform() {
+        match data.get(&getter_id_1_3).as_cast::<OnOff>() {
             Some(Ok(None)) => {},
             other => panic!("Unexpected result, {:?}", other)
         }
-        match data.get(&getter_id_2).transform() {
+        match data.get(&getter_id_2).as_cast::<OnOff>() {
             Some(Ok(None)) => {},
             other => panic!("Unexpected result, {:?}", other)
         }
@@ -1173,8 +1175,7 @@ fn test_send() {
         let rx_adapter_1 = adapter_1.take_rx();
         let rx_adapter_2 = adapter_2.take_rx();
 
-        let data_on = Payload::from_value(&Value::OnOff(OnOff::On), &format::ON_OFF).unwrap();
-        let data_closed = Payload::from_value(&Value::OpenClosed(OpenClosed::Closed), &format::OPEN_CLOSED).unwrap();
+        let data_on = Payload::from_value(&Value::new(OnOff::On), &format::ON_OFF).unwrap();
 
         println!("* Without adapters, sending values to a selector that has no channels returns an empty vector.");
         let data = manager.send_values(target_map(vec![(vec![ChannelSelector::new()], data_on.clone())]), User::None);
@@ -1214,11 +1215,9 @@ fn test_send() {
         assert_eq!(data.len(), 3);
 
         let value = rx_adapter_2.recv().unwrap();
-        if let Effect::ValueSent(id, Value::OnOff(OnOff::On)) = value {
-            assert_eq!(id, setter_id_2);
-        } else {
-            panic!("Unexpected value {:?}", value)
-        }
+        let Effect::ValueSent(id, value) = value;
+        assert_eq!(id, setter_id_2);
+        assert_eq!(value.cast::<OnOff>().unwrap(), &OnOff::On);
 
         println!("* No further value should have been received.");
         assert_matches!(rx_adapter_1.try_recv(), Err(_));
@@ -1246,12 +1245,16 @@ fn test_send() {
         println!("* All the non-errored values should have been received.");
         for _ in 0..2 {
             match rx_adapter_1.try_recv().unwrap() {
-                Effect::ValueSent(ref id, Value::OnOff(OnOff::On)) if *id != setter_id_1_1 => {},
+                Effect::ValueSent(ref id, ref value) if *id != setter_id_1_1 => {
+                    assert_matches!(value.cast::<OnOff>().unwrap(), &OnOff::On);
+                },
                 effect => panic!("Unexpected effect {:?}", effect)
             }
         }
         match rx_adapter_2.try_recv().unwrap() {
-            Effect::ValueSent(ref id, Value::OnOff(OnOff::On)) if *id == setter_id_2 => {},
+            Effect::ValueSent(ref id, ref value) if *id == setter_id_2 => {
+                assert_matches!(value.cast::<OnOff>().unwrap(), &OnOff::On);
+            },
             effect => panic!("Unexpected effect {:?}", effect)
         }
 
@@ -1409,21 +1412,21 @@ fn test_watch() {
         assert_matches!(rx_watch.try_recv(), Err(_));
 
         println!("* We can observe value changes.");
-        tweak_1(Tweak::InjectGetterValue(getter_id_1_1.clone(), Ok(Some(Value::OnOff(OnOff::On)))));
-        tweak_1(Tweak::InjectGetterValue(getter_id_1_2.clone(), Ok(Some(Value::OnOff(OnOff::On)))));
-        tweak_1(Tweak::InjectGetterValue(getter_id_1_3.clone(), Ok(Some(Value::OnOff(OnOff::Off)))));
+        tweak_1(Tweak::InjectGetterValue(getter_id_1_1.clone(), Ok(Some(Value::new(OnOff::On)))));
+        tweak_1(Tweak::InjectGetterValue(getter_id_1_2.clone(), Ok(Some(Value::new(OnOff::On)))));
+        tweak_1(Tweak::InjectGetterValue(getter_id_1_3.clone(), Ok(Some(Value::new(OnOff::Off)))));
         let events : HashMap<_, _> = (0..2).map(|_| {
             match rx_watch.recv().unwrap() {
                 Event::EnterRange {
                     channel,
                     value,
                     format
-                } => (channel, (value, format).transform()),
+                } => (channel, (value, format).as_value()),
                 other => panic!("Unexpected event {:?}", other)
             }
         }).collect();
-        assert_eq!(events.get(&getter_id_1_1).unwrap(), &Value::OnOff(OnOff::On));
-        assert_eq!(events.get(&getter_id_1_3).unwrap(), &Value::OnOff(OnOff::Off));
+        assert_matches!(events.get(&getter_id_1_1).unwrap().cast::<OnOff>(), Ok(&OnOff::On));
+        assert_matches!(events.get(&getter_id_1_3).unwrap().cast::<OnOff>(), Ok(&OnOff::Off));
 
         println!("* We only observe channels that still exist.");
         assert_matches!(rx_watch.try_recv(), Err(_));
@@ -1440,26 +1443,26 @@ fn test_watch() {
                 ChannelSelector::new()
                     .with_tags(vec![tag_1.clone()])
             ],
-            Exactly::Exactly((Payload::from_value(&Value::Range(Box::new(Range::Eq(Value::OnOff(OnOff::On)))), &format::RANGE).unwrap(), format::RANGE.clone()))
+            Exactly::Exactly((Payload::from_value(&Value::new(OnOff::On), &format::ON_OFF).unwrap()))
         )]), Box::new(tx_watch_2)));
 
         println!("* Value changes are observed on both watchers");
-        tweak_1(Tweak::InjectGetterValue(getter_id_1_1.clone(), Ok(Some(Value::OnOff(OnOff::Off)))));
-        tweak_1(Tweak::InjectGetterValue(getter_id_1_2.clone(), Ok(Some(Value::OnOff(OnOff::Off)))));
-        tweak_1(Tweak::InjectGetterValue(getter_id_1_3.clone(), Ok(Some(Value::OnOff(OnOff::Off)))));
-        tweak_2(Tweak::InjectGetterValue(getter_id_2.clone(), Ok(Some(Value::OnOff(OnOff::Off)))));
-        tweak_2(Tweak::InjectGetterValue(getter_id_2.clone(), Ok(Some(Value::OnOff(OnOff::On)))));
+        tweak_1(Tweak::InjectGetterValue(getter_id_1_1.clone(), Ok(Some(Value::new(OnOff::Off)))));
+        tweak_1(Tweak::InjectGetterValue(getter_id_1_2.clone(), Ok(Some(Value::new(OnOff::Off)))));
+        tweak_1(Tweak::InjectGetterValue(getter_id_1_3.clone(), Ok(Some(Value::new(OnOff::Off)))));
+        tweak_2(Tweak::InjectGetterValue(getter_id_2.clone(), Ok(Some(Value::new(OnOff::Off)))));
+        tweak_2(Tweak::InjectGetterValue(getter_id_2.clone(), Ok(Some(Value::new(OnOff::On)))));
 
         let mut events : HashMap<_, _> = (0..4).map(|_| {
             match rx_watch.recv().unwrap() {
-                Event::EnterRange { channel, value, format } => (channel, (value, format).transform() ),
+                Event::EnterRange { channel, value, format } => (channel, (value, format).as_value() ),
                 other => panic!("Unexpected event {:?}", other)
             }
         }).collect();
 
         match rx_watch_2.recv().unwrap() {
             Event::EnterRange { channel, value, format } => {
-                events.insert(channel, (value, format).transform());
+                events.insert(channel, (value, format).as_value());
             }
             other => panic!("Unexpected event {:?}", other)
         }
@@ -1469,7 +1472,7 @@ fn test_watch() {
 
         println!("* Watchers with ranges emit both EnterRange and ExitRange");
 
-        tweak_2(Tweak::InjectGetterValue(getter_id_2.clone(), Ok(Some(Value::OnOff(OnOff::Off)))));
+        tweak_2(Tweak::InjectGetterValue(getter_id_2.clone(), Ok(Some(Value::new(OnOff::Off)))));
         match rx_watch_2.recv().unwrap() {
             Event::ExitRange { ref channel, .. } if *channel == getter_id_2 => { }
             other => panic!("Unexpected event {:?}", other)
@@ -1486,10 +1489,10 @@ fn test_watch() {
         drop(guard);
         assert_matches!(rx_watch.try_recv(), Err(_));
 
-        tweak_1(Tweak::InjectGetterValue(getter_id_1_1.clone(), Ok(Some(Value::OnOff(OnOff::On)))));
-        tweak_1(Tweak::InjectGetterValue(getter_id_1_2.clone(), Ok(Some(Value::OnOff(OnOff::On)))));
-        tweak_1(Tweak::InjectGetterValue(getter_id_1_3.clone(), Ok(Some(Value::OnOff(OnOff::On)))));
-        tweak_2(Tweak::InjectGetterValue(getter_id_2.clone(), Ok(Some(Value::OnOff(OnOff::On)))));
+        tweak_1(Tweak::InjectGetterValue(getter_id_1_1.clone(), Ok(Some(Value::new(OnOff::On)))));
+        tweak_1(Tweak::InjectGetterValue(getter_id_1_2.clone(), Ok(Some(Value::new(OnOff::On)))));
+        tweak_1(Tweak::InjectGetterValue(getter_id_1_3.clone(), Ok(Some(Value::new(OnOff::On)))));
+        tweak_2(Tweak::InjectGetterValue(getter_id_2.clone(), Ok(Some(Value::new(OnOff::On)))));
 
         let events : HashSet<_> = (0..2).map(|_| {
                 match rx_watch_2.recv().unwrap() {

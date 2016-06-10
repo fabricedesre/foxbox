@@ -8,6 +8,9 @@ function SetUpAccessor() {
 }
 
 SetUpAccessor.prototype = Object.assign({
+  get emailField() {
+    return this.waitForElement('#signup-email');
+  },
 
   get passwordField() {
     // This makes sure password field is not plain text

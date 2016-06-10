@@ -1,0 +1,96 @@
+input#console-toggle,
+input#users-toggle {
+  display: none;
+  visibility: hidden;
+}
+
+label#for-console-toggle,
+label#for-users-toggle {
+  display: block;
+  padding: 0.5em;
+  text-align: center;
+  border-bottom: 1px solid #CCC;
+  color: #666;
+}
+
+label#for-console-toggle::before,
+label#for-users-toggle::before {
+  content: "+";
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  margin-right: 3px;
+}
+
+#console-toggle:checked ~ #console,
+#users-toggle:checked ~ #users {
+  height: 100%;
+}
+
+#console-toggle:checked ~ label#for-console-toggle::before,
+#users-toggle:checked ~ label#for-users-toggle::before {
+  content: "-";
+}
+
+#console,
+#users {
+  height: 0px;
+  overflow: hidden;
+}
+
+#user {
+  font-size: 1.4rem;
+}
+
+/* Table styling*/
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 1.4rem;
+}
+
+th {
+  background: #333;
+  color: white;
+}
+
+td, th {
+  padding: 6px;
+  border-bottom: 1px solid #ccc;
+  text-align: left;
+}
+
+@media
+only screen and (max-width: 760px),
+(min-device-width: 768px) and (max-device-width: 1024px)  {
+
+	/* Force table to not be like tables anymore */
+	table, thead, tbody, th, td, tr {
+		display: block;
+	}
+
+	/* Hide table headers (but not display: none;, for accessibility) */
+	thead tr {
+		position: absolute;
+		top: -9999px;
+		left: -9999px;
+	}
+
+	td {
+		/* Behave  like a "row" */
+		border: none;
+		position: relative;
+    text-align: center;
+	}
+
+	td:before {
+		/* Now like a table header */
+		position: absolute;
+		/* Top/left values mimic padding */
+		top: 6px;
+		left: 6px;
+		width: 45%;
+		padding-right: 10px;
+		white-space: nowrap;
+	}
+}

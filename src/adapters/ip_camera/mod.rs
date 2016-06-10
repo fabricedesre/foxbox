@@ -17,7 +17,7 @@ use foxbox_taxonomy::api::{Error, InternalError, User};
 use foxbox_taxonomy::channel::*;
 use foxbox_taxonomy::manager::*;
 use foxbox_taxonomy::services::*;
-use foxbox_taxonomy::values::{ Binary, Json, TypeError, Value };
+use foxbox_taxonomy::values::{ Binary, Json, Value };
 use foxbox_taxonomy::values::format;
 use self::api::*;
 use self::upnp_listener::IpCameraUpnpListener;
@@ -206,23 +206,23 @@ impl Adapter for IPCameraAdapter {
 
             if id == camera.username_id {
                 let rsp = camera.get_username();
-                return (id, Ok(Some(Value::String(Arc::new(rsp)))));
+                return (id, Ok(Some(Value::new(rsp))));
             }
 
             if id == camera.password_id {
                 let rsp = camera.get_password();
-                return (id, Ok(Some(Value::String(Arc::new(rsp)))));
+                return (id, Ok(Some(Value::new(rsp))));
             }
 
             if id == camera.image_list_id {
                 let rsp = camera.get_image_list();
-                return (id, Ok(Some(Value::Json(Arc::new(Json(serde_json::to_value(&rsp)))))));
+                return (id, Ok(Some(Value::new(Json(serde_json::to_value(&rsp))))));
             }
 
             if id == camera.image_newest_id {
                 return match camera.get_newest_image() {
-                    Ok(rsp) => (id, Ok(Some(Value::Binary(Binary {
-                        data: Arc::new(rsp),
+                    Ok(rsp) => (id, Ok(Some(Value::new(Binary {
+                        data: rsp,
                         mimetype: Id::new("image/jpeg")
                     })))),
                     Err(err) => (id, Err(err))
@@ -241,25 +241,23 @@ impl Adapter for IPCameraAdapter {
             };
 
             if id == camera.username_id {
-                if let Value::String(ref username) = value {
-                    camera.set_username(username);
-                    return (id, Ok(()));
+                return match value.cast::<String>() {
+                    Ok(username) => {
+                        camera.set_username(username);
+                        (id, Ok(()))
+                    }
+                    Err(err) => (id, Err(err))
                 }
-                return (id, Err(Error::TypeError(TypeError {
-                                got: value.description(),
-                                expected: format::STRING.description()
-                            })))
             }
 
             if id == camera.password_id {
-                if let Value::String(ref password) = value {
-                    camera.set_password(password);
-                    return (id, Ok(()));
+                return match value.cast::<String>() {
+                    Ok(password) => {
+                        camera.set_password(password);
+                        (id, Ok(()))
+                    }
+                    Err(err) => (id, Err(err))
                 }
-                return (id, Err(Error::TypeError(TypeError {
-                                got: value.description(),
-                                expected: format::STRING.description()
-                            })))
             }
 
             if id == camera.snapshot_id {

@@ -48,7 +48,7 @@ Prepper.makeSuite('Control lights locally',function(){
 
       // send various values within valid range
       var payload = {'select': {'id': lights[testParam.lightID]}, 
-      'value': { 'Color': {'h':hue,'s':sat,'v':bri} } };
+      'value': { 'h':hue,'s':sat,'v':bri} };
 
       return chakram.put(Prepper.foxboxManager.setterURL,payload)
       .then(function(cmdResponse) {
@@ -71,7 +71,7 @@ Prepper.makeSuite('Control lights locally',function(){
 
     // send various values within valid range
     var payload = {'select': {'id': lights[0]},
-      'value': { 'Color': {'h':hue,'s':invalidSat,'v':bri} } };
+      'value': {'h':hue,'s':invalidSat,'v':bri} };
 
     return chakram.put(Prepper.foxboxManager.setterURL,payload)
     .then(function(cmdResponse) {
@@ -91,7 +91,7 @@ Prepper.makeSuite('Control lights locally',function(){
 
     // send various values within valid range
     var payload = {'select': {'id': lights[1]},
-      'value': { 'Color': {'h':hue,'s':sat,'v':invalidBri} } };
+      'value': {'h':hue,'s':sat,'v':invalidBri} };
 
     return chakram.put(Prepper.foxboxManager.setterURL,payload)
     .then(function(cmdResponse) {

@@ -6,13 +6,35 @@
 /* global getElementName */
 /* global Session */
 /* global URLSearchParams */
+/* global Users */
+/* global validateEmail */
+
+/* exported Main */
+
+/**
+ * This script controls FoxBox's main UI.
+ *
+ * Currently, it shows two different screens (SIGN_IN and SIGNED_IN)
+ * depending on whether a user session exists or not.
+ *
+ * If no user is logged in, we show a login screen.
+ *
+ * Otherwise, we show the admin panel containing a console to make requests
+ * to FoxBox's HTTP API and a user management panel, where the admin can
+ * invite new users and delete existing ones. The logic to control these two
+ * sections (console and users) are in separated scripts (console.js and
+ * users.js).
+ */
 
 'use strict';
 
-var SIGN_IN         = 2;
-var SIGNED_IN       = 3;
+var SIGN_IN         = 0;
+var SIGNED_IN       = 1;
 
 var ELEMENTS = [{
+  screen: SIGN_IN,
+  selector: '#signin-email'
+}, {
   screen: SIGN_IN,
   selector: '#signin-pwd'
 }, {
@@ -27,8 +49,7 @@ var ELEMENTS = [{
   listener: 'signout'
 }];
 
-var SessionUI = {
-
+var Main = {
   get session() {
     if (!this._session) {
       this._session = Session.get();
@@ -37,27 +58,33 @@ var SessionUI = {
   },
 
   init: function() {
-    SessionUI.elements = {};
-    SessionUI.screens = {
+    Main.elements = {};
+    Main.screens = {
       signin: document.querySelector('#signin'),
       signedin: document.querySelector('#signedin')
     };
 
-    var searchParams =
-      new URLSearchParams(window.location.search.substring(1));
+    if (Main.session === null) {
+      // We might end up in the login screen because the user directly
+      // browsed to FoxBox's URL or because the user was redirected from
+      // an external app that is requesting access to FoxBox APIs.
+      // In this case, we need to obtain the 'redirect_url' query parameter
+      // so we can redirect the user back to the external app once the
+      // login process is completed.
+      var searchParams =
+        new URLSearchParams(window.location.search.substring(1));
 
-    if (searchParams.has('redirect_url')) {
-      try {
-        SessionUI.redirect = new URL(searchParams.get('redirect_url'));
-      } catch(e) {
-        console.error(e);
+      if (searchParams.has('redirect_url')) {
+        try {
+          Main.redirect = new URL(searchParams.get('redirect_url'));
+        } catch(e) {
+          console.error(e);
+        }
       }
-    }
 
-    if (SessionUI.session === null) {
-      SessionUI.show(SIGN_IN);
-    } else if (SessionUI.session.length) {
-      SessionUI.show(SIGNED_IN);
+      Main.show(SIGN_IN);
+    } else if (Main.session.length) {
+      Main.show(SIGNED_IN);
     }
   },
 
@@ -75,6 +102,13 @@ var SessionUI = {
     element.removeEventListener(event, this[listener]);
   },
 
+  /**
+   * We try to load only the pieces of the DOM that are visible on the screen
+   * depending on the session state.
+   * Once a section is hidden, we remove all its event listeners.
+   * This is happening for example when going from a logged out to a logged in
+   * state and viceversa.
+   */
   loadElements: function(screen) {
     var self = this;
     ELEMENTS.forEach(function(element) {
@@ -97,6 +131,9 @@ var SessionUI = {
     });
   },
 
+  /**
+   * We show screens depending on the user session state.
+   */
   show: function(screen) {
     if (this.currentScreen == screen) {
       return;
@@ -107,8 +144,11 @@ var SessionUI = {
 
     if (screen == SIGNED_IN) {
       Console.setup();
+      // XXX Do not show if user is not admin.
+      Users.setup();
     } else {
       Console.teardown();
+      Users.teardown();
     }
 
     this.loadElements(screen);
@@ -117,22 +157,28 @@ var SessionUI = {
   signin: function(evt) {
     evt.preventDefault();
 
-    var pwd = SessionUI.elements.signinPwd.value;
+    var email = Main.elements.signinEmail.value;
+    if (!validateEmail(email)) {
+      window.alert('Invalid email');
+      return;
+    }
+
+    var pwd = Main.elements.signinPwd.value;
     if (!pwd || pwd.length < 8) {
       window.alert('Invalid password');
       return;
     }
 
-    Session.start('admin', pwd, SessionUI.redirect === undefined).then(
+    Session.start(email, pwd, Main.redirect === undefined).then(
       function(token) {
-      if (SessionUI.redirect) {
-        var url = SessionUI.redirect;
+      if (Main.redirect) {
+        var url = Main.redirect;
         url.search +=
          (url.search.split('?')[1] ? '&':'?') + 'session_token=' + token;
         url.hash = window.location.hash;
         window.location.replace(url.toString());
       } else {
-        SessionUI.show(SIGNED_IN);
+        Main.show(SIGNED_IN);
       }
     }).catch(function(error) {
       window.alert('Signin error ' + error);
@@ -141,8 +187,8 @@ var SessionUI = {
 
   signout: function() {
     Session.clear();
-    SessionUI.show(SIGN_IN);
+    Main.show(SIGN_IN);
   }
 };
 
-document.addEventListener('DOMContentLoaded', SessionUI.init);
+document.addEventListener('DOMContentLoaded', Main.init);

@@ -17,7 +17,7 @@ features = ["ssl"]
 
 [dependencies]
 clippy = "0.0.71"
-foxbox_users = { git = "https://github.com/fxbox/users.git", rev = "d4e5277" }
+foxbox_users = { git = "https://github.com/fxbox/users.git", rev = "ec53c3a" }
 hyper = "0.8.1"
 libc = "0.2.7"
 log = "0.3"

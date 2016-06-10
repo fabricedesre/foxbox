@@ -11,7 +11,7 @@ module.exports = {
 
   credential :  {
     'email': 'a@b.com',
-    'username': 'admin',
+    'name': 'admin',
     'password': '87654321'
   },
 

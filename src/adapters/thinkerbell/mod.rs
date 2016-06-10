@@ -4,9 +4,10 @@ use foxbox_taxonomy::api::{ Error, InternalError, User };
 use foxbox_taxonomy::channel::*;
 use foxbox_taxonomy::io;
 use foxbox_taxonomy::manager::*;
+use foxbox_taxonomy::parse::*;
 use foxbox_taxonomy::services::{ AdapterId, ServiceId, Service };
 use foxbox_taxonomy::util::{ Id, Maybe };
-use foxbox_taxonomy::values::{ format, Duration, Value, TypeError, OnOff };
+use foxbox_taxonomy::values::{ format, Data, Duration, Value, OnOff };
 
 use foxbox_thinkerbell::compile::ExecutableDevEnv;
 use foxbox_thinkerbell::manager::{ ScriptManager, ScriptId, Error as ScriptManagerError };
@@ -17,7 +18,7 @@ use transformable_channels::mpsc::*;
 
 use std::collections::HashMap;
 use std::fmt;
-use std::path::Path;
+use std::path;
 use std::sync::{ Arc, Mutex };
 use std::thread;
 
@@ -215,12 +216,12 @@ impl ThinkerbellAdapter {
                     for ref rule in &rules {
                         if getter_id == rule.channel_is_enabled_id {
                             let is_enabled = script_manager.is_enabled(&rule.script_id);
-                            let _ = tx.send(Ok(Some(Value::OnOff(if is_enabled { OnOff::On } else { OnOff::Off }))));
+                            let _ = tx.send(Ok(Some(Value::new(if is_enabled { OnOff::On } else { OnOff::Off }))));
                             continue 'recv;
                         } else if getter_id == rule.getter_source_id {
                             match script_manager.get_source_and_owner(&rule.script_id) {
                                 Ok((source, _)) => {
-                                    let _ = tx.send(Ok(Some(Value::String(Arc::new(source.to_owned())))));
+                                    let _ = tx.send(Ok(Some(Value::new(source.to_owned()))));
                                 },
                                 Err(e) => {
                                     let _ = tx.send(Err(sm_error(e)));
@@ -235,8 +236,8 @@ impl ThinkerbellAdapter {
                 ThinkAction::RespondToSetter(tx, setter_id, value, user) => {
                     // Add a new rule (with the given JSON source).
                     if setter_id == self.setter_add_rule_id {
-                        match value {
-                            Value::ThinkerbellRule(ref rule_source) => {
+                        match value.cast::<RuleSource>() {
+                            Ok(ref rule_source) => {
                                 let script_id = Id::new(&rule_source.name);
                                 match script_manager.put(&script_id, &rule_source.source, &user) {
                                     Err(err) => {let _ = tx.send(Err(sm_error(err))) ;}
@@ -246,8 +247,8 @@ impl ThinkerbellAdapter {
                                     }
                                 }
                             },
-                            _ => {
-                                let _ = tx.send(Err(Error::TypeError(TypeError::new(&THINKERBELL_RULE, &value))));
+                            Err(err) => {
+                                let _ = tx.send(Err(err));
                             }
                         }
                     } else {
@@ -257,15 +258,15 @@ impl ThinkerbellAdapter {
                         // getter/setter API requests. In any case, this loop should be plenty fast for now.
                         for ref rule in &rules {
                             if setter_id == rule.channel_is_enabled_id {
-                                match value {
-                                    Value::OnOff(OnOff::On) => {
+                                match value.cast::<OnOff>() {
+                                    Ok(&OnOff::On) => {
                                         let _ = tx.send(script_manager.set_enabled(&rule.script_id, true).map_err(sm_error));
                                     },
-                                    Value::OnOff(OnOff::Off) => {
+                                    Ok(&OnOff::Off) => {
                                         let _ = tx.send(script_manager.set_enabled(&rule.script_id, false).map_err(sm_error));
                                     },
-                                    _ => {
-                                        let _ = tx.send(Err(Error::TypeError(TypeError::new(&format::ON_OFF, &value))));
+                                    Err(err) => {
+                                        let _ = tx.send(Err(err));
                                     },
                                 }
                                 continue 'recv;
@@ -357,7 +358,7 @@ impl ThinkerbellAdapter {
         };
 
         let mut script_manager = try!(
-            ScriptManager::new(env, Path::new(scripts_path), Box::new(tx_env)).map_err(sm_error));
+            ScriptManager::new(env, path::Path::new(scripts_path), Box::new(tx_env)).map_err(sm_error));
 
         let result_map = try!(script_manager.load().map_err(sm_error));
 
@@ -378,11 +379,12 @@ impl ThinkerbellAdapter {
         };
 
         // Add the adapter and the root service (the one that exposes `AddThinkerbellRule` for adding new rules).
+        let rule_source_format = Arc::new(io::Format::new::<RuleSource>());
         try!(manager.add_adapter(Arc::new(adapter.clone())));
         try!(manager.add_service(Service::empty(&root_service_id, &adapter_id)));
         try!(manager.add_channel(Channel {
             feature: feature_add_rule,
-            supports_send: Some(Signature::accepts(Maybe::Required(THINKERBELL_RULE.clone()))),
+            supports_send: Some(Signature::accepts(Maybe::Required(rule_source_format))),
             id: setter_add_rule_id,
             service: root_service_id.clone(),
             adapter: adapter_id.clone(),
@@ -409,14 +411,31 @@ impl ThinkerbellAdapter {
 }
 
 
-/// Placeholder implementation.
-struct ThinkerbellRuleFormat;
-impl io::Format for ThinkerbellRuleFormat {
-    fn description(&self) -> String {
+#[derive(Debug, Clone, PartialEq)]
+struct RuleSource {
+    pub name: String,
+    pub source: String,
+}
+
+impl Data for RuleSource {
+    fn description() -> String {
         "Thinkerbell Rule".to_owned()
+    }
+    fn parse(path: Path, source: &JSON, binary: &io::BinarySource) -> Result<Self, Error> {
+        let name = try!(path.push("name", |path| String::parse_field(path, source, binary, "name")));
+        let script_source = try!(path.push("source", |path| String::parse_field(path, source, binary, "source")));
+        Ok(RuleSource {
+            name: name,
+            source: script_source
+        })
+    }
+    fn serialize(source: &Self, _binary: &io::BinaryTarget) -> Result<JSON, Error> {
+        let json = vec![
+            ("name", &source.name),
+            ("source", &source.source),
+        ].to_json();
+        Ok(json)
     }
 }
 
-lazy_static! {
-    pub static ref THINKERBELL_RULE: Arc<io::Format> = Arc::new(ThinkerbellRuleFormat);
-}
+

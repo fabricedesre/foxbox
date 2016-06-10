@@ -15,10 +15,16 @@
         <div class="inner-container">
           <form action="#">
             <p>
+              <label for="signup-email">
+                Enter your email:
+              </label>
+              <input type="text" id="signup-email" autofocus>
+            </p>
+            <p>
               <label for="signup-pwd1">
                 Please choose an admin password (8 characters minimum):
               </label>
-              <input type="password" id="signup-pwd1" autofocus>
+              <input type="password" id="signup-pwd1">
             </p>
             <p>
               <label for="signup-pwd2">
@@ -48,5 +54,6 @@
     </div>
   </body>
   <script src="shared/js/url_search_params.js"></script>
+  <script src="shared/js/utils.js"></script>
   <script src="js/setup.js"></script>
 </html>

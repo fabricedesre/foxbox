@@ -49,7 +49,7 @@ Prepper.makeSuite('Verify validity of pagekite ping endpoint', function(){
     });
 
     it('create account via local_origin',function(){   
-      return chakram.post(local_url + '/users/setup', credential)
+      return chakram.post(local_url + '/users/v1/setup', credential)
       .then(function(setupResp) {
         expect(setupResp).to.have.status(201);
       });

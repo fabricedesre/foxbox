@@ -29,7 +29,8 @@ use foxbox_taxonomy::manager::AdapterManager as TaxoManager;
 use self::thinkerbell::ThinkerbellAdapter;
 use foxbox_core::traits::Controller;
 
-use openzwave::Adapter as OpenzwaveAdapter;
+#[cfg(feature = "zwave")]
+use openzwave;
 
 use std::sync::Arc;
 
@@ -55,6 +56,19 @@ impl<T: Controller> AdapterManager<T> {
         info!("No tts support on this platform.");
     }
 
+    #[cfg(feature = "zwave")]
+    fn start_zwave(&self, manager: &Arc<TaxoManager>) {
+        let profile_openzwave = &self.controller.get_profile().path_for("openzwave");
+
+        let openzwave_devices = self.controller.clone().get_config().get("openzwave", "devices");
+        openzwave::Adapter::init(manager, profile_openzwave, openzwave_devices).unwrap(); // FIXME convert to a local error
+    }
+
+    #[cfg(not(feature = "zwave"))]
+    fn start_zwave(&self, _: &Arc<TaxoManager>) {
+        // nothing to see :)
+    }
+
     /// Start all the adapters.
     pub fn start(&mut self, manager: &Arc<TaxoManager>) {
         let c = self.controller.clone(); // extracted here to prevent double-borrow of 'self'
@@ -65,11 +79,8 @@ impl<T: Controller> AdapterManager<T> {
         ip_camera::IPCameraAdapter::init(manager, self.controller.clone()).unwrap();
         let scripts_path = &self.controller.get_profile().path_for("thinkerbell_scripts.sqlite");
         ThinkerbellAdapter::init(manager, scripts_path).unwrap(); // FIXME: no unwrap!
-        let profile_openzwave = &self.controller.get_profile().path_for("openzwave");
 
-        let openzwave_devices = self.controller.clone().get_config().get("openzwave", "devices");
-        OpenzwaveAdapter::init(manager, profile_openzwave, openzwave_devices).unwrap();
-
+        self.start_zwave(manager);
         self.start_tts(manager);
     }
 

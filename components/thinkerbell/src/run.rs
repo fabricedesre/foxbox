@@ -8,10 +8,8 @@ use compile;
 use foxbox_taxonomy::api;
 use foxbox_taxonomy::api::{ API, Error as APIError, Targetted, User, WatchEvent };
 use foxbox_taxonomy::channel::Channel;
-use foxbox_taxonomy::io::*;
 use foxbox_taxonomy::util::{ Exactly, Id };
-use foxbox_taxonomy::values::{ Duration, Value };
-use foxbox_taxonomy::values::format;
+use foxbox_taxonomy::values::Duration;
 
 use transformable_channels::mpsc::*;
 
@@ -265,12 +263,11 @@ impl<Env> ExecutionTask<Env> where Env: ExecutableDevEnv + Debug {
 
                 let rule_index = rule_index.clone();
                 let condition_index = condition_index.clone();
-                let payload_and_type = (Payload::from_value_auto(&Value::Range(Box::new(condition.range.clone()))), format::RANGE.clone());
                 witnesses.push(
                     api.watch_values(
                         vec![Targetted {
                             select: condition.source.clone(),
-                            payload: Exactly::Exactly(payload_and_type)
+                            payload: Exactly::Exactly(condition.when.clone())
                         }],
                         Box::new(self.tx.map(move |event| {
                             ExecutionOp::Update {
@@ -324,7 +321,7 @@ impl<Env> ExecutionTask<Env> where Env: ExecutableDevEnv + Debug {
                         },
                         WatchEvent::ChannelRemoved(id) => {
                             debug!("[Recipe '{}'] Removed getter {}, resetting condition to `false`", self.script.name, id);
-                            // A getter was removed. Its condition is therefore not met anymore.
+                            // A channel was removed. Its condition is therefore not met anymore.
                             let msg = ExecutionOp::UpdateCondition {
                                 id: id.clone(),
                                 is_met: false,
@@ -336,7 +333,7 @@ impl<Env> ExecutionTask<Env> where Env: ExecutableDevEnv + Debug {
                         },
                         WatchEvent::ChannelAdded(id) => {
                             debug!("[Recipe '{}'] Added getter {}.", self.script.name, id);
-                            // An getter was added. Nothing to do.
+                            // A channel was added. Nothing to do.
                         }
                         WatchEvent::EnterRange { channel: id, value, .. } => {
                             debug!("[Recipe '{}'] Getter {} has entered the range for rule {}, condition {}: {:?}", self.script.name, id, rule_index, condition_index, value);

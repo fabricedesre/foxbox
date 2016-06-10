@@ -62,12 +62,12 @@ impl Parser<Script<UncheckedCtx>> for Script<UncheckedCtx> {
 ///   "conditions": [{
 ///     "source": [{"id": "my getter"}],
 ///     "feature": "oven/temperature-c",
-///     "range": {"Geq": {"Temperature": {"C": 300}}},
+///     "when": {"Geq": {"Temperature": {"C": 300}}},
 ///     "duration": 3600
 ///   }],
 ///   "execute": [{
 ///     "destination": [{"id": "my setter"}],
-///     "value": {"OnOff": "Off"},
+///     "value": "Off",
 ///     "feature": "light/is-on"
 ///   }]
 /// }"#;
@@ -122,7 +122,7 @@ impl Parser<Rule<UncheckedCtx>> for Rule<UncheckedCtx> {
 /// - source (array of ChannelSelector) - the selector for getters that will
 ///   provide the data;
 /// - feature (string) - the kind of channels;
-/// - range (Range) - the condition in whih the match is considered met –
+/// - condition (JSON) - the condition in whih the match is considered met –
 ///   a match becomes met when any of the sources *enters* the range;
 /// - duration (Duration, optional) - if provided, the match is only considered
 ///   met if any of the sources *enters* and *remains* in the range
@@ -140,7 +140,7 @@ impl Parser<Rule<UncheckedCtx>> for Rule<UncheckedCtx> {
 /// let source = r#"{
 ///   "source": [{"id": "my getter"}],
 ///   "feature": "oven/temperature-c",
-///   "range": {"Geq": {"Temperature": {"C": 300}}},
+///   "when": {"Geq": {"Temperature": {"C": 300}}},
 ///   "duration": 3600
 /// }"#;
 ///
@@ -161,10 +161,10 @@ pub struct Match<Ctx> where Ctx: Context {
     /// offer `feature`.
     pub feature: Id<FeatureId>,
 
-    /// The range of values for which the condition is considered met.
-    /// During compilation, we check that the type of `range` is
-    /// compatible with that of `getter`.
-    pub range: Range,
+    /// The condition in which this match becomes valid. For instance,
+    /// it may represent `OnOff::On` to trigger the `Statement` when some
+    /// device is set to `On`.
+    pub when: Payload,
 
     /// If specified, the values must remain in the `range` for at least
     /// `duration` before the match is considered valid. This is useful
@@ -186,8 +186,8 @@ impl Parser<Match<UncheckedCtx>> for Match<UncheckedCtx> {
         let feature = try!(path.push("feature",
             |path| Id::take(path, source, "feature"))
         );
-        let range = try!(path.push("range",
-            |path| Range::take(path, source, "range"))
+        let when = try!(path.push("when",
+            |path| Payload::take(path, source, "when"))
         );
         let duration = match path.push("duration",
             |path| Duration::take(path, source, "duration"))
@@ -199,7 +199,7 @@ impl Parser<Match<UncheckedCtx>> for Match<UncheckedCtx> {
         Ok(Match {
             source: sources,
             feature: feature,
-            range: range,
+            when: when,
             duration: duration,
             phantom: PhantomData,
         })
@@ -228,12 +228,12 @@ impl Parser<Match<UncheckedCtx>> for Match<UncheckedCtx> {
 /// # fn main() {
 /// let source = r#"{
 ///   "destination": [{"id": "my setter"}],
-///   "value": {"OnOff": "Off"},
+///   "value": "Off",
 ///   "feature": "light/is-on"
 /// }"#;
 ///
 /// let statement = Statement::<UncheckedCtx>::from_str(&source).unwrap();
-/// assert_eq!(statement.value, Payload::from_value_auto(&Value::OnOff(OnOff::Off)));
+/// assert_eq!(statement.value, Payload::from_data(OnOff::Off, &*format::ON_OFF).unwrap());
 /// assert_eq!(statement.feature, Id::new("light/is-on"));
 /// # }
 /// ```

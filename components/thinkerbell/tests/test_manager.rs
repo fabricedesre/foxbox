@@ -40,13 +40,13 @@ fn test_database_add_remove_script() {
 
     println!("* Putting a recipe in the database. It should be reported as running.");
     let name = Id::<ScriptId>::new("Sample Ruleset");
-    db.put(&name, &load_json("./examples/ruleset.json"), &User::Id(1)).unwrap();
+    db.put(&name, &load_json("./examples/ruleset.json"), &User::Id(String::from("1"))).unwrap();
     assert_eq!(db.get_running_count(), 1);
 
 
     println!("* The recipe should have the user with which it was stored.");
     let (_, owner) = db.get_source_and_owner(&name).unwrap();
-    assert_eq!(owner, User::Id(1));
+    assert_eq!(owner, User::Id(String::from("1")));
 
     println!("* Enable the recipe again. It should still be reported as running.");
     db.set_enabled(&name, true).unwrap();
@@ -65,10 +65,10 @@ fn test_database_add_remove_script() {
     assert_eq!(db.get_running_count(), 0);
 
     println!("* Add again the recipe. It should be reported as running again.");
-    db.put(&name, &load_json("./examples/ruleset.json"), &User::Id(1)).unwrap();
+    db.put(&name, &load_json("./examples/ruleset.json"), &User::Id(String::from("1"))).unwrap();
     assert_eq!(db.get_running_count(), 1);
 
     println!("* Overwrite the recipe. It should still be reported as running.");
-    db.put(&name, &load_json("./examples/ruleset.json"), &User::Id(1)).unwrap();
+    db.put(&name, &load_json("./examples/ruleset.json"), &User::Id(String::from("1"))).unwrap();
     assert_eq!(db.get_running_count(), 1);
 }

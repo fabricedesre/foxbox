@@ -22,7 +22,7 @@ use foxbox_taxonomy::api::{ Error, InternalError, User };
 use foxbox_taxonomy::channel::*;
 use foxbox_taxonomy::manager::*;
 use foxbox_taxonomy::services::*;
-use foxbox_taxonomy::values::{ format, Color, OnOff, TypeError, Value };
+use foxbox_taxonomy::values::{ Color, OnOff, Value };
 
 use std::collections::HashMap;
 use std::sync::{ Arc, Mutex };
@@ -235,21 +235,21 @@ impl<C: Controller> Adapter for PhilipsHueAdapter<C> {
 
             if id == light.get_available_id {
                 if light.get_available() {
-                    return (id, Ok(Some(Value::OnOff(OnOff::On))));
+                    return (id, Ok(Some(Value::new(OnOff::On))));
                 } else {
-                    return (id, Ok(Some(Value::OnOff(OnOff::Off))));
+                    return (id, Ok(Some(Value::new(OnOff::Off))));
                 }
             }
             if id == light.channel_power_id {
                 if light.get_power() {
-                    return (id, Ok(Some(Value::OnOff(OnOff::On))));
+                    return (id, Ok(Some(Value::new(OnOff::On))));
                 } else {
-                    return (id, Ok(Some(Value::OnOff(OnOff::Off))));
+                    return (id, Ok(Some(Value::new(OnOff::Off))));
                 }
             }
             if id == light.channel_color_id {
                 let (h, s, v) = light.get_color();
-                return (id, Ok(Some(Value::Color(Color::HSV(h, s, v)))));
+                return (id, Ok(Some(Value::new(Color::HSV(h, s, v)))));
             }
 
             (id.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(id))))
@@ -266,21 +266,17 @@ impl<C: Controller> Adapter for PhilipsHueAdapter<C> {
             };
 
             if id == light.channel_power_id {
-                match value {
-                    Value::OnOff(OnOff::On)  => { light.set_power(true); },
-                    Value::OnOff(OnOff::Off) => { light.set_power(false); },
-                    _ => {
-                        return (id, Err(Error::TypeError(TypeError::new(&format::ON_OFF, &value))));
-                    }
+                match value.cast::<OnOff>() {
+                    Ok(&OnOff::On)  => { light.set_power(true); },
+                    Ok(&OnOff::Off) => { light.set_power(false); },
+                    Err(err) => return (id, Err(err))
                 }
                 return (id, Ok(()));
             }
             if id == light.channel_color_id {
-                match value {
-                    Value::Color(Color::HSV(h, s, v)) => { light.set_color((h, s, v)); },
-                    _ => {
-                        return (id, Err(Error::TypeError(TypeError::new(&format::COLOR, &value) )));
-                    }
+                match value.cast::<Color>() {
+                    Ok(&Color::HSV(ref h, ref s, ref v)) => { light.set_color((h.clone(), s.clone(), v.clone())); },
+                    Err(err) => return (id, Err(err))
                 }
                 return (id, Ok(()));
             }

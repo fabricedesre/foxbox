@@ -11,8 +11,9 @@ exclude = [ "**/*.conf", "**/*.json",
           ]
 
 [features]
-default = ["authentication"]
+default = ["authentication", "zwave"]
 authentication = []
+zwave = ["openzwave-adapter"]
 
 [replace]
 "iron:0.3.0" = { path = "iron-fork/" }
@@ -26,10 +27,10 @@ foxbox_core = { path = "components/core/" }
 foxbox_thinkerbell = { path = "components/thinkerbell/" }
 foxbox_taxonomy = { path = "components/taxonomy/" }
 jsworkers = { path = "components/jsworkers" }
-openzwave-adapter = { path = "components/openzwave-adapter/" }
+openzwave-adapter = { path = "components/openzwave-adapter/", optional = true }
 tls = { path = "components/tls/" }
 
-foxbox_users = { git = "https://github.com/fxbox/users.git", rev = "d4e5277" }
+foxbox_users = { git = "https://github.com/fxbox/users.git", rev = "ec53c3a" }
 iron-cors = { git = "https://github.com/fxbox/iron-cors.git", rev = "f397cd2" }
 multicast_dns = { git = "https://github.com/fxbox/multicast-dns.git", rev = "a6e4bcc" }
 

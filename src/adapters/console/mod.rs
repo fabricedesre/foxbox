@@ -59,12 +59,13 @@ impl Adapter for Console {
             .map(|(id, value)| {
                 let result = {
                     if id == self.setter_stdout_id {
-                        if let Value::String(s) = value {
-                            info!("[console@link.mozilla.org] {} (user {:?})", s, user);
-                        } else {
-                            info!("[console@link.mozilla.org] {:?} (user {:?})", value, user);
+                        match value.cast::<String>() {
+                            Err(err) => Err(err),
+                            Ok(s) => {
+                                info!("[console@link.mozilla.org] {} (user {:?})", s, user);
+                                Ok(())
+                            }
                         }
-                        Ok(())
                     } else {
                         Err(Error::InternalError(InternalError::NoSuchChannel(id.clone())))
                     }

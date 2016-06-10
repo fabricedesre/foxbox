@@ -62,9 +62,14 @@ impl<T: TtsEngine> Adapter for TtsAdapter<T> {
 
         values.drain().map(|(id, value)| {
             if id == self.talk_setter_id {
-                if let Value::String(text) = value {
-                    self.engine.say(text.deref());
-                    return (id, Ok(()));
+                match value.cast::<String>() {
+                    Ok(text) => {
+                        self.engine.say(text.deref());
+                        return (id, Ok(()));
+                    }
+                    Err(err) => {
+                        return (id, Err(err))
+                    }
                 }
             }
             (id.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(id))))

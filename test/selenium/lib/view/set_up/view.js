@@ -11,27 +11,28 @@ function SetUpView() {
 
 SetUpView.prototype = Object.assign({
 
-  successLogin(password) {
-    return this._submitPassword(password)
+  successLogin(email, password) {
+    return this._submitPassword(email, password)
       .then(() => this.instanciateNextView('successful_page'));
   },
 
-  successSignUpFromApp(password) {
-    return this._submitPassword(password)
+  successSignUpFromApp(email, password) {
+    return this._submitPassword(email, password)
       .then(() => this.instanciateNextView('services'));
   },
 
-  failureLogin(password, confirmPassword) {
-    return this._submitPassword(password, confirmPassword)
+  failureLogin(email, password, confirmPassword) {
+    return this._submitPassword(email, password, confirmPassword)
       .then(() => this.alert.message);
   },
 
-  _submitPassword(password, confirmPassword) {
+  _submitPassword(email, password, confirmPassword) {
     password = password !== undefined ? password : PASSWORDS.valid;
     confirmPassword = confirmPassword !== undefined ?
       confirmPassword : password;
 
-    return this.accessor.passwordField.sendKeys(password)
+    return this.accessor.emailField.sendKeys(email)
+      .then(() => this.accessor.passwordField.sendKeys(password))
       .then(() => this.accessor.confirmPasswordField.sendKeys(confirmPassword))
       .then(() => this.accessor.submitButton.click());
   },

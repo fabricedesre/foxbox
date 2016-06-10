@@ -167,7 +167,7 @@ impl<Env> Compiler<Env> where Env: ExecutableDevEnv {
         Ok(Match {
             source: source,
             feature: match_.feature,
-            range: match_.range,
+            when: match_.when,
             duration: match_.duration,
             phantom: PhantomData
         })

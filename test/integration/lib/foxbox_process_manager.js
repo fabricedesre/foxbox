@@ -14,8 +14,8 @@ var foxboxInstance;
 
 var foxbox_process_manager = (function() {
 
-  var setupURL = config.get('foxbox.url') + '/users/setup';
-  var loginURL = config.get('foxbox.url') + '/users/login';
+  var setupURL = config.get('foxbox.url') + '/users/v1/setup';
+  var loginURL = config.get('foxbox.url') + '/users/v1/login';
   var serviceURL = config.get('foxbox.url') + '/api/v1';
   var serviceListURL = serviceURL + '/services'; 
   var getterURL = serviceURL + '/channels/get';
@@ -47,7 +47,7 @@ var foxbox_process_manager = (function() {
     return chakram.post(setupURL,credential)
     .then(function(setupResp){
       expect(setupResp).to.have.status(201);
-      var encoded_cred = new Buffer(credential.username+
+      var encoded_cred = new Buffer(credential.email+
       ':'+credential.password).toString('base64');
       header.Authorization = 'Basic ' + encoded_cred;
 

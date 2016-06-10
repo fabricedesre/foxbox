@@ -232,7 +232,7 @@ impl Tagged for ChannelData {
 /// yet. The `WatcherData` is materialized as a `WatchGuard` in userland.
 pub struct WatcherData {
     /// The criteria for watching.
-    watch: TargetMap<ChannelSelector, Exactly<(Payload, Arc<Format>)>>,
+    watch: TargetMap<ChannelSelector, Exactly<Payload>>,
 
     /// The listener for this watch.
     on_event: Mutex<Box<ExtSender<WatchEvent>>>,
@@ -263,7 +263,7 @@ impl PartialEq for WatcherData {
 }
 
 impl WatcherData {
-    fn new(liveness: &Arc<Liveness>, key: WatchKey, watch:TargetMap<ChannelSelector, Exactly<(Payload, Arc<Format>)>>, on_event: Box<ExtSender<WatchEvent>>) -> Self {
+    fn new(liveness: &Arc<Liveness>, key: WatchKey, watch:TargetMap<ChannelSelector, Exactly<Payload>>, on_event: Box<ExtSender<WatchEvent>>) -> Self {
         WatcherData {
             key: key,
             on_event: Mutex::new(on_event),
@@ -300,7 +300,7 @@ impl WatchMap {
             liveness: liveness.clone()
         }
     }
-    fn create(&mut self, watch:TargetMap<ChannelSelector, Exactly<(Payload, Arc<Format>)>>, on_event: Box<ExtSender<WatchEvent>>) -> Arc<WatcherData> {
+    fn create(&mut self, watch: TargetMap<ChannelSelector, Exactly<Payload>>, on_event: Box<ExtSender<WatchEvent>>) -> Arc<WatcherData> {
         let id = WatchKey(self.counter);
         self.counter += 1;
         let watcher = Arc::new(WatcherData::new(&self.liveness, id, watch, on_event));
@@ -967,7 +967,7 @@ impl State {
 
     fn aux_start_channel_watch(watcher: &mut Arc<WatcherData>,
         getter_data: &mut ChannelData,
-        filter: &Exactly<(Payload, Arc<Format>)>,
+        filter: &Exactly<Payload>,
         adapter_by_id: &HashMap<Id<AdapterId>, AdapterData>,
         per_adapter: &mut WatchRequest)
     {
@@ -975,20 +975,17 @@ impl State {
 
         let id = getter_data.id.clone();
         let adapter = getter_data.adapter.clone();
+        let sig = if let Some(ref sig) = getter_data.supports_watch {
+            sig.clone()
+        } else {
+            return;
+        };
 
-        let return_type =
-        {
-            let sig = if let Some(ref sig) = getter_data.supports_watch {
-                sig
-            } else {
-                return;
-            };
-            if let Maybe::Required(ref typ) = sig.returns {
-                typ.clone()
-            } else {
-                log_debug_assert!(false, "[aux_start_channel_watch] Signature kind is not implemented yet: {:?}", sig);
-                return;
-            }
+        let return_type = if let Maybe::Required(ref typ) = sig.returns {
+            typ.clone()
+        } else {
+            log_debug_assert!(false, "[aux_start_channel_watch] Signature kind is not implemented yet: {:?}", sig);
+            return;
         };
 
         let insert_in_getter =
@@ -1000,9 +997,11 @@ impl State {
             Ok(transaction) => transaction
         };
 
-        let range = match *filter {
-            Exactly::Exactly(ref range) => Some(range.clone()),
-            Exactly::Always => None,
+        let range = match (filter, sig.accepts) {
+            (&Exactly::Exactly(ref range), Maybe::Required(ref typ))
+        |   (&Exactly::Exactly(ref range), Maybe::Optional(ref typ)) =>
+                Some((range.clone(), typ.clone())),
+            (&Exactly::Always, _) => None,
             _ => {
                 insert_in_getter.commit();
                 return // Don't watch data, just topology.
@@ -1021,6 +1020,7 @@ impl State {
                         adapter_data.adapter.clone()
                     }
                 };
+
                 entry.insert((adapter, (vec![(id, range, return_type, Arc::downgrade(watcher) )])));
             },
             Occupied(mut entry) => {
@@ -1031,7 +1031,7 @@ impl State {
         insert_in_getter.commit();
     }
 
-    pub fn prepare_channel_watch(&mut self, mut watch: TargetMap<ChannelSelector, Exactly<(Payload, Arc<Format>)>>,
+    pub fn prepare_channel_watch(&mut self, mut watch: TargetMap<ChannelSelector, Exactly<Payload>>,
         on_event: Box<ExtSender<WatchEvent>>) -> (WatchRequest, WatchKey, Arc<AtomicBool>)
     {
         // Prepare the watcher and store it. Once we leave the lock, every time a channel is

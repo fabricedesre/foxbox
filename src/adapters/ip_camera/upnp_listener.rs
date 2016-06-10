@@ -54,13 +54,12 @@ impl UpnpListener for IpCameraUpnpListener {
 
         let url = try_get!(service.description, "/root/device/presentationURL");
 
-        let mut udn = try_get!(service.description, "/root/device/UDN").clone();
         // The UDN is typically of the for uuid:SOME-UID-HERE, but some devices
         // response with just a UUID. We strip off the uuid: prefix, if it exists
         // and use the resulting UUID as the service id.
-        if udn.starts_with("uuid:") {
-            udn = String::from(&udn[5..]);
-        }
+        let udn = try_get!(service.description, "/root/device/UDN")
+            .trim_left_matches("uuid:")
+            .to_owned();
 
         // TODO: We really need to update the IP/camera name in the event that
         //       it changed. I'll add this once we start persisting the camera

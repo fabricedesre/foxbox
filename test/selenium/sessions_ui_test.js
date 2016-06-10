@@ -6,6 +6,7 @@
 const assert = require('assert');
 const SuiteBuilder = require('./lib/make_suite');
 const PASSWORDS = require('./lib/passwords.json');
+const email = 'user@domain.org';
 
 var suiteBuilder = new SuiteBuilder('Test set up UI');
 
@@ -30,11 +31,18 @@ describe('sessions ui', function() {
           return setUpView.acceptAlert();
         });
 
+        it('should reject invalid email', function() {
+          return setUpView.failureLogin('invalid', 'unused', 'unused')
+          .then(text => {
+            assert.equal(text, 'Invalid email');
+          });
+        });
+
         PASSWORDS.invalids.forEach((invalidPassword) => {
           it('should reject ' + invalidPassword.reason + ' passwords',
           function() {
             return setUpView
-              .failureLogin(invalidPassword.value, invalidPassword.value)
+              .failureLogin(email, invalidPassword.value, invalidPassword.value)
               .then(text => {
                 assert.equal(text,
                   'Please use a password of at least 8 characters.');
@@ -43,7 +51,7 @@ describe('sessions ui', function() {
         });
 
         it('should reject non-matching passwords', function() {
-          return setUpView.failureLogin(12345678, 1234).then(text => {
+          return setUpView.failureLogin(email, 12345678, 1234).then(text => {
             assert.equal(text, 'Passwords don\'t match! Please try again.');
           });
         });
@@ -56,7 +64,7 @@ describe('sessions ui', function() {
         });
 
         it('should accept matching, long-enough passwords', function() {
-          return setUpView.successLogin()
+          return setUpView.successLogin(email)
             .then(successfulPageView => successfulPageView.loginMessage)
             .then(text => { assert.equal(text, 'Thank you!'); });
         });
@@ -64,12 +72,12 @@ describe('sessions ui', function() {
     });
   });
 
-  describe('once registred', function() {
+  describe('once registered', function() {
     var signedInView;
 
     before(function() {
       return setUpWebapp.init()
-        .then(setUpView => setUpView.successLogin())
+        .then(setUpView => setUpView.successLogin(email))
         .then(successfulView => successfulView.goToSignedIn())
         .then(view => { signedInView = view; });
     });
@@ -91,7 +99,7 @@ describe('sessions ui', function() {
       PASSWORDS.invalids.forEach(invalidPassword => {
         it('should reject ' + invalidPassword.reason + ' passwords',
         function() {
-          return signInView.failureLogin(invalidPassword.value)
+          return signInView.failureLogin(email, invalidPassword.value)
             .then(alertMessage => {
               assert.equal(alertMessage, 'Invalid password');
             });
@@ -99,14 +107,14 @@ describe('sessions ui', function() {
       });
 
       it('should reject not matching passwords', function() {
-        return signInView.failureLogin('longEnoughButInvalid')
+        return signInView.failureLogin(email, 'longEnoughButInvalid')
           .then(alertMessage => {
             assert.equal(alertMessage, 'Signin error Unauthorized');
           });
       });
 
       it('should accept matching, long-enough passwords', function() {
-        return signInView.successLogin();
+        return signInView.successLogin(email);
       });
     });
   });

@@ -5,9 +5,19 @@ set -ev
 CURRENT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$CURRENT_PATH/travis-linux-common.sh"
 
+_build_without_features() {
+  echo '> Building foxbox without default features.'
+  cargo build --no-default-features
+}
+
+_build_default() {
+    echo '> Building foxbox with default features.'
+    cargo build
+}
 
 build() {
-    cargo build
+  _build_without_features
+  _build_default
 }
 
 lint() {

@@ -1,5 +1,8 @@
 //! Utilities for defining a JSON parser.
 
+#![allow(identity_op)] // Keep clippy happy with [De]serialize
+
+use api::Error as APIError;
 use util::Id;
 
 use std::cell::RefCell;
@@ -95,7 +98,7 @@ impl Default for Path {
 }
 
 /// An error during parsing.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ParseError {
     JSON(JSONError),
     MissingField {
@@ -117,7 +120,8 @@ pub enum ParseError {
     UnknownConstant {
         at: String,
         constant: String,
-    }
+    },
+    InternalError(String),
 }
 
 impl Display for ParseError {
@@ -128,6 +132,12 @@ impl Display for ParseError {
 impl StdError for ParseError {
     fn description(&self) -> &str {
         "Error while parsing to JSON"
+    }
+}
+
+impl From<ParseError> for APIError {
+    fn from(v: ParseError) -> APIError {
+        APIError::ParseError(v)
     }
 }
 
@@ -168,7 +178,15 @@ impl ParseError {
 }
 
 #[derive(Debug)]
-pub struct JSONError(error::Error);
+pub struct JSONError(pub error::Error);
+
+impl PartialEq for JSONError {
+    fn eq(&self, other: &JSONError) -> bool {
+        format!("{}", self.0) == format!("{}", other.0)
+    }
+}
+
+impl Eq for JSONError {}
 
 impl Clone for JSONError {
     fn clone(&self) -> JSONError {
@@ -373,17 +391,7 @@ impl<T, U> Parser<(T, U)> for (T, U) where T: Parser<T>, U: Parser<U> {
     }
 }
 */
-impl Parser<String> for String {
-    fn description() -> String {
-        "String".to_owned()
-    }
-    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
-        match source.as_string() {
-            Some(str) => Ok(str.to_owned()),
-            None => Err(ParseError::type_error("string", &path, "string"))
-        }
-    }
-}
+
 
 
 impl<T> Parser<Arc<T>> for Arc<T> where T: Parser<T> {

@@ -80,12 +80,12 @@ impl Adapter for Clock {
         set.drain(..).map(|id| {
             if id == self.getter_timestamp_id {
                 let date = TimeStamp::from_datetime(chrono::UTC::now());
-                (id, Ok(Some(Value::TimeStamp(date))))
+                (id, Ok(Some(Value::new(date))))
             } else if id == self.getter_time_of_day_id {
                 use chrono::Timelike;
                 let date = chrono::Local::now();
                 let duration = chrono::Duration::seconds(date.num_seconds_from_midnight() as i64);
-                (id, Ok(Some(Value::Duration(ValDuration::from(duration)))))
+                (id, Ok(Some(Value::new(ValDuration::from(duration)))))
             } else {
                 (id.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(id))))
             }
@@ -120,7 +120,7 @@ impl Adapter for Clock {
                 }
             });
             (id.clone(), match filter {
-                Some(Value::Range(range)) => self.aux_register_watch(&id, &*range, Box::new(tx.clone())),
+                Some(range) => self.aux_register_watch(&id, &range, Box::new(tx.clone())),
                 _ => Err(Error::GetterRequiresThresholdForWatching(id)),
             })
         }).collect()
@@ -128,7 +128,7 @@ impl Adapter for Clock {
 }
 
 impl Clock {
-    fn aux_register_watch(&self, id: &Id<Channel>, range: &Range, tx: Box<ExtSender<Op>>)
+    fn aux_register_watch(&self, id: &Id<Channel>, range: &Value, tx: Box<ExtSender<Op>>)
         -> Result<Box<AdapterWatchGuard>, Error>
     {
         match () {
@@ -139,71 +139,58 @@ impl Clock {
         }
     }
 
-    fn aux_register_watch_interval(&self, id: &Id<Channel>, range: &Range, tx: Box<ExtSender<Op>>)
+    fn aux_register_watch_interval(&self, id: &Id<Channel>, value: &Value, tx: Box<ExtSender<Op>>)
         -> Result<Box<AdapterWatchGuard>, Error>
     {
-        use foxbox_taxonomy::values::Range::*;
-
         // Determine when to call the trigger.
-        let duration = match *range {
-            Eq (ref val) | Geq (ref val) => {
-                try!(val.as_duration().map_err(Error::TypeError))
-                    .clone().into()
-            }
-            _ => return Err(Error::InvalidValue)
-        };
+        let duration = try!(value.cast::<ValDuration>()).clone();
 
-        debug!(target: "clock@link.mozilla.org", "[clock@link.mozilla.org] Scheduling a repeating watch with a duration of {}", duration);
+        debug!(target: "clock@link.mozilla.org", "[clock@link.mozilla.org] Scheduling a repeating watch with a duration of {:?}", duration);
 
         let id = id.clone();
-        let guard = self.timer.lock().unwrap().schedule_repeating(duration, move || {
+        let guard = self.timer.lock().unwrap().schedule_repeating(duration.clone().into(), move || {
             // Send Enter followed immediately by Exit, to make sure that Thinkerbell
             // rules reset themselves.
             let _ = tx.send(Op::Enter(id.clone(),
-                Value::Duration(ValDuration::from(duration))));
+                Value::new(duration.clone())));
             let _ = tx.send(Op::Exit(id.clone(),
-                Value::Duration(ValDuration::from(duration))));
+                Value::new(duration.clone())));
         });
         Ok(Box::new(Guard(vec![guard])))
     }
 
-    fn aux_register_watch_timeofday(&self, id: &Id<Channel>, range: &Range, tx: Box<ExtSender<Op>>)
+    fn aux_register_watch_timeofday(&self, id: &Id<Channel>, value: &Value, tx: Box<ExtSender<Op>>)
         -> Result<Box<AdapterWatchGuard>, Error>
     {
         use foxbox_taxonomy::values::Range::*;
+
+        let range = try!(value.cast::<Range<ValDuration>>());
 
         // Determine when to call the trigger. Repeat duration is always one day.
         let mut thresholds = match *range {
             Leq (ref val) => {
                 // Equivalent to BetweenEq { min: 0am, max: val }
-                let ts : chrono::Duration = try!(val.as_duration().map_err(Error::TypeError))
-                    .clone().into();
+                let ts : chrono::Duration = val.clone().into();
                 vec![(Movement::Enter, chrono::Duration::seconds(0)), (Movement::Exit, ts)]
             }
             Geq (ref val) => {
                 // Equivalent to BetweenEq { min: val, max: 0am }
-                let ts = try!(val.as_duration().map_err(Error::TypeError))
-                    .clone().into();
+                let ts = val.clone().into();
                 vec![(Movement::Enter, ts), (Movement::Exit, Duration::days(1))]
             }
             BetweenEq { ref min, ref max } => {
-                let ts_min = try!(min.as_duration().map_err(Error::TypeError))
-                    .clone().into();
-                let ts_max = try!(max.as_duration().map_err(Error::TypeError))
-                    .clone().into();
+                let ts_min = min.clone().into();
+                let ts_max = max.clone().into();
                 vec![(Movement::Enter, ts_min), (Movement::Exit, ts_max)]
             }
             OutOfStrict { ref min, ref max } => {
                 // Equivalent to BetweenEq {min: 0am, max: min} and BetweenEq {min: max, max: 0am}
-                let ts_min = try!(min.as_duration().map_err(Error::TypeError))
-                    .clone().into();
-                let ts_max = try!(max.as_duration().map_err(Error::TypeError))
-                    .clone().into();
+                let ts_min = min.clone().into();
+                let ts_max = max.clone().into();
                 vec![(Movement::Exit, ts_min), (Movement::Enter, ts_max)]
             }
             Eq (ref val) => {
-                let ts : chrono::Duration = try!(val.as_duration().map_err(Error::TypeError))
-                    .clone().into();
+                let ts : chrono::Duration = val.clone().into();
                 vec![(Movement::Enter, ts.clone()), (Movement::Exit, ts)]
             }
         };
@@ -225,9 +212,9 @@ impl Clock {
 
                 let event = match movement {
                     Movement::Enter => Op::Enter(id.clone(),
-                        Value::Duration(ValDuration::from(duration))),
+                        Value::new(ValDuration::from(duration))),
                     Movement::Exit => Op::Exit(id.clone(),
-                        Value::Duration(ValDuration::from(duration))),
+                        Value::new(ValDuration::from(duration))),
                 };
                 let _ = tx.send(event);
             });
@@ -255,10 +242,11 @@ impl Clock {
         }
     }
 
-    fn aux_register_watch_timestamp(&self, id: &Id<Channel>, range: &Range, tx: Box<ExtSender<Op>>)
+    fn aux_register_watch_timestamp(&self, id: &Id<Channel>, value: &Value, tx: Box<ExtSender<Op>>)
         -> Result<Box<AdapterWatchGuard>, Error>
     {
         use foxbox_taxonomy::values::Range::*;
+        let range = try!(value.cast::<Range<TimeStamp>>());
 
         // Now determine when/if to call the trigger.
         let mut thresholds = match *range {
@@ -267,22 +255,17 @@ impl Clock {
                 return Ok(Box::new(Guard(vec![])))
             }
             Geq (ref val) | Eq (ref val) => {
-                let ts = *try!(val.as_timestamp().map_err(Error::TypeError))
-                    .as_datetime();
+                let ts = *val.as_datetime();
                 vec![(Movement::Enter, ts)]
             }
             OutOfStrict { ref min, ref max } => {
-                let ts_min = *try!(min.as_timestamp().map_err(Error::TypeError))
-                    .as_datetime();
-                let ts_max = *try!(max.as_timestamp().map_err(Error::TypeError))
-                    .as_datetime();
+                let ts_min = *min.as_datetime();
+                let ts_max = *max.as_datetime();
                 vec![(Movement::Exit, ts_min), (Movement::Enter, ts_max)]
             }
             BetweenEq { ref min, ref max } => {
-                let ts_min = *try!(min.as_timestamp().map_err(Error::TypeError))
-                    .as_datetime();
-                let ts_max = *try!(max.as_timestamp().map_err(Error::TypeError))
-                    .as_datetime();
+                let ts_min = *min.as_datetime();
+                let ts_max = *max.as_datetime();
                 vec![(Movement::Enter, ts_min), (Movement::Exit, ts_max)]
             }
         };
@@ -303,9 +286,9 @@ impl Clock {
 
                 let event = match movement {
                     Movement::Enter => Op::Enter(id.clone(),
-                        Value::Duration(ValDuration::from(duration))),
+                        Value::new(ValDuration::from(duration))),
                     Movement::Exit => Op::Exit(id.clone(),
-                        Value::Duration(ValDuration::from(duration))),
+                        Value::new(ValDuration::from(duration))),
                 };
                 let _ = tx.send(event);
             });

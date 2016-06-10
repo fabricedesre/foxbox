@@ -115,6 +115,7 @@ pub trait RawAdapter: Send + Sync {
     /// reboots/reconnections.
     fn id(&self) -> Id<AdapterId>;
 
+    #[allow(type_complexity)] // Making the type simpler doesn't make sense, as it wouldn't match the other signatures in this module.
     fn fetch_values(&self, mut target: Vec<(Id<Channel>, Arc<Format>)>, _: User) -> ResultMap<Id<Channel>, Option<(Payload, Arc<Format>)>, Error> {
         target.drain(..).map(|(id, _)| {
             (id.clone(), Err(Error::OperationNotSupported(Operation::Watch, id)))

@@ -32,7 +32,7 @@ Prepper.makeSuite('Control camera locally',function(){
   it('take a picture (using the channel id)',function(){
     var setter = 'channel:' +
       cameraService.id.replace('service:','snapshot.');
-    var payload = {'select': {'id': setter}, 'value': {'Unit': {}}};
+    var payload = {'select': {'id': setter}, 'value': null};
     return chakram.put(Prepper.foxboxManager.setterURL, payload)
     .then(function(cmdResponse) {
       expect(cmdResponse).to.have.status(200);
@@ -50,7 +50,7 @@ Prepper.makeSuite('Control camera locally',function(){
     var payload = {'id': getter};
     return chakram.put(Prepper.foxboxManager.getterURL, payload)
     .then(function(cmdResponse) {
-      var imageList = cmdResponse.body[getter].Json;
+      var imageList = cmdResponse.body[getter];
       var res = imageList[imageList.length - 1].match(datePrefix);
       expect(cmdResponse).to.have.status(200);
       expect(imageList.length).above(0);
@@ -75,7 +75,7 @@ Prepper.makeSuite('Control camera locally',function(){
     var setter = 'channel:' +
       cameraService.id.replace('service:','snapshot.');
     var payload = {'select': {'feature': 'camera/store-snapshot'}, 
-      'value': {'Unit': {}}};
+      'value': null};
     return chakram.put(Prepper.foxboxManager.setterURL, payload)
     .then(function(cmdResponse) {
       expect(cmdResponse).to.have.status(200);
@@ -90,10 +90,10 @@ Prepper.makeSuite('Control camera locally',function(){
     var getter = 'channel:'+
       cameraService.id.replace('service:','image_list.');
     var payload = {'feature': 'camera/x-image-list'};
-    
+
     return chakram.put(Prepper.foxboxManager.getterURL, payload)
     .then(function(cmdResponse) {
-      var imageList = cmdResponse.body[getter].Json;
+      var imageList = cmdResponse.body[getter];
       var res = imageList[imageList.length - 1].match(datePrefix);
       expect(cmdResponse).to.have.status(200);
       expect(imageList.length).above(0);

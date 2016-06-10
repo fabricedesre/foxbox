@@ -3,7 +3,6 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /* global getElementName */
-/* global Headers */
 /* global Session */
 
 /* exported Console */
@@ -20,9 +19,9 @@ var Console = {
      '#console-response',
      '#console-response-content'].forEach(function(selector) {
       var name = getElementName(selector);
-      this[name] = document.querySelector(selector);      
+      this[name] = document.querySelector(selector);
     }.bind(this));
-    
+
     this._send = this.send.bind(this);
     this._clear = this.clear.bind(this);
 
@@ -58,7 +57,7 @@ var Console = {
 
     var self = this;
     var responseText = '';
-    this.request(method, endpoint, body).then(function(response) {
+    Session.request(method, endpoint, body).then(function(response) {
       responseText += response.url + '\n' +
                       response.status + ' ' + response.statusText + '\n';
       var headerKeys = response.headers.keys();
@@ -87,22 +86,5 @@ var Console = {
     this.consoleBody.value = '';
     this.consoleResponseContent = '';
     this.consoleResponse.hidden = true;
-  },
-
-  request: function(method, endpoint, body) {
-    var options = {
-      method: method,
-      mode: 'cors',
-      redirect: 'follow',
-      headers: new Headers({
-        'Authorization': 'Bearer ' + Session.get()
-      })
-    };
-
-    if (body && body.length) {
-      options.body = body;
-    }
-
-    return fetch(endpoint, options);
   }
 };

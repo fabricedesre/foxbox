@@ -8,13 +8,13 @@ var source = {'name': 'Hellooo, Thinkerbell', 'rules':
             [{'source':
               [{'id':'OpenZWave72057594126794752 (Sensor)'}],
             'feature':'door/is-open',
-            'range':{'Eq':{'OpenClosed':'Open'}}
+            'when':{'Eq': 'Open'}
           }],
           'execute':
             [{'destination':
               [{'feature':'log/append-text'}],
               'feature':'log/append-text',
-              'value':{'String':'Closed'}}]}
+              'value': 'Closed'}]}
             ]};
 source = JSON.stringify(source);
 
@@ -24,10 +24,8 @@ function generateThinkerbellNewRecipePayload(recipeName) {
        'feature':'thinkerbell/add-rule'
     },
     'value':{
-       'ThinkerbellRule':{
-          'name': recipeName,
-          'source': source
-        }
+        'name': recipeName,
+        'source': source
     }
   };
 }

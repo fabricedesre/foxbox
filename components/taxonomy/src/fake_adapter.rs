@@ -48,7 +48,7 @@ impl Drop for TestWatchGuard {
 type SyncMap<K, V> = Arc<Mutex<HashMap<K, V>>>;
 
 struct WatcherState {
-    filter: Option<Box<Range>>,
+    filter: Option<Value>,
     on_event: Box<ExtSender<WatchEvent<Value>>>,
     is_met: RefCell<bool>, /* is_met*/
     is_dropped: Arc<AtomicBool>, /* is_dropped */
@@ -108,23 +108,28 @@ impl FakeAdapter {
                                             value: value.clone()
                                         }).unwrap();
                                     }
-                                    Some(ref range) => {
-                                        match (range.contains(&value), *watcher.is_met.borrow()) {
-                                            (true, false) => {
-                                                watcher.on_event.send(WatchEvent::Enter {
-                                                    id: id.clone(),
-                                                    value: value.clone()
-                                                }).unwrap();
+                                    Some(ref target) => {
+                                        let mut is_met = watcher.is_met.borrow_mut();
+                                        println!("XX [fake_adapter] is_met: {}, value==target: {}, {:?}, {:?}", *is_met, value == *target, value, target);
+                                        if value == *target {
+                                            if *is_met {
+                                                continue;
                                             }
-                                            (false, true) => {
-                                                watcher.on_event.send(WatchEvent::Exit {
-                                                    id: id.clone(),
-                                                    value: value.clone()
-                                                }).unwrap();
+                                            *is_met = true;
+                                            watcher.on_event.send(WatchEvent::Enter {
+                                                id: id.clone(),
+                                                value: value.clone()
+                                            }).unwrap();
+                                        } else {
+                                            if !*is_met {
+                                                continue;
                                             }
-                                            _ => {}
+                                            *is_met = false;
+                                            watcher.on_event.send(WatchEvent::Exit {
+                                                id: id.clone(),
+                                                value: value.clone()
+                                            }).unwrap();
                                         }
-                                        *watcher.is_met.borrow_mut() = range.contains(&value);
                                     }
                                 }
                             }
@@ -213,17 +218,8 @@ impl Adapter for FakeAdapter {
         let mut watchers = self.watchers.lock().unwrap();
         watch.drain(..).filter_map(|(id, filter, on_event)| {
             let is_dropped = Arc::new(AtomicBool::new(false));
-            let range = match filter {
-                None => None,
-                Some(Value::Range(range)) => Some(range),
-                Some(_) => {
-                    // Ignore.
-                    // FIXME: Log?
-                    return None
-                }
-            };
             let watcher = WatcherState {
-                filter: range,
+                filter: filter,
                 on_event: on_event,
                 is_met: RefCell::new(false),
                 is_dropped: is_dropped.clone()

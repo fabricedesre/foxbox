@@ -10,8 +10,8 @@ use std::sync::{ Arc, Mutex, Weak };
 
 pub type SyncSender = Mutex<Box<ExtSender<WatchEvent<Value>>>>;
 type WatchersMap = HashMap<usize, Arc<SyncSender>>;
-type RangedWeakSender = (Option<Box<Range>>, Weak<SyncSender>);
-pub type RangedSyncSender = (Option<Box<Range>>, Arc<SyncSender>);
+type RangedWeakSender = (Option<Value>, Weak<SyncSender>);
+pub type RangedSyncSender = (Option<Value>, Arc<SyncSender>);
 
 pub struct Watchers {
     current_index: usize,
@@ -28,7 +28,7 @@ impl Watchers {
         }
     }
 
-    pub fn push(&mut self, taxo_id: TaxoId<Channel>, range: Option<Box<Range>>, watcher: Arc<SyncSender>) -> WatcherGuard {
+    pub fn push(&mut self, taxo_id: TaxoId<Channel>, range: Option<Value>, watcher: Arc<SyncSender>) -> WatcherGuard {
         let index = self.current_index;
         self.current_index += 1;
         {

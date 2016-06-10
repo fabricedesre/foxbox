@@ -18,7 +18,7 @@ use io::*;
 use services::*;
 use selector::*;
 pub use util::{ ResultMap, TargetMap, Targetted };
-use values::{ format, TypeError };
+use values::TypeError;
 
 use transformable_channels::mpsc::*;
 
@@ -28,7 +28,7 @@ use std::sync::Arc;
 
 use serde_json;
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub enum Operation {
     Fetch,
     Send,
@@ -57,7 +57,7 @@ impl ToJSON for Operation {
 
 /// An error that arose during interaction with either a device, an adapter or the
 /// adapter manager
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Error {
     /// Attempting to execute a value from a Channel that doesn't support this operation.
     OperationNotSupported(Operation, Id<Channel>),
@@ -145,7 +145,7 @@ impl error::Error for Error {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 pub enum InternalError {
     /// Attempting to use a channel that isn't registered.
     NoSuchChannel(Id<Channel>),
@@ -224,13 +224,13 @@ pub enum WatchEvent {
 #[derive(Debug, Clone, PartialEq)]
 pub enum User {
     None,
-    Id(i32)
+    Id(String)
 }
 
 #[test]
 fn test_user_partialeq() {
     assert_eq!(User::None, User::None);
-    assert_eq!(User::Id(1), User::Id(1));
+    assert_eq!(User::Id(String::from("1")), User::Id(String::from("1")));
 }
 
 impl<K> Parser<Targetted<K, Payload>> for Targetted<K, Payload> where K: Parser<K> + Clone {
@@ -263,7 +263,7 @@ impl<K> Parser<Targetted<K, Payload>> for Targetted<K, Payload> where K: Parser<
     }
 }
 
-impl<K> Parser<Targetted<K, Exactly<(Payload, Arc<Format>)>>> for Targetted<K, Exactly<(Payload, Arc<Format>)>> where K: Parser<K> + Clone {
+impl<K> Parser<Targetted<K, Exactly<Payload>>> for Targetted<K, Exactly<Payload>> where K: Parser<K> + Clone {
     fn description() -> String {
         format!("Targetted<{}, range>", K::description())
     }
@@ -278,7 +278,7 @@ impl<K> Parser<Targetted<K, Exactly<(Payload, Arc<Format>)>>> for Targetted<K, E
             }
         }
         let result = match path.push("range", |path| Exactly::<Payload>::take_opt(path, source, "range")) {
-            Some(Ok(Exactly::Exactly(payload))) => Exactly::Exactly((payload, format::RANGE.clone())),
+            Some(Ok(Exactly::Exactly(payload))) => Exactly::Exactly(payload),
             Some(Ok(Exactly::Always)) | None => Exactly::Always,
             Some(Ok(Exactly::Never)) => Exactly::Never,
             Some(Err(err)) => return Err(err),
@@ -393,7 +393,7 @@ pub trait API: Send {
     /// Many devices may reject such requests.
     ///
     /// The watcher is disconnected once the `WatchGuard` returned by this method is dropped.
-    fn watch_values(& self, watch: TargetMap<ChannelSelector, Exactly<(Payload, Arc<Format>)>>,
+    fn watch_values(& self, watch: TargetMap<ChannelSelector, Exactly<Payload>>,
             on_event: Box<ExtSender<WatchEvent>>) -> Self::WatchGuard;
 
     /// A value that causes a disconnection once it is dropped.

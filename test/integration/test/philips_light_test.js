@@ -41,21 +41,21 @@ Prepper.makeSuite('Control lights locally',function(){
     // id and the philips hue id until the tag feature is implemented
     it('Turn on all lights one by one', function(){
       var lightID = lights[0];
-      var payload = {'select': {'id': lightID}, 'value': { 'OnOff': 'On' } };
+      var payload = {'select': {'id': lightID}, 'value': 'On' };
 
       return chakram.put(Prepper.foxboxManager.setterURL,payload)
       .then(function(cmdResponse) {
        expect(cmdResponse).to.have.status(200);
        expect(cmdResponse.body[lightID]).equals(null);
        lightID = lights[1];
-       payload = {'select': {'id': lightID}, 'value': { 'OnOff': 'On' } };
+       payload = {'select': {'id': lightID}, 'value': 'On' };
        return chakram.put(Prepper.foxboxManager.setterURL,payload);
      })
       .then(function(cmdResponse) {
         expect(cmdResponse).to.have.status(200);
         expect(cmdResponse.body[lightID]).equals(null);
         lightID = lights[2];
-        payload = {'select': {'id': lightID}, 'value': { 'OnOff': 'On' } };
+        payload = {'select': {'id': lightID}, 'value': 'On' };
         return chakram.put(Prepper.foxboxManager.setterURL,payload);
       })
       .then(function(cmdResponse) {
@@ -72,15 +72,15 @@ Prepper.makeSuite('Control lights locally',function(){
         expect(lights.length).equals(3);
 
         lights.forEach(light => {
-          expect(listResponse.body[light].OnOff).equals('On');
+          expect(listResponse.body[light]).equals('On');
         });
       }); 
     });
 
     it('Turn off all lights at once', function() {
 
-      var payload = {'select': {'feature': 'light/is-on'}, 
-        'value': {'OnOff':'Off'}};
+      var payload = {'select': {'feature': 'light/is-on'},
+        'value': 'Off'};
 
       return chakram.put(Prepper.foxboxManager.setterURL,payload)
       .then(function(cmdResponse) {
@@ -96,7 +96,7 @@ Prepper.makeSuite('Control lights locally',function(){
         expect(listResponse).to.have.status(200);
 
         lights.forEach(light => {
-          expect(listResponse.body[light].OnOff).equals('Off');
+          expect(listResponse.body[light]).equals('Off');
         });
       }); 
     });

@@ -1,6 +1,6 @@
 [package]
 name = "foxbox_taxonomy"
-version = "0.1.2"
+version = "0.2.0"
 authors = ["David Rajchenbach-Teller <dteller@mozilla.com>"]
 
 [dependencies]
@@ -9,6 +9,7 @@ clippy = "0.0.71"
 lazy_static = "^0.1"
 libc = "0.2.9"
 log = "0.3"
+mopa = "0.2.2"
 odds = "0.2.*"
 rusqlite = "0.6.0"
 serde = "0.7.0"

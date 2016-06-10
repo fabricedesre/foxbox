@@ -36,7 +36,7 @@ struct TestSharedAdapterBackend {
     timers: BinaryHeap<Timer>,
     trigger_timers_until: Option<DateTime<UTC>>,
 
-    watchers: HashMap<usize, (Id<Channel>, Option<Box<Range>>, Box<ExtSender<WatchEvent<Value>>>)>,
+    watchers: HashMap<usize, (Id<Channel>, Option<Value>, Box<ExtSender<WatchEvent<Value>>>)>,
 }
 
 impl TestSharedAdapterBackend {
@@ -85,11 +85,6 @@ impl TestSharedAdapterBackend {
             Vec<(Id<Channel>, Result<usize, Error>)>
     {
         let results = source.drain(..).filter_map(|(id, range, tx)| {
-            let range = match range {
-                Some(Value::Range(range)) => Some(range),
-                None => None,
-                _ => return None, // FIXME: Log
-            };
             let result = (id.clone(), Ok(self.counter));
             self.watchers.insert(self.counter, (id, range, tx));
             self.counter += 1;
@@ -121,20 +116,22 @@ impl TestSharedAdapterBackend {
         for (id, value) in values.drain(..) {
             let old = self.getter_values.insert(id.clone(), value.clone());
             match value {
-                Err(_) => continue,
+                Err(_) => {
+                    continue
+                },
                 Ok(value) => {
                     for watcher in self.watchers.values() {
-                        let (ref watched_id, ref range, ref cb) = *watcher;
+                        let (ref watched_id, ref condition, ref cb) = *watcher;
                         if *watched_id != id {
                             continue;
                         }
-                        if let Some(ref range) = *range {
+                        if let Some(ref condition) = *condition {
                             let was_met = if let Some(Ok(ref value)) = old {
-                                range.contains(value)
+                                value == condition
                             } else {
                                 false
                             };
-                            match (was_met, range.contains(&value)) {
+                            match (was_met, value == *condition) {
                                 (false, true) => {
                                     let _ = cb.send(WatchEvent::Enter {
                                         id: id.clone(),

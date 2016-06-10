@@ -10,10 +10,8 @@
             }
           ],
           "feature": "clock/time-of-day-s",
-          "range": {
-            "Geq": {
-              "Duration": 5
-            }
+          "when": {
+            "Duration": 5
           }
         },
         {
@@ -23,10 +21,8 @@
             }
           ],
           "feature": "clock/time-of-day-s",
-          "range": {
-            "Leq": {
+          "when": {
               "Duration": 2
-            }
           }
         }
       ],

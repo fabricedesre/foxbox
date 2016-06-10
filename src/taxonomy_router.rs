@@ -9,7 +9,7 @@ use foxbox_taxonomy::manager::*;
 use foxbox_taxonomy::api::{ API, Error, TargetMap, User };
 use foxbox_taxonomy::channel::*;
 use foxbox_taxonomy::io::*;
-use foxbox_taxonomy::values::{ format, Binary, Value };
+use foxbox_taxonomy::values::{ format, Binary };
 use foxbox_taxonomy::selector::*;
 use foxbox_taxonomy::services::*;
 
@@ -42,12 +42,11 @@ impl TaxonomyRouter {
     }
 
     fn build_binary_response(&self, payload: &Binary) -> IronResult<Response> {
-        use core::ops::Deref;
         use hyper::mime::Mime;
 
         let mime : Mime = format!("{}", payload.mimetype).parse().unwrap();
         // TODO: stop copying the array here.
-        let data = payload.data.deref().clone();
+        let data = payload.data.clone();
 
         let mut response = Response::with(data);
         response.status = Some(Status::Ok);
@@ -87,20 +86,20 @@ impl TaxonomyRouter {
 
         for map_value in map.values() {
             if let Ok(Some((ref payload, _))) = *map_value {
-                match payload.to_value(&format::BINARY) {
-                    Ok(Value::Binary(ref data)) => {
-                        return Some(Binary {
-                            mimetype: (*data).mimetype.clone(),
-                            data: (*data).data.clone()
-                        });
-                    }
-                    Ok(other) => {
-                        warn!("get_binary could not convert data labelled as format::BINARY to Value::Binary {:?}", other);
-                    }
-                    Err(_) => {
-                        // It's not a binary, proceed as usual.
+                if let Ok(ref data) = payload.to_value(&format::BINARY) {
+                    match data.downcast::<Binary>() {
+                        Some(ref data) => {
+                            return Some(Binary {
+                                mimetype: (*data).mimetype.clone(),
+                                data: (*data).data.clone()
+                            });
+                        },
+                        None => {
+                            warn!("get_binary could not convert data labelled as format::BINARY to Binary {}", data.description());
+                        }
                     }
                 }
+                // It's not a binary, proceed as usual.
             }
         }
 
@@ -312,7 +311,7 @@ describe! taxonomy_router {
                                     Headers::new(),
                                     &mount).unwrap();
         let body = response::extract_body_to_string(response);
-        let s = r#"[{"adapter":"clock@link.mozilla.org","channels":{"getter:interval.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","feature":"clock/time-interval-seconds","id":"getter:interval.clock@link.mozilla.org","service":"service:clock@link.mozilla.org","supports_fetch":null,"supports_send":null,"tags":[]},"getter:timeofday.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","feature":"clock/time-of-day-seconds","id":"getter:timeofday.clock@link.mozilla.org","service":"service:clock@link.mozilla.org","supports_fetch":{"returns":{"requires":"Duration (s)"}},"supports_send":null,"tags":[]},"getter:timestamp.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","feature":"clock/time-timestamp-rfc-3339","id":"getter:timestamp.clock@link.mozilla.org","service":"service:clock@link.mozilla.org","supports_fetch":{"returns":{"requires":"TimeStamp"}},"supports_send":null,"tags":[]}},"id":"service:clock@link.mozilla.org","properties":{"model":"Mozilla clock v1"},"tags":[]}]"#;
+        let s = r#"[{"adapter":"clock@link.mozilla.org","channels":{"getter:interval.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","feature":"clock/time-interval-seconds","id":"getter:interval.clock@link.mozilla.org","service":"service:clock@link.mozilla.org","supports_fetch":null,"supports_send":null,"tags":[]},"getter:timeofday.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","feature":"clock/time-of-day-seconds","id":"getter:timeofday.clock@link.mozilla.org","service":"service:clock@link.mozilla.org","supports_fetch":{"returns":{"requires":"Duration (s)"}},"supports_send":null,"tags":[]},"getter:timestamp.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","feature":"clock/time-timestamp-rfc-3339","id":"getter:timestamp.clock@link.mozilla.org","service":"service:clock@link.mozilla.org","supports_fetch":{"returns":{"requires":"TimeStamp (RFC 3339)"}},"supports_send":null,"tags":[]}},"id":"service:clock@link.mozilla.org","properties":{"model":"Mozilla clock v1"},"tags":[]}]"#;
 
         assert_eq!(body, s);
     }
@@ -323,7 +322,7 @@ describe! taxonomy_router {
                                     r#"[{"id":"service:clock@link.mozilla.org"}]"#,
                                     &mount).unwrap();
         let body = response::extract_body_to_string(response);
-        let s = r#"[{"adapter":"clock@link.mozilla.org","channels":{"getter:interval.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","feature":"clock/time-interval-seconds","id":"getter:interval.clock@link.mozilla.org","service":"service:clock@link.mozilla.org","supports_fetch":null,"supports_send":null,"tags":[]},"getter:timeofday.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","feature":"clock/time-of-day-seconds","id":"getter:timeofday.clock@link.mozilla.org","service":"service:clock@link.mozilla.org","supports_fetch":{"returns":{"requires":"Duration (s)"}},"supports_send":null,"tags":[]},"getter:timestamp.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","feature":"clock/time-timestamp-rfc-3339","id":"getter:timestamp.clock@link.mozilla.org","service":"service:clock@link.mozilla.org","supports_fetch":{"returns":{"requires":"TimeStamp"}},"supports_send":null,"tags":[]}},"id":"service:clock@link.mozilla.org","properties":{"model":"Mozilla clock v1"},"tags":[]}]"#;
+        let s = r#"[{"adapter":"clock@link.mozilla.org","channels":{"getter:interval.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","feature":"clock/time-interval-seconds","id":"getter:interval.clock@link.mozilla.org","service":"service:clock@link.mozilla.org","supports_fetch":null,"supports_send":null,"tags":[]},"getter:timeofday.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","feature":"clock/time-of-day-seconds","id":"getter:timeofday.clock@link.mozilla.org","service":"service:clock@link.mozilla.org","supports_fetch":{"returns":{"requires":"Duration (s)"}},"supports_send":null,"tags":[]},"getter:timestamp.clock@link.mozilla.org":{"adapter":"clock@link.mozilla.org","feature":"clock/time-timestamp-rfc-3339","id":"getter:timestamp.clock@link.mozilla.org","service":"service:clock@link.mozilla.org","supports_fetch":{"returns":{"requires":"TimeStamp (RFC 3339)"}},"supports_send":null,"tags":[]}},"id":"service:clock@link.mozilla.org","properties":{"model":"Mozilla clock v1"},"tags":[]}]"#;
 
         assert_eq!(body, s);
     }
@@ -352,7 +351,7 @@ describe! binary_getter {
         use foxbox_taxonomy::services::*;
         use foxbox_taxonomy::values::{ format, Value, Binary };
         use iron::Headers;
-        use iron::headers::{ Authorization, Bearer, ContentLength, ContentType };
+        use iron::headers::{ ContentLength, ContentType };
         use iron_test::{ request, response };
         use mount::Mount;
         use std::collections::HashMap;
@@ -388,15 +387,15 @@ describe! binary_getter {
 
             fn fetch_values(&self, mut set: Vec<Id<Channel>>, user: User)
                 -> ResultMap<Id<Channel>, Option<Value>, Error> {
-                assert_eq!(user, User::Id(2));
+                assert_eq!(user, User::None);
                 set.drain(..).map(|id| {
                     if id == Id::new("getter:binary@link.mozilla.org") {
                         let vec = vec![1, 2, 3, 10, 11, 12];
                         let binary = Binary {
-                            data: Arc::new(vec),
+                            data: vec,
                             mimetype: Id::new("image/png")
                         };
-                        return (id.clone(), Ok(Some(Value::Binary(binary))));
+                        return (id.clone(), Ok(Some(Value::new(binary))));
                     }
 
                     (id.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(id))))
@@ -442,15 +441,8 @@ describe! binary_getter {
         let mut mount = Mount::new();
         mount.mount("/api/v1", create(ControllerStub::new(), &taxo_manager));
 
-        // Token payload is { "id": 2, "name": "admin" }
-        let token = "eyJ0eXAiOiJKV1QiLCJraWQiOm51bGwsImFsZyI6IkhTMjU2In0.eyJpZCI\
-                     6MiwibmFtZSI6ImFkbWluIn0.JNtvokupDl2hdqB+vER15y89qigPc4FviZfJOSR1Vso";
-
-        let mut headers = Headers::new();
-        headers.set(Authorization(Bearer { token: token.to_owned() }));
-
         let response = request::put("http://localhost:3000/api/v1/channels/get",
-                                    headers,
+                                    Headers::new(),
                                     r#"[{"id":"getter:binary@link.mozilla.org"}]"#,
                                     &mount).unwrap();
 

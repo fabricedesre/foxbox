@@ -288,7 +288,7 @@ impl API for AdapterManager {
     }
 
     /// Watch for any change
-    fn watch_values(&self, watch: TargetMap<ChannelSelector, Exactly<(Payload, Arc<Format>)>>,
+    fn watch_values(&self, watch: TargetMap<ChannelSelector, Exactly<Payload>>,
         on_event: Box<ExtSender<api::WatchEvent>>) -> Self::WatchGuard
     {
         let (request, watch_key, is_dropped) =

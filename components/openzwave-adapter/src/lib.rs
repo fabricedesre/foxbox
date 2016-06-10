@@ -107,18 +107,18 @@ trait RangeChecker {
     fn should_send(&self, &Value, EventType) -> bool;
 }
 
-impl RangeChecker for Option<Box<Range>> {
+impl RangeChecker for Option<Value> {
     fn should_send(&self, value: &Value, event_type: EventType) -> bool {
         match *self {
             None => event_type == EventType::Enter, // no range means we send only Enter events
-            Some(ref range) => range.contains(value)
+            Some(ref range) => range == value // FIXME: This won't scale up to interesting ranges.
         }
     }
 }
 
-impl RangeChecker for Range {
+impl RangeChecker for Value {
     fn should_send(&self, value: &Value, _: EventType) -> bool {
-        self.contains(value)
+        self == value // FIXME: This won't scale up to interesting ranges.
     }
 }
 
@@ -146,9 +146,9 @@ fn ozw_vid_as_taxo_value(vid: &ValueID) -> Option<Value> {
                     return None;
                 };
                 if ref_eq(kind, &DOOR_IS_OPEN) {
-                    Some(Value::OpenClosed(if value {OpenClosed::Open} else {OpenClosed::Closed}))
+                    Some(Value::new(if value {OpenClosed::Open} else {OpenClosed::Closed}))
                 } else if ref_eq(kind, &DOOR_IS_LOCKED) {
-                    Some(Value::DoorLocked(if value {DoorLocked::Locked} else {DoorLocked::Unlocked}))
+                    Some(Value::new(if value {IsLocked::Locked} else {IsLocked::Unlocked}))
                 } else {
                     None
                 }
@@ -168,11 +168,12 @@ fn set_ozw_vid_from_taxo_value(vid: &ValueID, value: Value) -> Result<(), TaxoEr
 
     let result = match vid.get_type() {
         ValueType::ValueType_Bool => {
-            match value {
-                //Value::OnOff(onOff) => { vid.set_bool(onOff == OnOff::On) } // TODO support switches
-                Value::OpenClosed(open_closed) => { vid.set_bool(open_closed == OpenClosed::Open) }
-                Value::DoorLocked(locked_unlocked) => { vid.set_bool(locked_unlocked == DoorLocked::Locked) }
-                _ => { return Err(TaxoError::InvalidValue) } // TODO InvalidType would be better but we'll need to fix specific types for specific TaxoIds
+            if let Some(open_closed) = value.downcast::<OpenClosed>() {
+                vid.set_bool(*open_closed == OpenClosed::Open)
+            } else if let Some(locked_unlocked) = value.downcast::<IsLocked>() {
+                vid.set_bool(*locked_unlocked == IsLocked::Locked)
+            } else {
+                return Err(TaxoError::InvalidValue) // TODO InvalidType would be better but we'll need to fix specific types for specific TaxoIds
             }
         }
         _ => { return Err(TaxoError::InternalError(InternalError::GenericError(format!("Unsupported OZW type: {:?}", vid.get_type())))) }
@@ -182,18 +183,14 @@ fn set_ozw_vid_from_taxo_value(vid: &ValueID, value: Value) -> Result<(), TaxoEr
 }
 
 fn start_including(ozw: &ZWaveManager, home_id: u32, value: &Value) -> Result<(), TaxoError> {
-    match *value {
-        Value::IsSecure(ref is_secure) => {
-            let is_secure_bool = *is_secure == IsSecure::Secure;
-            try!(
-                ozw.add_node(home_id, is_secure_bool)
-                    .map_err(|e| TaxoError::InternalError(InternalError::GenericError(format!("Error while including node on network {}: {}", home_id, e))))
-            );
-            info!("[OpenZWaveAdapter] Controller on network {} is awaiting an include in {} mode, please do the appropriate steps to include a device.", home_id, is_secure);
-            Ok(())
-        }
-        _ => Err(TaxoError::TypeError(TypeError::new(&format::IS_SECURE, &value)))
-    }
+    let is_secure = try!(value.cast::<IsSecure>());
+    let is_secure_bool = *is_secure == IsSecure::Secure;
+    try!(
+        ozw.add_node(home_id, is_secure_bool)
+            .map_err(|e| TaxoError::InternalError(InternalError::GenericError(format!("Error while including node on network {}: {}", home_id, e))))
+    );
+    info!("[OpenZWaveAdapter] Controller on network {} is awaiting an include in {} mode, please do the appropriate steps to include a device.", home_id, is_secure);
+    Ok(())
 }
 
 fn start_excluding(ozw: &ZWaveManager, home_id: u32) -> Result<(), TaxoError> {
@@ -453,13 +450,13 @@ impl OpenzwaveAdapter {
                             previous
                         };
 
-                        for &(ref range, ref sender) in &watchers {
-                            debug!("[OpenzwaveAdapter::ValueChanged] Iterating over watcher {:?} {:?}", taxo_id, range);
+                        for &(ref when, ref sender) in &watchers {
+                            debug!("[OpenzwaveAdapter::ValueChanged] Iterating over watcher {:?} {:?}", taxo_id, when);
 
-                            let should_send_value = range.should_send(&taxo_value, EventType::Enter);
+                            let should_send_value = when.should_send(&taxo_value, EventType::Enter);
 
                             if let Some(ref previous_value) = previous_value {
-                                let should_send_previous = range.should_send(previous_value, EventType::Exit);
+                                let should_send_previous = when.should_send(previous_value, EventType::Exit);
                                 // If the new and the old values are both in the same range, we
                                 // need to send nothing.
                                 if should_send_value && should_send_previous { continue }
@@ -564,15 +561,6 @@ impl taxonomy::adapter::Adapter for OpenzwaveAdapter {
 
             let sender = Arc::new(Mutex::new(sender)); // Mutex is necessary because cb is not Sync.
             debug!("[OpenzwaveAdapter::register_watch] Should register a watcher for {:?} {:?}", id, range);
-            let range = match range {
-                None => None,
-                Some(Value::Range(range)) => Some(range),
-                Some(_) => {
-                    // Ignore.
-                    // FIXME: Log?
-                    return None
-                }
-            };
             let watch_guard = {
                 let mut watchers = self.watchers.lock().unwrap();
                 watchers.push(id.clone(), range.clone(), sender.clone())

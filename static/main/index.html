@@ -6,6 +6,7 @@
     <meta http-equiv="Content-Security-Policy" content="default-src 'self' ; style-src 'self' 'unsafe-inline' ; connect-src * ; object-src 'none' ; img-src 'self' blob: ; referrer no-referrer ;">
     <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
     <meta name="format-detection" content="telephone=no">
+    <link rel="stylesheet" href="css/main.css">
     <link rel="stylesheet" href="shared/css/FiraSans/font.css">
     <link rel="stylesheet" href="shared/css/common.css">
   </head>
@@ -14,32 +15,49 @@
       <div class="container">
         <div class="inner-container">
           <p>
-            You are signed in as admin.
+            You are signed in as <span id="user"></span>
           </p>
           <p>
             <button id="signout-button">Log out</button>
           </p>
 
+          <input id="console-toggle" type="checkbox">
+          <label id="for-console-toggle" for="console-toggle">API Console</label>
           <div id="console">
-            <h3>API Console</h3>
             <div>
-              <label>Endpoint</label>
+              <label for="console-endpoint">Endpoint</label>
               <input id="console-endpoint" type="text" placeholder="endpoint"></input>
-              <label>Method</label>
+              <label for="console-method">Method</label>
               <select id="console-method">
                 <option>POST</option>
                 <option>GET</option>
                 <option>PUT</option>
                 <option>DELETE</option>
               </select>
-              <label>Body</label>
+              <label for="console-body">Body</label>
               <textarea id="console-body"></textarea>
               <button id="console-send">Send</button>
               <button id="console-clear">Clear</button>
             </div>
             <div id="console-response" hidden>
-              <label>Response</label>
+              <label for="console-response-content">Response</label>
               <textarea id="console-response-content"></textarea>
+            </div>
+          </div>
+
+          <input id="users-toggle" type="checkbox">
+          <label id="for-users-toggle" for="users-toggle">Users</label>
+          <div id="users">
+            <div>
+              <table>
+                <tbody id="users-list">
+                </tbody>
+              </table>
+            </div>
+            <div>
+              <label for="users-invite-email">Invite a new user</label>
+              <input id="users-invite-email" type="text" placeholder="user email"></input>
+              <button id="users-invite-button">Invite</button>
             </div>
           </div>
         </div>
@@ -50,8 +68,9 @@
       <div class="container">
         <div class="inner-container">
           <form action="#">
-            <label for="signin-pwd">Please, enter your password</label>
-            <input id="signin-pwd" type="password" placeholder="password" autofocus>
+            <label for="signin-email">Please, enter your login and password</label>
+            <input id="signin-email" type="text" placeholder="email" autofocus>
+            <input id="signin-pwd" type="password" placeholder="password">
             <button id="signin-button">Log in</button>
           </form>
         </div>
@@ -62,6 +81,7 @@
   <script src="shared/js/url_search_params.js"></script>
   <script src="shared/js/utils.js"></script>
   <script src="js/console.js"></script>
+  <script src="js/users.js"></script>
   <script src="js/session.js"></script>
-  <script src="js/session_ui.js"></script>
+  <script src="js/main.js"></script>
 </html>

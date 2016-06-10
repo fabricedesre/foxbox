@@ -8,6 +8,9 @@ function SignInAccessor() {
 }
 
 SignInAccessor.prototype = Object.assign({
+  get emailField() {
+    return this.waitForElement('#signin-email');
+  },
 
   get passwordField() {
     // Make sure this field is not plain text

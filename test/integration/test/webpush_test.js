@@ -13,25 +13,21 @@ Prepper.makeSuite('Test Push Service locally',function(){
        'id':'channel:subscription.webpush@link.mozilla.org'
      },
      'value': {
-       'Json': {
-         'subscriptions':[{
-           'push_uri': Prepper.webPush_server.getEndpointURI(),
-           'public_key': Prepper.webPush_server.getPublicKey()
-         }]
-      }
+       'subscriptions':[{
+         'push_uri': Prepper.webPush_server.getEndpointURI(),
+         'public_key': Prepper.webPush_server.getPublicKey()
+       }]
     }
   };
 
   var newWebPushSubscriptionPayload = 
   Object.assign({}, baseSubscriptionPayload, {
     value: {
-       Json: {
-          subscriptions: [{
-            'push_uri': Prepper.webPush_server.getEndpointURI(),
-            'public_key': Prepper.webPush_server.getPublicKey(),
-            'auth': Prepper.webPush_server.getUserAuth()
-          }]
-       }
+        subscriptions: [{
+          'push_uri': Prepper.webPush_server.getEndpointURI(),
+          'public_key': Prepper.webPush_server.getPublicKey(),
+          'auth': Prepper.webPush_server.getUserAuth()
+        }]
     }
   });
 
@@ -82,9 +78,9 @@ Prepper.makeSuite('Test Push Service locally',function(){
         })
         .then(function(cmdResp){
           expect(cmdResp).to.have.status(200);
-          expect(cmdResp.body[getter].Json.subscriptions[0].public_key)
+          expect(cmdResp.body[getter].subscriptions[0].public_key)
           .equals(Prepper.webPush_server.getPublicKey());
-          expect(cmdResp.body[getter].Json.subscriptions[0].push_uri)
+          expect(cmdResp.body[getter].subscriptions[0].push_uri)
           .equals(Prepper.webPush_server.getEndpointURI());
         });
       });
@@ -96,8 +92,7 @@ Prepper.makeSuite('Test Push Service locally',function(){
           'select': {
             'id': setter},
             'value': {
-              'Json': {
-                'resources':['livingroom', 'washroom']}}};
+                'resources':['livingroom', 'washroom']}};
         var getterPayload = {'id': getter};
 
         return chakram.put(Prepper.foxboxManager.setterURL,setterPayload)
@@ -109,9 +104,9 @@ Prepper.makeSuite('Test Push Service locally',function(){
         .then(function(cmdResp){
           expect(cmdResp).to.have.status(200);
           expect(cmdResp.body[getter]
-            .Json.resources[0]).equals('livingroom');
+            .resources[0]).equals('livingroom');
           expect(cmdResp.body[getter]
-            .Json.resources[1]).equals('washroom');
+            .resources[1]).equals('washroom');
         });
       });
 
@@ -124,8 +119,7 @@ Prepper.makeSuite('Test Push Service locally',function(){
             'id': setter
           },
           'value': {
-            'WebPushNotify': {
-              'resource':resource,'message':notificationText}}} ;
+              'resource':resource,'message':notificationText}} ;
         return chakram.put(Prepper.foxboxManager.setterURL, payload)
         .then(function(cmdResponse) {
           expect(cmdResponse).to.have.status(200);
@@ -144,8 +138,7 @@ Prepper.makeSuite('Test Push Service locally',function(){
               'id': setter
             },
             'value': {
-              'WebPushNotify': {
-                'resource':resource,'message':notificationText}}} ;
+                'resource':resource,'message':notificationText}} ;
           return chakram.put(Prepper.foxboxManager.setterURL, payload)
           .then(function(cmdResponse) {
           // collect the response from the webpush simulator 
@@ -169,11 +162,10 @@ Prepper.makeSuite('Test Push Service locally',function(){
               'id':setter
             }, 
             'value': {
-              'Json': {
                 'subscriptions':[{
                   'push_uri':pushURI,
                   'public_key':pushkey
-                }]}}};
+                }]}};
           var getterPayload = {'id': getter};
 
           return chakram.put(Prepper.foxboxManager.setterURL,setterPayload)
@@ -184,7 +176,7 @@ Prepper.makeSuite('Test Push Service locally',function(){
           })
           .then(function(cmdResp){
             expect(cmdResp).to.have.status(200);
-            expect(cmdResp.body[getter].Json.subscriptions.length).equals(0);
+            expect(cmdResp.body[getter].subscriptions.length).equals(0);
           });
         });
       });
