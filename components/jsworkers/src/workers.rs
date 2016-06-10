@@ -6,9 +6,7 @@ use foxbox_core::broker::SharedBroker;
 use foxbox_core::jsworkers::{ Message, Url, User, WorkerInfo, WorkerState };
 
 use rusqlite::Connection;
-use serde::{Serialize, Serializer};
 use std::collections::HashMap;
-use std::path::PathBuf;
 
 fn escape<T>(string: &str) -> String {
     // http://www.sqlite.org/faq.html#q14
