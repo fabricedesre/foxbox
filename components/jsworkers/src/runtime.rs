@@ -99,7 +99,12 @@ impl Handler for RuntimeWsHandler {
             info!("WS browser connection for id {}", id);
             self.mode.set(ClientType::Browser);
             let mut guard = self.broker.lock().unwrap();
-            guard.send_message("workers", BrokerMessage::BrowserWS { id: id.to_string(), out: self.out.clone() });
+            guard.send_message("workers",
+                               BrokerMessage::BrowserWS {
+                                   out: self.out.clone(),
+                                   worker_id: id.to_string(),
+                                   handler_id: self.handler_id,
+                               });
         }
 
         // Wrong resource path, rejecting connection.
@@ -205,8 +210,13 @@ impl Runtime {
                 .spawn(move || {
                     // We keep track of ws senders here to save us from spawing a extra thread
                     // for each connection to send messages.
+
+                    // The ws used to communicate with the runtime.
                     let mut runtime_ws_out: Option<Sender> = None;
-                    let mut browser_ws_out: HashMap<String, Sender> = HashMap::new();
+                    // The ws used to communicate with the browsers. The outer hash map key
+                    // is the WorkerInfo key, the inner one is the handler_id.
+                    // TODO: use types for these keys.
+                    let mut browser_ws_out: HashMap<String, HashMap<String, Sender>> = HashMap::new();
 
                     loop {
                         let res = rx.recv().unwrap();
@@ -259,9 +269,9 @@ impl Runtime {
                                 info!("jsrunner WS is ready.");
                                 runtime_ws_out = Some(out.clone());
                             }
-                            BrokerMessage::BrowserWS { ref out, ref id } => {
-                                info!("browser WS is ready for {}.", id);
-                                browser_ws_out.insert(id.clone(), out.clone());
+                            BrokerMessage::BrowserWS { ref out, ref worker_id, ref handler_id } => {
+                                info!("browser WS is ready for {}.", worker_id);
+                                browser_ws_out.insert(worker_id.clone(), out.clone());
                             }
                             BrokerMessage::SendToBrowser { ref id, ref data } => {
                                 // TODO: should we buffer the messages waiting for the

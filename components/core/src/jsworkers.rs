@@ -97,7 +97,8 @@ pub enum Message {
     BrowserWS {
         #[serde(skip_serializing)]
         out: WsSender,
-        id: String,
+        worker_id: String,
+        handler_id: String,
     },
     // Result value when starting a worker, giving the url of the ws used.
     ClientEndpoint {
