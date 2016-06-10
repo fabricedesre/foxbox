@@ -21,6 +21,7 @@ use std::process::Command;
 use std::sync::mpsc::channel;
 use std::thread;
 use std::thread::Builder;
+use uuid::Uuid;
 use workers::JsWorkers;
 use ws;
 use ws::{Handler, listen, Sender, Result as WsResult, Message, Handshake, CloseCode, Error, ErrorKind};
@@ -38,7 +39,8 @@ struct RuntimeWsHandler {
     pub out: Sender,
     broker: SharedBroker<BrokerMessage>,
     mode: Cell<ClientType>,
-    id: RefCell<Option<String>>,
+    worker_id: RefCell<Option<String>>, // For browser ws, this is the WorkerInfo key.
+    handler_id: String, // A unique id for this handler, used to keep track of handlers shutdown.
 }
 
 impl RuntimeWsHandler {
@@ -47,7 +49,8 @@ impl RuntimeWsHandler {
             out: out,
             broker: broker,
             mode: Cell::new(ClientType::Unknown),
-            id: RefCell::new(None),
+            worker_id: RefCell::new(None),
+            handler_id: Uuid::new_v4().to_simple_string(),
         }
     }
 
@@ -92,7 +95,7 @@ impl Handler for RuntimeWsHandler {
         // Client urls are "/client/:id" so we extract the id here.
         if resource.starts_with("/client/") {
             let id = resource.split('/').last().unwrap();
-            *self.id.borrow_mut() = Some(id.to_string());
+            *self.worker_id.borrow_mut() = Some(id.to_string());
             info!("WS browser connection for id {}", id);
             self.mode.set(ClientType::Browser);
             let mut guard = self.broker.lock().unwrap();
@@ -140,7 +143,7 @@ impl Handler for RuntimeWsHandler {
         } else {
             // We know which client this comes from so we don't need to wrap the message with
             // bitsparrow.
-            let id = self.id.borrow().clone().unwrap_or("".to_owned());
+            let id = self.worker_id.borrow().clone().unwrap_or("".to_owned());
             let mut guard = self.broker.lock().unwrap();
             guard.send_message("workers",
                                BrokerMessage::SendToRuntime {

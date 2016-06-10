@@ -17,6 +17,7 @@ extern crate log;
 extern crate rusqlite;
 extern crate serde;
 extern crate serde_json;
+extern crate uuid;
 extern crate ws;
 
 pub mod runtime;
