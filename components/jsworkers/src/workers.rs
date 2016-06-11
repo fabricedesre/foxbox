@@ -41,11 +41,11 @@ impl JsWorkers {
         self.workers.get(&WorkerInfo::key_from(user, &url))
     }
 
-    pub fn get_workers_for(&mut self, user: User) -> Vec<WorkerInfo> {
+    pub fn get_workers_for(&mut self, user: &User) -> Vec<WorkerInfo> {
         let mut res = Vec::new();
         let ref w = self.workers;
         for (_, info) in w {
-            if info.user == user {
+            if info.user == *user {
                 res.push(info.clone());
             }
         }
@@ -83,7 +83,7 @@ impl JsWorkers {
 
     /// TODO: improve error case.
     pub fn stop_worker(&self, info: &WorkerInfo) -> Result<(), ()> {
-        if let Some(worker_info) = self.get_worker_info(info.user, info.url.clone()) {
+        if let Some(worker_info) = self.get_worker_info(info.user.clone(), info.url.clone()) {
             if worker_info.state.get() == WorkerState::Stopped {
                 return Err(());
             }
@@ -100,7 +100,7 @@ impl JsWorkers {
 
     /// TODO: improve error case.
     pub fn start_worker(&self, info: &WorkerInfo) -> Result<(), ()> {
-        if let Some(worker_info) = self.get_worker_info(info.user, info.url.clone()) {
+        if let Some(worker_info) = self.get_worker_info(info.user.clone(), info.url.clone()) {
             if worker_info.state.get() == WorkerState::Running {
                 return Err(());
             }
@@ -129,14 +129,14 @@ fn test_workers() {
     let mut list = JsWorkers::new("", &MessageBroker::new_shared());
     let url = "http://example.com/worker.js".to_owned();
     let url2 = "http://example.com/worker2.js".to_owned();
-    let user1: User = 0;
-    let user2: User = 1;
-    let user3: User = 2;
+    let user1: User = String::from("User0");
+    let user2: User = String::from("User1");
+    let user3: User = String::from("User2");
 
-    let info1 = WorkerInfo::default(user1, url.clone());
-    let info1_2 = WorkerInfo::default(user1, url2.clone());
-    let info2 = WorkerInfo::default(user2, url.clone());
-    let info3 = WorkerInfo::default(user3, url.clone());
+    let info1 = WorkerInfo::default(user1.clone(), url.clone());
+    let info1_2 = WorkerInfo::default(user1.clone(), url2.clone());
+    let info2 = WorkerInfo::default(user2.clone(), url.clone());
+    let info3 = WorkerInfo::default(user3.clone(), url.clone());
 
     // Start with an empty set.
     assert_eq!(list.count(), 0);
@@ -147,10 +147,10 @@ fn test_workers() {
         assert_eq!(list.count(), 1);
 
         // Check that we don't get anything for another user.
-        assert_eq!(list.get_worker_info(user2, url.clone()), None);
+        assert_eq!(list.get_worker_info(user2.clone(), url.clone()), None);
 
         // Get the worker info back and check state.
-        let info = list.get_worker_info(user1, url.clone()).unwrap();
+        let info = list.get_worker_info(user1.clone(), url.clone()).unwrap();
         assert_eq!(info.state.get(), WorkerState::Stopped);
 
         // Start the worker and check the new state.
@@ -173,7 +173,7 @@ fn test_workers() {
     {
         // Start the worker again and check that stop_all works.
         list.start_worker(&info1).unwrap();
-        let info = list.get_worker_info(user1, url.clone()).unwrap();
+        let info = list.get_worker_info(user1.clone(), url.clone()).unwrap();
         assert_eq!(info.state.get(), WorkerState::Running);
         list.stop_all();
         assert_eq!(info.state.get(), WorkerState::Stopped);
@@ -202,13 +202,13 @@ fn test_workers() {
     assert_eq!(list.count(), 4);
 
     // Check the workers per user list.
-    let mut all = list.get_workers_for(user1);
+    let mut all = list.get_workers_for(&user1);
     assert_eq!(all.len(), 2);
 
-    all = list.get_workers_for(user2);
+    all = list.get_workers_for(&user2);
     let serialized = serde_json::to_string(&all).unwrap();
     assert_eq!(serialized,
-               r#"[{"url":"http://example.com/worker.js","user":1,"state":"Stopped","id":"15634489503557940443"}]"#);
+               r#"[{"url":"http://example.com/worker.js","user":"User1","state":"Stopped","id":"6030026276773233015"}]"#);
 
     // ... and remove them, out of order.
     list.remove_worker(&info2).unwrap();

@@ -17,6 +17,7 @@ use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::io::Error as IoError;
+use std::ops::Deref;
 use std::process::Command;
 use std::sync::mpsc::channel;
 use std::thread;
@@ -50,7 +51,7 @@ impl RuntimeWsHandler {
             broker: broker,
             mode: Cell::new(ClientType::Unknown),
             worker_id: RefCell::new(None),
-            handler_id: Uuid::new_v4().to_simple_string(),
+            handler_id: format!("{}", Uuid::new_v4()),
         }
     }
 
@@ -89,7 +90,7 @@ impl Handler for RuntimeWsHandler {
         if resource == "/runtime/" {
             self.mode.set(ClientType::Runtime);
             let mut guard = self.broker.lock().unwrap();
-            guard.send_message("workers", BrokerMessage::RunnerWS { out: self.out.clone() });
+            guard.send_message("workers", BrokerMessage::RunnerWSOpened { out: self.out.clone() });
         }
 
         // Client urls are "/client/:id" so we extract the id here.
@@ -100,10 +101,10 @@ impl Handler for RuntimeWsHandler {
             self.mode.set(ClientType::Browser);
             let mut guard = self.broker.lock().unwrap();
             guard.send_message("workers",
-                               BrokerMessage::BrowserWS {
+                               BrokerMessage::BrowserWSOpened {
                                    out: self.out.clone(),
                                    worker_id: id.to_string(),
-                                   handler_id: self.handler_id,
+                                   handler_id: self.handler_id.clone(),
                                });
         }
 
@@ -170,6 +171,12 @@ impl Handler for RuntimeWsHandler {
             self.broker.lock().unwrap().broadcast_message(BrokerMessage::StopAll);
         } else {
             // TODO: Send a message to remove the browser ws.
+            let worker_id = self.worker_id.borrow().clone().unwrap_or("".to_owned());
+            self.broker.lock().unwrap().send_message("workers",
+                                                     BrokerMessage::BrowserWSClosed {
+                                                         worker_id: worker_id,
+                                                         handler_id: self.handler_id.clone(),
+                                                     });
         }
     }
 
@@ -216,7 +223,7 @@ impl Runtime {
                     // The ws used to communicate with the browsers. The outer hash map key
                     // is the WorkerInfo key, the inner one is the handler_id.
                     // TODO: use types for these keys.
-                    let mut browser_ws_out: HashMap<String, HashMap<String, Sender>> = HashMap::new();
+                    let mut browser_ws_out: HashMap<String, RefCell<HashMap<String, Sender>>> = HashMap::new();
 
                     loop {
                         let res = rx.recv().unwrap();
@@ -232,7 +239,7 @@ impl Runtime {
 
                                     send_json_to_ws(out,
                                                     "StartWorker",
-                                                    &workers.get_worker_info(worker.user, worker.url.clone()));
+                                                    &workers.get_worker_info(worker.user.clone(), worker.url.clone()));
 
                                     // Return the ws url for the client side.
                                     // TODO: don't hardcode `localhost`
@@ -255,7 +262,7 @@ impl Runtime {
                                     error!("Can't stop worker because runtime is not up yet!");
                                 }
                             }
-                            BrokerMessage::GetList { user, ref tx } => {
+                            BrokerMessage::GetList { ref user, ref tx } => {
                                 let user_workers = workers.get_workers_for(user);
                                 let infos = BrokerMessage::List { list: user_workers };
                                 tx.send(infos).unwrap();
@@ -265,20 +272,39 @@ impl Runtime {
                                 // This message happens when the js runner itself shuts down.
                                 workers.stop_all();
                             }
-                            BrokerMessage::RunnerWS { ref out } => {
+                            BrokerMessage::RunnerWSOpened { ref out } => {
                                 info!("jsrunner WS is ready.");
                                 runtime_ws_out = Some(out.clone());
                             }
-                            BrokerMessage::BrowserWS { ref out, ref worker_id, ref handler_id } => {
+                            BrokerMessage::BrowserWSOpened { ref out, ref worker_id, ref handler_id } => {
                                 info!("browser WS is ready for {}.", worker_id);
-                                browser_ws_out.insert(worker_id.clone(), out.clone());
+                                if !browser_ws_out.contains_key(worker_id) {
+                                    browser_ws_out.insert(worker_id.clone(), RefCell::new(HashMap::new()));
+                                }
+                                browser_ws_out.get(worker_id)
+                                              .unwrap()
+                                              .borrow_mut()
+                                              .insert(handler_id.clone(), out.clone());
+                            }
+                            BrokerMessage::BrowserWSClosed { ref worker_id, ref handler_id } => {
+                                if browser_ws_out.contains_key(worker_id) {
+                                    browser_ws_out.get(worker_id)
+                                                  .unwrap()
+                                                  .borrow_mut()
+                                                  .remove(handler_id);
+                                } else {
+                                    error!("Unable to remove ws for worker {}.", worker_id);
+                                }
                             }
                             BrokerMessage::SendToBrowser { ref id, ref data } => {
                                 // TODO: should we buffer the messages waiting for the
                                 // browser ws to be ready?
                                 if browser_ws_out.contains_key(id) {
-                                    if let Some(sender) = browser_ws_out.get(id) {
-                                        sender.send(Message::Binary(data.clone()));
+                                    if let Some(handlers) = browser_ws_out.get(id) {
+                                        let iter = handlers.borrow();
+                                        for (_, sender) in iter.deref() {
+                                            sender.send(Message::Binary(data.clone()));
+                                        }
                                     } else {
                                         error!("Unable to relay message to id {}", id);
                                     }
@@ -303,7 +329,7 @@ impl Runtime {
                                 }
                             }
                             _ => {
-                                info!("Unexpected message by the  `workers` actor {:?}", res);
+                                error!("Unexpected message by the `workers` actor {:?}", res);
                             }
                         }
                     }

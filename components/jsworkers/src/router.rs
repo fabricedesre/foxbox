@@ -36,6 +36,9 @@ use serde_json;
 use std::io::{Error as IOError, Read};
 use std::sync::mpsc::channel;
 
+// TODO: we should never need that when authentication is on.
+static DEFAULT_USER: &'static str = "_";
+
 pub struct Router {
     broker: SharedBroker<Message>,
 }
@@ -55,7 +58,7 @@ impl Router {
         // Sends a "List" message to the worker set and wait for the answer.
         let (tx, rx) = channel::<Message>();
         let message = Message::GetList {
-            user: user.unwrap_or(0),
+            user: user.unwrap_or(DEFAULT_USER.to_owned()),
             tx: tx,
         };
 
@@ -96,7 +99,7 @@ impl Router {
         let webworker_url = params.unwrap().webworker_url;
 
         let message = Message::Start {
-            worker: WorkerInfo::default(user.unwrap_or(0), webworker_url.clone()), /* TODO: respect the `authentication` feature. */
+            worker: WorkerInfo::default(user.unwrap_or(DEFAULT_USER.to_owned()), webworker_url.clone()), /* TODO: respect the `authentication` feature. */
             tx: tx,
         };
 

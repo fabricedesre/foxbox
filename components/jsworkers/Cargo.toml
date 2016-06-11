@@ -10,7 +10,7 @@ publish = false
 [dependencies]
 bitsparrow = "0.3.2"
 foxbox_core = { path = "../core" }
-foxbox_users = { git = "https://github.com/fxbox/users.git", rev = "d4e5277" }
+foxbox_users = { git = "https://github.com/fxbox/users.git", rev = "ec53c3a" }
 log = "^0.3"
 rusqlite = "0.6.0"
 url = "0.5.7"
@@ -18,7 +18,7 @@ ws = "0.4.8"
 serde = "0.7.0"
 serde_json = "0.7.0"
 serde_macros = "0.7.2"
-uuid = "0.1.18"
+uuid = { version = "0.2.2", features = ["v4"] }
 
 [dependencies.iron]
 version = "0.3.0"
