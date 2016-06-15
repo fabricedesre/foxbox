@@ -10,7 +10,7 @@ use std::sync::mpsc::Sender;
 use ws::Sender as WsSender;
 
 pub type Url = String; // FIXME: should be the url type from hyper.
-pub type User = i32;   // FIXME: should be the user type from foxbox_users.
+pub type User = String;   // FIXME: should be the user type from foxbox_users.
 
 /// An enum representing a worker state.
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -51,7 +51,7 @@ impl Serialize for WorkerInfo {
         }
         let info = SerializableInfo {
             url: self.url.clone(),
-            user: self.user,
+            user: self.user.clone(),
             state: self.state.get(),
             id: self.key(),
         };
@@ -78,7 +78,7 @@ impl WorkerInfo {
 
     /// Creates a unique key for this WorkerInfo.
     pub fn key(&self) -> String {
-        WorkerInfo::key_from(self.user, &self.url)
+        WorkerInfo::key_from(self.user.clone(), &self.url)
     }
 
     pub fn key_from(user: User, url: &str) -> String {
@@ -93,8 +93,13 @@ impl WorkerInfo {
 
 #[derive(Clone, Debug, Serialize)]
 pub enum Message {
+    // Notifies that we have a browser connection closing. WebSocket -> Runtime
+    BrowserWSClosed {
+        worker_id: String,
+        handler_id: String,
+    },
     // Notifies that we have a browser connection established. WebSocket -> Runtime
-    BrowserWS {
+    BrowserWSOpened {
         #[serde(skip_serializing)]
         out: WsSender,
         worker_id: String,
@@ -115,7 +120,7 @@ pub enum Message {
         list: Vec<WorkerInfo>,
     },
     // Notifies that we have a js runner connection established. WebSocket -> Runtime
-    RunnerWS {
+    RunnerWSOpened {
         #[serde(skip_serializing)]
         out: WsSender,
     },

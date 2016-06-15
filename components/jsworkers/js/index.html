@@ -10,9 +10,9 @@ function test() {
   document.getElementById("inout").removeAttribute("style");
   FoxboxWorkers.set_base_url("http://localhost:3000");
   worker = FoxboxWorkers.start("http://localhost:8000/worker1.js");
-  worker.onmessage = function(event) {
-    document.getElementById("output").innerHTML += ">> " + event + "\n";
-  }
+  worker.addEventListener("message", function(event) {
+    document.getElementById("output").innerHTML += ">> " + event.data + "\n";
+  });
 }
 
 function send() {
