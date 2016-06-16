@@ -19,6 +19,10 @@ onmessage = function(event) {
     triggerError();
     return;
   }
+  if (event.data == "close") {
+    close();
+    return;
+  }
   postMessage(`You send me: ${event.data}`);
 }
 
