@@ -11,7 +11,7 @@
 var worker;
 
 function formatError(event) {
-  return `${event.message} @ <a href="view-source:${event.filename}">${event.filename}:${event.lineno}:${event.colno}</a>`;
+  return `${event.message} @ <a href="${event.filename}">${event.filename}:${event.lineno}:${event.colno}</a>`;
 }
 
 function test() {
