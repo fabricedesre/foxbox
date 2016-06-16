@@ -10,6 +10,8 @@ Gecko:
 - Worker cache policy?
 - Tests.
 
+Client:
+- relay worker termination.
 
 All:
 - webrtc mode.
