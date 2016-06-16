@@ -9,8 +9,16 @@ const customerData = [
   { ssn: "555-55-5555", name: "Donna", age: 32, email: "donna@home.org" }
 ];
 
+function triggerError() {
+  throw Error("worker error");
+}
+
 onmessage = function(event) {
   console.log(`Worker received ${event}`)
+  if (event.data == "error") {
+    triggerError();
+    return;
+  }
   postMessage(`You send me: ${event.data}`);
 }
 

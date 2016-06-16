@@ -92,6 +92,21 @@ impl WorkerInfo {
 }
 
 #[derive(Clone, Debug, Serialize)]
+pub enum BrowserMessageKind {
+    Message,
+    Error,
+}
+
+impl From<BrowserMessageKind> for String {
+    fn from(s: BrowserMessageKind) -> String {
+        match s {
+            BrowserMessageKind::Message => String::from("message"),
+            BrowserMessageKind::Error => String::from("error"),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize)]
 pub enum Message {
     // Notifies that we have a browser connection closing. WebSocket -> Runtime
     BrowserWSClosed {
@@ -128,6 +143,7 @@ pub enum Message {
     SendToBrowser {
         data: Vec<u8>,
         id: String,
+        kind: BrowserMessageKind,
     },
     // Sends a payload to the runtime for a given worker.
     SendToRuntime {

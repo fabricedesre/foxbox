@@ -4,31 +4,47 @@
 
 (function(global) {
   var BOX_BASE_URL = null;
+  // When mode is "local" we spawn an in-browser web worker.
   var MODE = "local";
+
+  // Global state values.
+  const kPendingHttp = 0;
+  const kPendingWs   = 1;
+  const kReady       = 2;
+  const kError       = 3;
+
+  // WS message event states.
+  const kCommand = 0;
+  const kPayload = 1;
 
   function RemoteWorker(worker_url) {
     console.log(`Starting remote worker at ${worker_url}`);
     // Creates a worker client object. This needs to be sync so the returned
     // object is in pending state at this stage, waiting for the http request
     // to complete and then the websocket connection to be established.
-    // state can be: "pending_http", "pending_ws", "ready" or "error".
-    this.state = "pending_http";
+    this.state = kPendingHttp;
     this.url = worker_url;
+
+    // The state of the onmessage ws handler. We process pair of messages, the
+    // fist one being a command ('message' or 'error') and the second one being
+    // the payload.
+    this.ws_state = kCommand;
+    this.ws_command = null;
+
     this.send_http_request()
         .then(this.on_http_response.bind(this))
         .then(this.open_ws_connection.bind(this))
         .catch(error => {
           console.error(error);
-          this.state = "error";
+          this.state = kError;
         });
   }
 
   RemoteWorker.prototype = {
-    // EventTarget shim from https://cs.chromium.org/chromium/src/ui/webui/resources/js/cr/event_target.js
+    // Start of EventTarget shim from https://cs.chromium.org/chromium/src/ui/webui/resources/js/cr/event_target.js
     // Copyright (c) 2010 The Chromium Authors. All rights reserved.
     // Use of this source code is governed by a BSD-style license that can be
     // found in the LICENSE file.
-
     /**
      * Adds an event listener to the target.
      * @param {string} type The name of the event.
@@ -96,6 +112,7 @@
       }
       return !prevented && !event.defaultPrevented;
     },
+    // End of EventTarget shim from https://cs.chromium.org/chromium/src/ui/webui/resources/js/cr/event_target.js
 
     expect_state: function(state) {
       if (this.state != state) {
@@ -105,7 +122,7 @@
 
     // Send the initial http request.
     send_http_request: function() {
-      this.expect_state("pending_http");
+      this.expect_state(kPendingHttp);
       let url = BOX_BASE_URL + "/jsworkers/v1/start";
       let init = {
         method: "POST",
@@ -126,7 +143,7 @@
         response.json().then(function(json) {
           if (json.ws_url) {
             // TODO: check that this is actually a url.
-            self.state = "pending_ws";
+            self.state = kPendingWs;
             resolve(json.ws_url);
           } else {
             reject("NoWsUrl");
@@ -136,7 +153,7 @@
     },
 
     open_ws_connection: function(ws_url) {
-      this.expect_state("pending_ws");
+      this.expect_state(kPendingWs);
       console.log(`Opening websocket connection to ${ws_url}`);
       this.ws = new global.WebSocket(ws_url);
 
@@ -152,24 +169,43 @@
         case "error":
         case "close":
           // TODO: investigate if we can recover from a remote closure.
-          this.state = "error";
+          this.state = kError;
           break;
         case "open":
           console.log(`Websocket opened for ${this.url}`);
-          this.state = "ready";
+          this.state = kReady;
           break;
         case "message":
-          console.log(`Message received for ${this.url} : ${event.data} size is ${event.data.size}`);
+          console.log(`Message received for ${this.url} : ${event.data}`);
+          if (this.ws_state === kCommand) {
+            this.ws_command = event.data;
+            this.ws_state = kPayload;
+            return;
+          }
+
+          if (this.ws_state !== kPayload) {
+            console.error(`Unexpected ws state: ${this.ws_state}`);
+            return;
+          }
+
           var self = this;
           var reader = new FileReader();
           reader.addEventListener("loadend", function() {
             let decoded = window.ObjectEncoder.decode(reader.result);
-            if (self.onmessage && typeof self.onmessage === "function") {
-              self.onmessage(decoded);
+            if (self.ws_command === "message") {
+              if (self.onmessage && typeof self.onmessage === "function") {
+                self.onmessage(decoded);
+              }
+              self.dispatchEvent({ type: "message", data: decoded });
+            } else if (self.ws_command == "error") {
+              if (self.onerror && typeof self.onerror === "function") {
+                self.onerror(new ErrorEvent("error", decoded));
+              }
+              self.dispatchEvent(new ErrorEvent("error", decoded));
             }
-            self.dispatchEvent({ type: "message", data: decoded });
           });
           reader.readAsArrayBuffer(event.data);
+          this.ws_state = kCommand;
           break;
         default:
           console.error(`Unexpected event type: ${event.type}`);
@@ -178,10 +214,16 @@
 
     postMessage: function(message) {
       // TODO: should we buffer the messages until we're ready?
-      this.expect_state("ready");
+      this.expect_state(kReady);
       window.ObjectEncoder.encode(message).then(encoded => {
         this.ws.send(encoded);
       });
+    },
+
+    terminate: function() {
+      this.expect_state(kReady);
+      this.ws.close();
+      this.state = kError;
     }
   }
 
@@ -193,7 +235,7 @@
       MODE = "remote";
     },
 
-    start: function(worker_url) {
+    Worker: function(worker_url) {
       if (MODE == "local") {
         console.log(`Starting local worker at ${worker_url}`);
         return new global.Worker(worker_url);

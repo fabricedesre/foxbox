@@ -2,16 +2,28 @@
   <head>
     <script src="objectencoder.js"> </script>
     <script src="remoteworkers.js"> </script>
+    <style>
+.error {
+  color: red;
+}
+    </style>
     <script>
 var worker;
+
+function formatError(event) {
+  return `${event.message} @ <a href="view-source:${event.filename}">${event.filename}:${event.lineno}:${event.colno}</a>`;
+}
 
 function test() {
   console.log("Starting test...");
   document.getElementById("inout").removeAttribute("style");
   FoxboxWorkers.set_base_url("http://localhost:3000");
-  worker = FoxboxWorkers.start("http://localhost:8000/worker1.js");
+  worker = FoxboxWorkers.Worker("http://localhost:8000/worker1.js");
   worker.addEventListener("message", function(event) {
     document.getElementById("output").innerHTML += ">> " + event.data + "\n";
+  });
+  worker.addEventListener("error", function(event) {
+    document.getElementById("output").innerHTML += "<span class=error>>> !! " + formatError(event) + "</span>\n";
   });
 }
 

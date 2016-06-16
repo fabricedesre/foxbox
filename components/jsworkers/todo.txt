@@ -1,17 +1,15 @@
 TODO:
 
 Foxbox:
-- Manage multiple clients connected to the same worker (in runtime.rs).
 - Persistence in workers.rs
 - Turn into an adapter?
 - More tests.
 
 Gecko:
 - Create the worker with a per-usercontext principal.
+- Worker cache policy?
 - Tests.
 
-Client library:
-- Better Worker() api reimplementation.
 
 All:
 - webrtc mode.

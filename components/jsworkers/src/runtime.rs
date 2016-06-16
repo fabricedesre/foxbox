@@ -9,7 +9,7 @@ extern crate url;
 use bitsparrow::{Decoder, Encoder};
 use foxbox_core::broker::SharedBroker;
 use foxbox_core::managed_process::ManagedProcess;
-use foxbox_core::jsworkers::Message as BrokerMessage;
+use foxbox_core::jsworkers::{BrowserMessageKind, Message as BrokerMessage};
 use self::url::Url;
 use serde::Serialize;
 use serde_json;
@@ -128,6 +128,23 @@ impl Handler for RuntimeWsHandler {
                 return Ok(());
             }
 
+            let kind = decoder.string();
+            if kind.is_err() {
+                error!("Unable to decode `kind` in runtime web socket message: {:?}", kind.err());
+                return Ok(());
+            }
+            let e_kind: BrowserMessageKind = {
+                let s_kind = kind.unwrap();
+                if s_kind == "message" {
+                    BrowserMessageKind::Message
+                } else if s_kind == "error" {
+                    BrowserMessageKind::Error
+                } else {
+                    error!("Unexpected `kind` value in runtime web socket message: {}", s_kind);
+                    return Ok(());
+                }
+            };
+
             let payload = decoder.bytes();
             if payload.is_err() {
                 error!("Unable to decode `payload` in runtime web socket message: {:?}", payload.err());
@@ -144,6 +161,7 @@ impl Handler for RuntimeWsHandler {
             guard.send_message("workers",
                                BrokerMessage::SendToBrowser {
                                    id: id.unwrap(),
+                                   kind: e_kind,
                                    data: payload.unwrap(),
                                });
         } else {
@@ -296,13 +314,14 @@ impl Runtime {
                                     error!("Unable to remove ws for worker {}.", worker_id);
                                 }
                             }
-                            BrokerMessage::SendToBrowser { ref id, ref data } => {
+                            BrokerMessage::SendToBrowser { ref id, ref kind, ref data } => {
                                 // TODO: should we buffer the messages waiting for the
                                 // browser ws to be ready?
                                 if browser_ws_out.contains_key(id) {
                                     if let Some(handlers) = browser_ws_out.get(id) {
                                         let iter = handlers.borrow();
                                         for (_, sender) in iter.deref() {
+                                            sender.send(Message::Text(String::from(kind.clone())));
                                             sender.send(Message::Binary(data.clone()));
                                         }
                                     } else {
