@@ -22,9 +22,10 @@
 ///   output: 200 [{ state: Running|Stopped, webworker_url: <worker_url>, ws_url: <websocket_url> }*]
 
 use foxbox_core::broker::SharedBroker;
-use foxbox_core::jsworkers::{ Message, User, WorkerInfo };
+use foxbox_core::jsworkers::{Message, User, WorkerInfo};
+use foxbox_core::traits::Controller;
 
-use foxbox_users::SessionToken;
+use foxbox_users::{AuthEndpoint, SessionToken};
 
 use iron::{Handler, headers, IronResult, Request, Response};
 use iron::headers::ContentType;
@@ -36,8 +37,8 @@ use serde_json;
 use std::io::{Error as IOError, Read};
 use std::sync::mpsc::channel;
 
-// TODO: we should never need that when authentication is on.
-static DEFAULT_USER: &'static str = "_";
+// We never use that user when authentication is on.
+static DEFAULT_USER: &'static str = "_dummy_user_";
 
 pub struct Router {
     broker: SharedBroker<Message>,
@@ -99,7 +100,7 @@ impl Router {
         let webworker_url = params.unwrap().webworker_url;
 
         let message = Message::Start {
-            worker: WorkerInfo::default(user.unwrap_or(DEFAULT_USER.to_owned()), webworker_url.clone()), /* TODO: respect the `authentication` feature. */
+            worker: WorkerInfo::default(user.unwrap_or(DEFAULT_USER.to_owned()), webworker_url.clone()),
             tx: tx,
         };
 
@@ -154,12 +155,15 @@ impl Handler for Router {
                     Err(_) => return Ok(Response::with(Status::Unauthorized)),
                 }
             }
-            _ => None,
+            _ => {
+                error!("Unauthenticated request to {:?}", req.url.path);
+                None
+            }
         };
 
-        info!("HTTP Request path is {:?}, user is {:?}",
-              req.url.path,
-              user);
+        if cfg!(feature = "authentication") && user == None {
+            return Ok(Response::with(Status::Unauthorized));
+        }
 
         if req.url.path == ["start"] && req.method == Method::Post {
             return self.handle_start(req, user);
@@ -178,11 +182,25 @@ impl Handler for Router {
     }
 }
 
-pub fn create(broker: &SharedBroker<Message>) -> Chain {
-    // TODO: add authentication support.
-    // That requires access to controller.get_users_manager() which is not yet available to code
-    // in components/ crates.
+pub fn create<T>(controller: T) -> Chain
+    where T: Controller {
 
-    let router = Router::new(broker);
-    Chain::new(router)
+    let router = Router::new(&controller.get_jsworkers_broker());
+
+    let auth_endpoints = if cfg!(feature = "authentication") {
+        // Keep this list in sync with all the (url path, http method) from
+        // the handle() method and with the CORS chain in http_server.rs
+        vec![
+            AuthEndpoint(vec![Method::Get], "list".to_owned()),
+            AuthEndpoint(vec![Method::Post], "start".to_owned()),
+            AuthEndpoint(vec![Method::Post], "stop".to_owned()),
+        ]
+    } else {
+        vec![]
+    };
+
+    let mut chain = Chain::new(router);
+    chain.around(controller.get_users_manager().get_middleware(auth_endpoints));
+
+    chain
 }

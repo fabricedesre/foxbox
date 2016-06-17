@@ -35,7 +35,7 @@ enum ClientType {
 }
 
 /// Handles the jsworkers websocket server.
-// TODO: split that in two different handlers for the runtime and browser ws connections.
+// TODO: split that in two different handlers for the runtime and browser ws connections?
 struct RuntimeWsHandler {
     pub out: Sender,
     broker: SharedBroker<BrokerMessage>,
@@ -188,7 +188,6 @@ impl Handler for RuntimeWsHandler {
         if self.is_runtime() {
             self.broker.lock().unwrap().broadcast_message(BrokerMessage::StopAll);
         } else {
-            // TODO: Send a message to remove the browser ws.
             let worker_id = self.worker_id.borrow().clone().unwrap_or("".to_owned());
             self.broker.lock().unwrap().send_message("workers",
                                                      BrokerMessage::BrowserWSClosed {

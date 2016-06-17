@@ -69,7 +69,7 @@ impl<T: Controller> HttpServer<T> {
         let taxonomy_chain = taxonomy_router::create(self.controller.clone(),
                                                       adapter_api);
 
-        let jsworkers_chain = jsworkers_router::create(&self.controller.get_jsworkers_broker());
+        let jsworkers_chain = jsworkers_router::create(self.controller.clone());
 
         let users_manager = self.controller.get_users_manager();
         let mut mount = Mount::new();
@@ -96,8 +96,10 @@ impl<T: Controller> HttpServer<T> {
             (vec![Method::Put], "api/v1/channels/set".to_owned()),
             (vec![Method::Post, Method::Delete], "api/v1/channels/tags".to_owned()),
 
-            // jsworkers paths.
+            // jsworkers paths. Keep in sync with components/jsworkers/router.rs
             (vec![Method::Post], "jsworkers/v1/start".to_owned()),
+            (vec![Method::Post], "jsworkers/v1/stop".to_owned()),
+            (vec![Method::Get], "jsworkers/v1/list".to_owned()),
         ]);
         chain.link_after(cors);
 
