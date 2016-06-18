@@ -10,7 +10,8 @@ Prepper.makeSuite('Test Push Service locally',function(){
 
   var baseSubscriptionPayload = {
      'select': {
-       'id':'channel:subscription.webpush@link.mozilla.org'
+       'id':'channel:subscription.webpush@link.mozilla.org',
+       'feature': 'webpush/subscribe',
      },
      'value': {
        'subscriptions':[{
@@ -20,7 +21,7 @@ Prepper.makeSuite('Test Push Service locally',function(){
     }
   };
 
-  var newWebPushSubscriptionPayload = 
+  var newWebPushSubscriptionPayload =
   Object.assign({}, baseSubscriptionPayload, {
     value: {
         subscriptions: [{
@@ -34,7 +35,7 @@ Prepper.makeSuite('Test Push Service locally',function(){
   var testParams = [{
     suiteName: 'Old WebPush',
     payload: baseSubscriptionPayload
-  }, 
+  },
   {
     suiteName: 'New WebPush',
     payload: newWebPushSubscriptionPayload
@@ -67,7 +68,7 @@ Prepper.makeSuite('Test Push Service locally',function(){
         var getter =  'channel:subscription.webpush@link.mozilla.org';
         // differs by the type of webpush std
         var setterPayload = testParam.payload;
-        var getterPayload = {'id': getter};
+        var getterPayload = {'id': getter, 'feature': 'webpush/subscribe'};
 
         return chakram.put(Prepper.foxboxManager.setterURL,setterPayload)
         .then(function(cmdResp){
@@ -90,10 +91,12 @@ Prepper.makeSuite('Test Push Service locally',function(){
         var setter = 'channel:resource.webpush@link.mozilla.org';
         var setterPayload = {
           'select': {
-            'id': setter},
+            'id': setter,
+            'feature': 'webpush/resource'
+          },
             'value': {
                 'resources':['livingroom', 'washroom']}};
-        var getterPayload = {'id': getter};
+        var getterPayload = {'id': getter, 'feature': 'webpush/resource'};
 
         return chakram.put(Prepper.foxboxManager.setterURL,setterPayload)
         .then(function(cmdResp){
@@ -116,7 +119,8 @@ Prepper.makeSuite('Test Push Service locally',function(){
         var notificationText = 'lights on!';
         var payload = {
           'select': {
-            'id': setter
+            'id': setter,
+            'feature': 'webpush/notify-msg'
           },
           'value': {
               'resource':resource,'message':notificationText}} ;
@@ -135,7 +139,8 @@ Prepper.makeSuite('Test Push Service locally',function(){
           var setter = 'channel:notify.webpush@link.mozilla.org';
           var payload = {
             'select': {
-              'id': setter
+              'id': setter,
+              'feature': 'webpush/notify-msg'
             },
             'value': {
                 'resource':resource,'message':notificationText}} ;
@@ -159,14 +164,15 @@ Prepper.makeSuite('Test Push Service locally',function(){
           var getter =  'channel:subscription.webpush@link.mozilla.org';
           var setterPayload = {
             'select': {
-              'id':setter
-            }, 
+              'id':setter,
+              'feature': 'webpush/unsubscribe'
+            },
             'value': {
                 'subscriptions':[{
                   'push_uri':pushURI,
                   'public_key':pushkey
                 }]}};
-          var getterPayload = {'id': getter};
+          var getterPayload = {'id': getter, 'feature': 'webpush/subscribe'};
 
           return chakram.put(Prepper.foxboxManager.setterURL,setterPayload)
           .then(function(cmdResp){

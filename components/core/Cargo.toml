@@ -16,7 +16,7 @@ default-features = true
 features = ["ssl"]
 
 [dependencies]
-clippy = "0.0.71"
+clippy = "0.0.76"
 foxbox_users = { git = "https://github.com/fxbox/users.git", rev = "ec53c3a" }
 hyper = "0.8.1"
 libc = "0.2.7"
@@ -31,4 +31,4 @@ xml-rs = "0.3.0"
 [dev-dependencies]
 stainless = "0.1.4"
 tempdir = "0.3.4"
-uuid = "0.1.18"
+uuid = { version = "0.2.2", features = ["v4"] }

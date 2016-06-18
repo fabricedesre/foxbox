@@ -160,7 +160,7 @@ describe! config {
     before_each {
         use uuid::Uuid;
         use std::fs;
-        let config_file_name = format!("conftest-{}.tmp", Uuid::new_v4().to_simple_string());
+        let config_file_name = format!("conftest-{}.tmp", Uuid::new_v4());
     }
 
     after_each {

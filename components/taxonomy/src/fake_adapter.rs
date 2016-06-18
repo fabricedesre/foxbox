@@ -110,7 +110,6 @@ impl FakeAdapter {
                                     }
                                     Some(ref target) => {
                                         let mut is_met = watcher.is_met.borrow_mut();
-                                        println!("XX [fake_adapter] is_met: {}, value==target: {}, {:?}, {:?}", *is_met, value == *target, value, target);
                                         if value == *target {
                                             if *is_met {
                                                 continue;

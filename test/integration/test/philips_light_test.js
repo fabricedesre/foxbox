@@ -14,7 +14,7 @@ Prepper.makeSuite('Control lights locally',function(){
   before(Prepper.foxboxManager.foxboxLogin);
 
   it('check 3 bulbs are registered',function(){
-  
+
     // collect all getters for the lightbulbs
     return chakram.put(Prepper.foxboxManager.getterURL,getterPayload)
     .then(function(listResponse) {
@@ -41,21 +41,21 @@ Prepper.makeSuite('Control lights locally',function(){
     // id and the philips hue id until the tag feature is implemented
     it('Turn on all lights one by one', function(){
       var lightID = lights[0];
-      var payload = {'select': {'id': lightID}, 'value': 'On' };
+      var payload = {'select': {'id': lightID, 'feature': 'light/is-on'}, 'value': 'On' };
 
       return chakram.put(Prepper.foxboxManager.setterURL,payload)
       .then(function(cmdResponse) {
        expect(cmdResponse).to.have.status(200);
        expect(cmdResponse.body[lightID]).equals(null);
        lightID = lights[1];
-       payload = {'select': {'id': lightID}, 'value': 'On' };
+       payload = {'select': {'id': lightID, 'feature': 'light/is-on'}, 'value': 'On' };
        return chakram.put(Prepper.foxboxManager.setterURL,payload);
      })
       .then(function(cmdResponse) {
         expect(cmdResponse).to.have.status(200);
         expect(cmdResponse.body[lightID]).equals(null);
         lightID = lights[2];
-        payload = {'select': {'id': lightID}, 'value': 'On' };
+        payload = {'select': {'id': lightID, 'feature': 'light/is-on'}, 'value': 'On' };
         return chakram.put(Prepper.foxboxManager.setterURL,payload);
       })
       .then(function(cmdResponse) {

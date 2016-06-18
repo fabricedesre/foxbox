@@ -32,7 +32,7 @@ Prepper.makeSuite('Control camera locally',function(){
   it('take a picture (using the channel id)',function(){
     var setter = 'channel:' +
       cameraService.id.replace('service:','snapshot.');
-    var payload = {'select': {'id': setter}, 'value': null};
+    var payload = {'select': {'id': setter, 'feature': 'camera/store-snapshot'}, 'value': null};
     return chakram.put(Prepper.foxboxManager.setterURL, payload)
     .then(function(cmdResponse) {
       expect(cmdResponse).to.have.status(200);
@@ -47,7 +47,7 @@ Prepper.makeSuite('Control camera locally',function(){
 
     var getter = 'channel:'+
       cameraService.id.replace('service:','image_list.');
-    var payload = {'id': getter};
+    var payload = {'id': getter, 'feature': 'camera/x-image-list'};
     return chakram.put(Prepper.foxboxManager.getterURL, payload)
     .then(function(cmdResponse) {
       var imageList = cmdResponse.body[getter];
@@ -62,7 +62,7 @@ Prepper.makeSuite('Control camera locally',function(){
   it('download the picture (using the channel id)',function(){
     var getter = 'channel:' +
       cameraService.id.replace('service:','image_newest.');
-    var payload = {'id': getter};
+    var payload = {'id': getter, 'feature': 'camera/x-latest-image'};
     return chakram.put(Prepper.foxboxManager.getterURL, payload)
     .then(function(cmdResponse) {
       expect(cmdResponse).to.have.status(200);
@@ -74,7 +74,7 @@ Prepper.makeSuite('Control camera locally',function(){
   it('take a picture (using feature)',function(){
     var setter = 'channel:' +
       cameraService.id.replace('service:','snapshot.');
-    var payload = {'select': {'feature': 'camera/store-snapshot'}, 
+    var payload = {'select': {'feature': 'camera/store-snapshot'},
       'value': null};
     return chakram.put(Prepper.foxboxManager.setterURL, payload)
     .then(function(cmdResponse) {
@@ -104,7 +104,7 @@ Prepper.makeSuite('Control camera locally',function(){
   // Checks the correct size of bytes is received
   it('download the picture (using feature)',function(){
     var payload = {'feature': 'camera/x-latest-image'};
-    
+
     return chakram.put(Prepper.foxboxManager.getterURL, payload)
     .then(function(cmdResponse) {
       expect(cmdResponse).to.have.status(200);

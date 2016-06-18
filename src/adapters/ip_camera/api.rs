@@ -308,7 +308,7 @@ describe! ip_camera {
         use std::sync::Arc;
         use uuid::Uuid;
 
-        let uniq_str = Uuid::new_v4().to_simple_string();
+        let uniq_str = format!("{}", Uuid::new_v4());
         let config_filename = format!("ip-camera-test-conf-{}.tmp", uniq_str);
         let config = ConfigService::new(&config_filename);
         let snapshot_dir = format!("ip-camera-test-snapshot-dir-{}.tmp", uniq_str);

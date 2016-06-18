@@ -232,8 +232,8 @@ impl Handler for TaxonomyRouter {
         // Fetching and getting values.
         // We can't use a GET http method here because the Fetch() DOM api
         // doesn't allow bodies with GET and HEAD requests.
-        payload_api!(fetch_values, Vec<ChannelSelector>, ["channels", "get"], Method::Put, binary);
-        payload_api!(send_values, TargetMap<ChannelSelector, Payload>, ["channels", "set"], Method::Put, simple);
+        payload_api!(fetch_values, Vec<ChannelSelectorWithFeature>, ["channels", "get"], Method::Put, binary);
+        payload_api!(send_values, TargetMap<ChannelSelectorWithFeature, Payload>, ["channels", "set"], Method::Put, simple);
 
         // Adding tags.
         payload_api2!(add_service_tags,
@@ -443,7 +443,7 @@ describe! binary_getter {
 
         let response = request::put("http://localhost:3000/api/v1/channels/get",
                                     Headers::new(),
-                                    r#"[{"id":"getter:binary@link.mozilla.org"}]"#,
+                                    r#"[{"id":"getter:binary@link.mozilla.org", "feature":"x-test/x-binary"}]"#,
                                     &mount).unwrap();
 
         let content_length = format!("{}", response.headers.get::<ContentLength>().unwrap());

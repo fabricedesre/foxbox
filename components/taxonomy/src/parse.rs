@@ -344,17 +344,17 @@ impl Parser<u8> for u8 {
     }
 }
 
-impl<T> Parser<Vec<T>> for Vec<T> where T: Parser<T> {
+impl<T, P> Parser<Vec<T>> for Vec<P> where P: Parser<T> {
     fn description() -> String {
-        format!("Array<{}>", T::description())
+        format!("Array<{}>", P::description())
     }
-    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
+    fn parse(path: Path, source: &JSON) -> Result<Vec<T>, ParseError> {
         // Otherwise, parse as an actual array.
         match *source {
             JSON::Array(ref array) => {
                 let mut result = Vec::with_capacity(array.len());
                 for (source, i) in array.iter().zip(0..) {
-                    let value = try!(path.push_index(i, |path| T::parse(path, source)));
+                    let value = try!(path.push_index(i, |path| P::parse(path, source)));
                     result.push(value)
                 }
                 Ok(result)
@@ -365,7 +365,7 @@ impl<T> Parser<Vec<T>> for Vec<T> where T: Parser<T> {
             }
             _ => {
                 // Attempt to promote the value to an array.
-                let single = try!(path.push_str("", |path| T::parse(path, source)));
+                let single = try!(path.push_str("", |path| P::parse(path, source)));
                 Ok(vec![single])
             }
         }

@@ -35,7 +35,7 @@ iron-cors = { git = "https://github.com/fxbox/iron-cors.git", rev = "f397cd2" }
 multicast_dns = { git = "https://github.com/fxbox/multicast-dns.git", rev = "a6e4bcc" }
 
 chrono = "0.2.19"
-clippy = "0.0.71"
+clippy = "0.0.76"
 docopt = "0.6.78"
 docopt_macros = "0.6.80"
 env_logger = "0.3.2"
@@ -77,4 +77,4 @@ iron-test = "0.3.0"
 regex = "0.1.55"
 rand = "0.3.14"
 tempdir = "0.3.4"
-uuid = "0.1.18"
+uuid = { version = "0.2.2", features = ["v4"] }

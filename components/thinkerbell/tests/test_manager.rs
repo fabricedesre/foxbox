@@ -34,7 +34,6 @@ fn test_database_add_remove_script() {
 
     db.remove_all().unwrap();
 
-
     println!("* Initially, there should be no recipe running.");
     assert_eq!(db.get_running_count(), 0);
 
@@ -42,7 +41,6 @@ fn test_database_add_remove_script() {
     let name = Id::<ScriptId>::new("Sample Ruleset");
     db.put(&name, &load_json("./examples/ruleset.json"), &User::Id(String::from("1"))).unwrap();
     assert_eq!(db.get_running_count(), 1);
-
 
     println!("* The recipe should have the user with which it was stored.");
     let (_, owner) = db.get_source_and_owner(&name).unwrap();

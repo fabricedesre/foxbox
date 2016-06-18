@@ -601,13 +601,13 @@ impl Parser<Instruction> for Instruction {
             Ok(Instruction::InjectSetterErrors(try!(result)))
         } else if let Some(result) = path.push_str("InjectGetterValues", |path| GetterValueParser::take_vec_opt(path, source, "InjectGetterValues")) {
             Ok(Instruction::InjectGetterValues(try!(result)))
-        } else if let Some(result) = path.push_str("RemoveChannels", |path| Vec::take_opt(path, source, "RemoveChannels")) {
+        } else if let Some(result) = path.push_str("RemoveChannels", |path| Vec::<Id<_>>::take_opt(path, source, "RemoveChannels")) {
             Ok(Instruction::RemoveChannels(try!(result)))
         } else if let Some(result) = path.push_str("AddChannels", |path| AddChannelsParser::take_opt(path, source, "AddChannels")) {
             result
         } else if let Some(result) = path.push_str("AddServices", |path| AddServicesParser::take_opt(path, source, "AddServices")) {
             result
-        } else if let Some(result) = path.push_str("AddAdapters", |path| Vec::take_opt(path, source, "AddAdapters")) {
+        } else if let Some(result) = path.push_str("AddAdapters", |path| Vec::<String>::take_opt(path, source, "AddAdapters")) {
             Ok(Instruction::AddAdapters(try!(result)))
         } else {
             unimplemented!()

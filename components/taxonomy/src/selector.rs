@@ -384,6 +384,7 @@ impl Parser<ChannelSelector> for ChannelSelector {
         }
     }
 }
+
 impl ChannelSelector {
     /// Create a new selector that accepts all getter channels.
     pub fn new() -> Self {
@@ -493,6 +494,24 @@ impl ChannelSelector {
             return false;
         }
         true
+    }
+}
+
+/// A parser for `ChannelSelector` that makes sure that the `feature` field is provided.
+#[derive(Clone)]
+pub struct ChannelSelectorWithFeature;
+
+impl Parser<ChannelSelector> for ChannelSelectorWithFeature {
+    fn description() -> String {
+        "ChannelSelector (feature must be specified)".to_owned()
+    }
+    fn parse(path: Path, source: &JSON) -> Result<ChannelSelector, ParseError> {
+        let selector = try!(ChannelSelector::parse(path.clone(), source));
+        if let Exactly::Exactly(_) = selector.feature {
+            Ok(selector)
+        } else {
+            Err(ParseError::missing_field("feature", &path))
+        }
     }
 }
 

@@ -32,7 +32,7 @@ function generateThinkerbellNewRecipePayload(recipeName) {
 
 function generateThinkerbellDeletionPayload(recipeName) {
   return {'select':
-      {'id': 'thinkerbell/'+recipeName+'/remove'},'value':null};
+      {'id': 'thinkerbell/'+recipeName+'/remove', 'feature': 'thinkerbell/remove-rule-id'},'value':null};
 }
 
 Prepper.makeSuite('Add/Remove recipe',function(){
@@ -97,7 +97,7 @@ Prepper.makeSuite('Add/Remove recipe',function(){
     after(function(){
       var promises = ['First', 'Second', 'Third'].map(number => 
         chakram.put(Prepper.foxboxManager.setterURL, {'select':
-      {'id': 'thinkerbell/' + number + ' Recipe/remove'},'value':null}));
+      {'id': 'thinkerbell/' + number + ' Recipe/remove', 'feature': 'thinkerbell/remove-rule-id'},'value':null}));
       return Promise.all(promises);
     });
   });

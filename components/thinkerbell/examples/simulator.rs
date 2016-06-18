@@ -99,7 +99,7 @@ fn main () {
         let mut source = String::new();
         file.read_to_string(&mut source).unwrap();
         let json : serde_json::Value = serde_json::from_str(&source).unwrap();
-        let script : Vec<Instruction> = Vec::parse(Path::new(), &json).unwrap();
+        let script = Vec::<Instruction>::parse(Path::new(), &json).unwrap();
         println!("Sequence of events loaded, playing...");
 
         for event in script {

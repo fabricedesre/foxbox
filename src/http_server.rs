@@ -84,9 +84,6 @@ impl<T: Controller> HttpServer<T> {
 
         let cors = CORS::new(vec![
             (vec![Method::Get], "ping".to_owned()),
-            (vec![Method::Get, Method::Post, Method::Put, Method::Delete],
-             "services/:service/:command".to_owned()),
-            (vec![Method::Get], "services/list".to_owned()),
 
             // Taxonomy router paths. Keep in sync with taxonomy_router.rs
             (vec![Method::Get, Method::Post], "api/v1/services".to_owned()),
@@ -172,9 +169,7 @@ describe! http_server {
         use iron::method::Method;
 
         let endpoints = vec![
-            (vec![Method::Get, Method::Post, Method::Put],
-             "services/:service/:command".to_owned()),
-            (vec![Method::Get], "services/list".to_owned())
+            (vec![Method::Get], "ping".to_owned())
         ];
         let client = hyper::Client::new();
         for endpoint in endpoints {

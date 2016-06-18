@@ -233,14 +233,14 @@ fn test_user_partialeq() {
     assert_eq!(User::Id(String::from("1")), User::Id(String::from("1")));
 }
 
-impl<K> Parser<Targetted<K, Payload>> for Targetted<K, Payload> where K: Parser<K> + Clone {
+impl<P, T> Parser<Targetted<T, Payload>> for Targetted<P, Payload> where P: Parser<T>, T: Clone {
     fn description() -> String {
-        format!("Targetted<{}, Value>", K::description())
+        format!("Targetted<{}, Value>", P::description())
     }
-    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
+    fn parse(path: Path, source: &JSON) -> Result<Targetted<T, Payload>, ParseError> {
         if source.is_object() {
             // Default format: an object {select, value}.
-            let select = try!(path.push("select", |path| Vec::<K>::take(path, source, "select")));
+            let select = try!(path.push("select", |path| Vec::<P>::take(path, source, "select")));
             let payload = try!(path.push("value", |path| Payload::take(path, source, "value")));
             Ok(Targetted {
                 select: select,
@@ -251,7 +251,7 @@ impl<K> Parser<Targetted<K, Payload>> for Targetted<K, Payload> where K: Parser<
             if array.len() != 2 {
                 return Err(ParseError::type_error(&Self::description() as &str, &path, "an array of length 2"))
             }
-            let select = try!(path.push_index(0, |path| Vec::<K>::parse(path, &array[0])));
+            let select = try!(path.push_index(0, |path| Vec::<P>::parse(path, &array[0])));
             let payload = try!(path.push_index(1, |path| Payload::parse(path, &array[1])));
             Ok(Targetted {
                 select: select,
@@ -263,12 +263,12 @@ impl<K> Parser<Targetted<K, Payload>> for Targetted<K, Payload> where K: Parser<
     }
 }
 
-impl<K> Parser<Targetted<K, Exactly<Payload>>> for Targetted<K, Exactly<Payload>> where K: Parser<K> + Clone {
+impl<P, T> Parser<Targetted<T, Exactly<Payload>>> for Targetted<P, Exactly<Payload>> where P: Parser<T>, T: Clone {
     fn description() -> String {
-        format!("Targetted<{}, range>", K::description())
+        format!("Targetted<{}, range>", P::description())
     }
-    fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
-        let select = try!(path.push("select", |path| Vec::<K>::take(path, source, "select")));
+    fn parse(path: Path, source: &JSON) -> Result<Targetted<T, Exactly<Payload>>, ParseError> {
+        let select = try!(path.push("select", |path| Vec::<P>::take(path, source, "select")));
         if let Some(&JSON::String(ref str)) = source.find("range") {
             if str == "Never" {
                 return Ok(Targetted {

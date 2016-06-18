@@ -129,12 +129,12 @@ pub type ResultMap<K, T, E> = HashMap<K, Result<T, E>>;
 /// A bunch of instructions, going to different targets.
 pub type TargetMap<K, T> = Vec<Targetted<K, T>>;
 
-#[derive(Clone)]
-pub struct Targetted<K, T> where K: Clone, T: Clone {
+
+pub struct Targetted<K, T> {
     pub select: Vec<K>,
     pub payload: T
 }
-impl<K, T> Default for Targetted<K, T> where T: Default + Clone, K: Clone {
+impl<K, T> Default for Targetted<K, T> where T: Default {
     fn default() -> Self {
         Targetted {
             select: vec![],
@@ -142,7 +142,7 @@ impl<K, T> Default for Targetted<K, T> where T: Default + Clone, K: Clone {
         }
     }
 }
-impl<K, T> Targetted<K, T> where K: Clone, T: Clone {
+impl<K, T> Targetted<K, T>  {
     pub fn new(select: Vec<K>, payload: T) -> Self {
         Targetted {
             select: select,
@@ -150,7 +150,15 @@ impl<K, T> Targetted<K, T> where K: Clone, T: Clone {
         }
     }
 }
-
+impl<K, T> Clone for Targetted<K, T> where K: Clone, T: Clone {
+    fn clone(&self) -> Self {
+        Targetted {
+            select: self.select.clone(),
+            payload: self.payload.clone()
+        }
+    }
+}
+ 
 /// A unique id for values of a given kind.
 ///
 /// # Performance
