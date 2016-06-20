@@ -224,7 +224,8 @@ impl Runtime {
         let broker = broker.clone();
 
         let _ = Builder::new().name("JsWorkers_runtime".to_owned()).spawn(move || {
-            let mut workers = JsWorkers::new(&root, &broker);
+            info!("Initializing JsWorkers at {}", root.clone());
+            let mut workers = JsWorkers::new(&root);
 
             // Set up our broker listener and a thread to process messages on it.
             let (tx, rx) = channel::<BrokerMessage>();

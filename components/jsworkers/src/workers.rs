@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use foxbox_core::jsworkers::{ Message, Url, User, WorkerInfo, WorkerInfoKey, WorkerState };
+use foxbox_core::jsworkers::{ Url, User, WorkerInfo, WorkerInfoKey, WorkerState };
 
 use rusqlite::Connection;
 use std::collections::HashMap;
@@ -14,18 +14,53 @@ fn escape<T>(string: &str) -> String {
 
 /// The entire set of workers.
 pub struct JsWorkers {
-    db: Option<Connection>,
+    db: Connection,
     workers: HashMap<WorkerInfoKey, WorkerInfo>,
 }
 
 impl JsWorkers {
     pub fn new(config_root: &str) -> Self {
-        // TODO: Read the current set of workers from disk, creating the DB if it doesn't exist yet.
+        // Open the database.
+        let db = Connection::open(format!("{}/workers.sqlite", config_root)).unwrap_or_else(|err| {
+            panic!("Unable to open jsworkers database: {}", err);
+        });
+
+        // Create the table if if doesn't exist yet.
+        db.execute("CREATE TABLE IF NOT EXISTS workers (
+                key    TEXT NOT NULL PRIMARY KEY,
+                url    TEXT NOT NULL,
+                user   TEXT NOT NULL,
+                state  INTEGER
+        )", &[]).unwrap_or_else(|err| {
+            panic!("Unable to create taxonomy tags database: {}", err);
+        });
+
+        // Read the list of stored workers.
+        let mut workers = HashMap::new();
+        {
+            let mut stmt = db.prepare("SELECT key, url, user, state FROM workers").unwrap();
+            let rows = stmt.query(&[]).unwrap();
+            for result_row in rows {
+                let row = result_row.unwrap();
+                let key: WorkerInfoKey = row.get(0);
+                let url: Url = row.get(1);
+                let user: User = row.get(2);
+                let sqlt_state: i64 = row.get(3);
+                let state: WorkerState = WorkerState::from_int(sqlt_state as u32);
+                workers.insert(key, WorkerInfo::new(user, url, state));
+            }
+        }
 
         JsWorkers {
-            workers: HashMap::new(),
-            db: None,
+            workers: workers,
+            db: db,
         }
+    }
+
+    // Updates a worker in the database. The only field that can actually change is the
+    // state, so we don't update the other fields.
+    fn update_worker_in_db(&self, info: &WorkerInfo) {
+        
     }
 
     pub fn has_worker(&self, info: &WorkerInfo) -> bool {

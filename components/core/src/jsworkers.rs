@@ -19,6 +19,23 @@ pub enum WorkerState {
     Running,
 }
 
+impl WorkerState {
+    pub fn as_int(&self) -> u32 {
+        match *self {
+            WorkerState::Stopped => 0,
+            WorkerState::Running => 1,
+        }
+    }
+
+    pub fn from_int(value: u32) -> Self {
+        match value {
+            0 => WorkerState::Stopped,
+            1 => WorkerState::Running,
+            _ => { panic!("Invalid value: {}", value); }
+        }
+    }
+}
+
 impl Serialize for WorkerState {
     fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
         where S: Serializer
