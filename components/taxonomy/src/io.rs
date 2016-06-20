@@ -17,9 +17,11 @@ pub struct BinarySource;
 /// Placeholder.
 pub struct BinaryTarget;
 
-/// Placeholder.
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-pub struct SerializeError;
+pub enum SerializeError {
+    JSON(String)
+}
 impl fmt::Display for SerializeError {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         (self as &fmt::Debug).fmt(formatter)

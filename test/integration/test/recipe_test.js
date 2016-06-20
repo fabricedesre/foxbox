@@ -16,17 +16,15 @@ var source = {'name': 'Hellooo, Thinkerbell', 'rules':
               'feature':'log/append-text',
               'value': 'Closed'}]}
             ]};
-source = JSON.stringify(source);
 
 function generateThinkerbellNewRecipePayload(recipeName) {
+  let copy = JSON.parse(JSON.stringify(source));
+  copy.name = recipeName;
   return {
     'select':{
        'feature':'thinkerbell/add-rule'
     },
-    'value':{
-        'name': recipeName,
-        'source': source
-    }
+    'value': copy
   };
 }
 

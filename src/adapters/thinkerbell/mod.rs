@@ -7,8 +7,9 @@ use foxbox_taxonomy::manager::*;
 use foxbox_taxonomy::parse::*;
 use foxbox_taxonomy::services::{ AdapterId, ServiceId, Service };
 use foxbox_taxonomy::util::{ Id, Maybe };
-use foxbox_taxonomy::values::{ format, Data, Duration, Value, OnOff };
+use foxbox_taxonomy::values::{ format, Data, Duration, Json, Value, OnOff };
 
+use foxbox_thinkerbell::ast::*;
 use foxbox_thinkerbell::compile::ExecutableDevEnv;
 use foxbox_thinkerbell::manager::{ ScriptManager, ScriptId, Error as ScriptManagerError };
 use foxbox_thinkerbell::run::ExecutionEvent;
@@ -21,6 +22,8 @@ use std::fmt;
 use std::path;
 use std::sync::{ Arc, Mutex };
 use std::thread;
+
+use serde_json;
 
 static ADAPTER_NAME: &'static str = "Thinkerbell adapter (built-in)";
 static ADAPTER_VENDOR: &'static str = "team@link.mozilla.org";
@@ -221,7 +224,15 @@ impl ThinkerbellAdapter {
                         } else if getter_id == rule.getter_source_id {
                             match script_manager.get_source_and_owner(&rule.script_id) {
                                 Ok((source, _)) => {
-                                    let _ = tx.send(Ok(Some(Value::new(source.to_owned()))));
+                                    match serde_json::from_str::<JSON>(&source) {
+                                        Ok(json) => {
+                                            let _ = tx.send(Ok(Some(Value::new(Json(json)))));
+                                        }
+                                        Err(err) => {
+                                            warn!("[thinkerbell_adapter] The source for rule {} was stored in the db but cannot be parsed", rule.script_id);
+                                            let _ = tx.send(Err(Error::ParseError(ParseError::JSON(JSONError(err)))));
+                                        }
+                                    }
                                 },
                                 Err(e) => {
                                     let _ = tx.send(Err(sm_error(e)));
@@ -237,8 +248,8 @@ impl ThinkerbellAdapter {
                     // Add a new rule (with the given JSON source).
                     if setter_id == self.setter_add_rule_id {
                         match value.cast::<RuleSource>() {
-                            Ok(ref rule_source) => {
-                                let script_id = Id::new(&rule_source.name);
+                            Ok(rule_source) => {
+                                let script_id = Id::new(&rule_source.script.name);
                                 match script_manager.put(&script_id, &rule_source.source, &user) {
                                     Err(err) => {let _ = tx.send(Err(sm_error(err))) ;}
                                     Ok(ok) => {
@@ -411,30 +422,42 @@ impl ThinkerbellAdapter {
 }
 
 
-#[derive(Debug, Clone, PartialEq)]
+/// In-memory representation of a script.
+#[derive(Debug)]
 struct RuleSource {
-    pub name: String,
-    pub source: String,
+    /// Parsed script.
+    script: Script<UncheckedCtx>,
+
+    /// The actual source code.
+    source: String
+}
+
+impl PartialEq for RuleSource {
+    fn eq(&self, other: &Self) -> bool {
+        self.source == other.source
+    }
 }
 
 impl Data for RuleSource {
     fn description() -> String {
         "Thinkerbell Rule".to_owned()
     }
-    fn parse(path: Path, source: &JSON, binary: &io::BinarySource) -> Result<Self, Error> {
-        let name = try!(path.push("name", |path| String::parse_field(path, source, binary, "name")));
-        let script_source = try!(path.push("source", |path| String::parse_field(path, source, binary, "source")));
-        Ok(RuleSource {
-            name: name,
-            source: script_source
-        })
+    fn parse(path: Path, source: &JSON, _: &io::BinarySource) -> Result<Self, Error> {
+        let script = try!(Script::<UncheckedCtx>::parse(path, source)
+            .map_err(Error::ParseError));
+        match serde_json::to_string(source) {
+            Ok(source) =>
+                Ok(RuleSource {
+                    script: script,
+                    source: source
+                }),
+            Err(err) =>
+                Err(Error::SerializeError(io::SerializeError::JSON(err.to_string())))
+        }
     }
     fn serialize(source: &Self, _binary: &io::BinaryTarget) -> Result<JSON, Error> {
-        let json = vec![
-            ("name", &source.name),
-            ("source", &source.source),
-        ].to_json();
-        Ok(json)
+        serde_json::from_str(&source.source)
+            .map_err(|err| Error::ParseError(ParseError::JSON(JSONError(err))))
     }
 }
 
