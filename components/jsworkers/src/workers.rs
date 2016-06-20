@@ -2,8 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use foxbox_core::broker::SharedBroker;
-use foxbox_core::jsworkers::{ Message, Url, User, WorkerInfo, WorkerState };
+use foxbox_core::jsworkers::{ Message, Url, User, WorkerInfo, WorkerInfoKey, WorkerState };
 
 use rusqlite::Connection;
 use std::collections::HashMap;
@@ -16,18 +15,16 @@ fn escape<T>(string: &str) -> String {
 /// The entire set of workers.
 pub struct JsWorkers {
     db: Option<Connection>,
-    workers: HashMap<String, WorkerInfo>, // The key is a WorkerInfo key.
-    broker: SharedBroker<Message>,
+    workers: HashMap<WorkerInfoKey, WorkerInfo>,
 }
 
 impl JsWorkers {
-    pub fn new(config_root: &str, broker: &SharedBroker<Message>) -> Self {
+    pub fn new(config_root: &str) -> Self {
         // TODO: Read the current set of workers from disk, creating the DB if it doesn't exist yet.
 
         JsWorkers {
             workers: HashMap::new(),
             db: None,
-            broker: broker.clone(),
         }
     }
 
@@ -87,7 +84,6 @@ impl JsWorkers {
             if worker_info.state.get() == WorkerState::Stopped {
                 return Err(());
             }
-            // TODO: call something to actually stop the worker.
 
             // Mark the worker as stopped.
             worker_info.state.set(WorkerState::Stopped);
@@ -104,8 +100,6 @@ impl JsWorkers {
             if worker_info.state.get() == WorkerState::Running {
                 return Err(());
             }
-
-            // TODO: call something to actually start the worker.
 
             // Mark the worker as running.
             worker_info.state.set(WorkerState::Running);

@@ -38,6 +38,8 @@ pub struct WorkerInfo {
     pub state: Cell<WorkerState>,
 }
 
+pub type WorkerInfoKey = String;
+
 impl Serialize for WorkerInfo {
     fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
         where S: Serializer
@@ -47,7 +49,7 @@ impl Serialize for WorkerInfo {
             url: Url,
             user: User,
             state: WorkerState,
-            id: String,
+            id: WorkerInfoKey,
         }
         let info = SerializableInfo {
             url: self.url.clone(),
@@ -77,11 +79,11 @@ impl WorkerInfo {
     }
 
     /// Creates a unique key for this WorkerInfo.
-    pub fn key(&self) -> String {
+    pub fn key(&self) -> WorkerInfoKey {
         WorkerInfo::key_from(self.user.clone(), &self.url)
     }
 
-    pub fn key_from(user: User, url: &str) -> String {
+    pub fn key_from(user: User, url: &str) -> WorkerInfoKey {
         use std::hash::{Hash, Hasher, SipHasher};
 
         let mut hasher = SipHasher::new();
@@ -110,14 +112,14 @@ impl From<BrowserMessageKind> for String {
 pub enum Message {
     // Notifies that we have a browser connection closing. WebSocket -> Runtime
     BrowserWSClosed {
-        worker_id: String,
+        worker_id: WorkerInfoKey,
         handler_id: String,
     },
     // Notifies that we have a browser connection established. WebSocket -> Runtime
     BrowserWSOpened {
         #[serde(skip_serializing)]
         out: WsSender,
-        worker_id: String,
+        worker_id: WorkerInfoKey,
         handler_id: String,
     },
     // Result value when starting a worker, giving the url of the ws used.
@@ -142,13 +144,13 @@ pub enum Message {
     // Sends a payload to the browser for a given worker.
     SendToBrowser {
         data: Vec<u8>,
-        id: String,
+        id: WorkerInfoKey,
         kind: BrowserMessageKind,
     },
     // Sends a payload to the runtime for a given worker.
     SendToRuntime {
         data: Vec<u8>,
-        id: String,
+        id: WorkerInfoKey,
     },
     // Notifies that the foxbox is shutting down. Broadcasted by the main controller.
     Shutdown,
