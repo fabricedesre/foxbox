@@ -208,7 +208,7 @@ pub struct OpenzwaveAdapter {
     name: String,
     vendor: String,
     version: [u32; 4],
-    ozw: ZWaveManager,
+    ozw: Arc<ZWaveManager>,
     node_map: IdMap<ServiceId, Node>,
     getter_map: IdMap<Channel, ValueID>,
     setter_map: IdMap<Channel, ValueID>,
@@ -602,4 +602,3 @@ mod tests {
     fn it_works() {
     }
 }
-
