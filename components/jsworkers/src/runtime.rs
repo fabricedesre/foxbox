@@ -260,7 +260,9 @@ impl Runtime {
 
                                     send_json_to_ws(out,
                                                     "StartWorker",
-                                                    &workers.get_worker_info(worker.user.clone(), worker.url.clone()));
+                                                    &workers.get_worker_info(worker.user.clone(),
+                                                                             worker.url.clone(),
+                                                                             worker.kind.clone()));
 
                                     // Return the ws url for the client side.
                                     // TODO: use wss:// if tls is enabled.
@@ -285,7 +287,9 @@ impl Runtime {
 
                                     send_json_to_ws(out,
                                                     "StartWorker",
-                                                    &workers.get_worker_info(worker.user.clone(), worker.url.clone()));
+                                                    &workers.get_worker_info(worker.user.clone(),
+                                                                             worker.url.clone(),
+                                                                             worker.kind.clone()));
                                 } else {
                                     // TODO: queue the requests and drain them when the runtime
                                     // comes up.

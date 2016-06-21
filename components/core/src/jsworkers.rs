@@ -17,7 +17,7 @@ pub type User = String;   // FIXME: should be the user type from foxbox_users.
 pub enum WorkerState {
     Stopped,
     Running,
-    Hibernation, // Used to track workers that should run but wait for a wake up call.
+    Hibernating, // Used to track workers that should run but wait for a wake up call.
 }
 
 impl WorkerState {
@@ -25,7 +25,7 @@ impl WorkerState {
         match *self {
             WorkerState::Stopped => 0,
             WorkerState::Running => 1,
-            WorkerState::Hibernation => 2,
+            WorkerState::Hibernating => 2,
         }
     }
 
@@ -33,7 +33,7 @@ impl WorkerState {
         match value {
             0 => WorkerState::Stopped,
             1 => WorkerState::Running,
-            2 => WorkerState::Hibernation,
+            2 => WorkerState::Hibernating,
             _ => { panic!("Invalid value: {}", value); }
         }
     }
@@ -46,7 +46,48 @@ impl Serialize for WorkerState {
         match *self {
             WorkerState::Stopped => serializer.serialize_str("Stopped"),
             WorkerState::Running => serializer.serialize_str("Running"),
-            WorkerState::Hibernation => serializer.serialize_str("Hibernation"),
+            WorkerState::Hibernating => serializer.serialize_str("Hibernating"),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum WorkerKind {
+    Web,
+    Service,
+}
+
+impl WorkerKind {
+    fn to_string(&self) -> String {
+        match *self {
+            WorkerKind::Web => String::from("WebWorker"),
+            WorkerKind::Service => String::from("ServiceWorker"),
+        }
+    }
+
+    pub fn as_int(&self) -> u32 {
+        match *self {
+            WorkerKind::Web => 0,
+            WorkerKind::Service => 1,
+        }
+    }
+
+    pub fn from_int(value: u32) -> Self {
+        match value {
+            0 => WorkerKind::Web,
+            1 => WorkerKind::Service,
+            _ => { panic!("Invalid value: {}", value); }
+        }
+    }
+}
+
+impl Serialize for WorkerKind {
+    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
+        where S: Serializer
+    {
+        match *self {
+            WorkerKind::Web => serializer.serialize_str("WebWorker"),
+            WorkerKind::Service => serializer.serialize_str("ServiceWorker"),
         }
     }
 }
@@ -56,6 +97,7 @@ impl Serialize for WorkerState {
 pub struct WorkerInfo {
     pub url: Url,
     pub user: User,
+    pub kind: WorkerKind,
     pub state: Cell<WorkerState>,
 }
 
@@ -70,12 +112,14 @@ impl Serialize for WorkerInfo {
             url: Url,
             user: User,
             state: WorkerState,
+            kind: WorkerKind,
             id: WorkerInfoKey,
         }
         let info = SerializableInfo {
             url: self.url.clone(),
             user: self.user.clone(),
             state: self.state.get(),
+            kind: self.kind.clone(),
             id: self.key(),
         };
         info.serialize(serializer)
@@ -83,33 +127,35 @@ impl Serialize for WorkerInfo {
 }
 
 impl WorkerInfo {
-    pub fn new(user: User, url: Url, initial_state: WorkerState) -> Self {
+    pub fn new(user: User, url: Url, kind: WorkerKind, initial_state: WorkerState) -> Self {
         WorkerInfo {
             url: url,
             user: user,
+            kind: kind,
             state: Cell::new(initial_state),
         }
     }
 
-    pub fn default(user: User, url: Url) -> Self {
-        WorkerInfo {
-            url: url,
-            user: user,
-            state: Cell::new(WorkerState::Stopped),
-        }
+    pub fn new_webworker(user: User, url: Url, initial_state: WorkerState) -> Self {
+        WorkerInfo::new(user, url, WorkerKind::Web, initial_state)
+    }
+
+    pub fn new_serviceworker(user: User, url: Url, initial_state: WorkerState) -> Self {
+        WorkerInfo::new(user, url, WorkerKind::Service, initial_state)
     }
 
     /// Creates a unique key for this WorkerInfo.
     pub fn key(&self) -> WorkerInfoKey {
-        WorkerInfo::key_from(self.user.clone(), &self.url)
+        WorkerInfo::key_from(self.user.clone(), &self.url, &self.kind)
     }
 
-    pub fn key_from(user: User, url: &str) -> WorkerInfoKey {
+    pub fn key_from(user: User, url: &str, kind: &WorkerKind) -> WorkerInfoKey {
         use std::hash::{Hash, Hasher, SipHasher};
 
         let mut hasher = SipHasher::new();
         url.hash(&mut hasher);
         user.hash(&mut hasher);
+        kind.to_string().hash(&mut hasher);
         format!("{}", hasher.finish())
     }
 }

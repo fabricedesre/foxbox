@@ -3,7 +3,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use foxbox_core::broker::SharedBroker;
-use foxbox_core::jsworkers::{ Message, Url, User, WorkerInfo, WorkerInfoKey, WorkerState };
+use foxbox_core::jsworkers::{Message, Url, User, WorkerInfo, WorkerInfoKey, WorkerKind, WorkerState};
 
 use rusqlite::Connection;
 use std::collections::HashMap;
@@ -24,7 +24,7 @@ pub struct JsWorkers {
 impl JsWorkers {
     pub fn new(config_root: &str, broker: &SharedBroker<Message>) -> Self {
         // Open the database.
-        let db = Connection::open(format!("{}/workers.sqlite", config_root)).unwrap_or_else(|err| {
+        let db = Connection::open(format!("{}/jsworkers.sqlite", config_root)).unwrap_or_else(|err| {
             panic!("Unable to open jsworkers database: {}", err);
         });
 
@@ -33,29 +33,34 @@ impl JsWorkers {
                 key    TEXT NOT NULL PRIMARY KEY,
                 url    TEXT NOT NULL,
                 user   TEXT NOT NULL,
+                kind   INTEGER,
                 state  INTEGER
         )", &[]).unwrap_or_else(|err| {
-            panic!("Unable to create taxonomy tags database: {}", err);
+            panic!("Unable to create jsworkers database: {}", err);
         });
 
         // Read the list of stored workers.
         let mut workers = HashMap::new();
         {
-            let mut stmt = db.prepare("SELECT key, url, user, state FROM workers").unwrap();
+            let mut stmt = db.prepare("SELECT key, url, user, kind, state FROM workers").unwrap();
             let rows = stmt.query(&[]).unwrap();
             for result_row in rows {
                 let row = result_row.unwrap();
                 let key: WorkerInfoKey = row.get(0);
                 let url: Url = row.get(1);
                 let user: User = row.get(2);
-                let sqlt_state: i64 = row.get(3);
-                let mut state: WorkerState = WorkerState::from_int(sqlt_state as u32);
+                let sql_kind: i64 = row.get(3);
+                let sql_state: i64 = row.get(4);
+                let mut state: WorkerState = WorkerState::from_int(sql_state as u32);
                 // Put running workers in hibernation. They will wake up when they are woken up
                 // by start_all_workers() or start_worker().
                 if state == WorkerState::Running {
-                    state = WorkerState::Hibernation;
+                    state = WorkerState::Hibernating;
                 }
-                workers.insert(key, WorkerInfo::new(user, url, state));
+                workers.insert(key, WorkerInfo::new(user,
+                                                    url,
+                                                    WorkerKind::from_int(sql_kind as u32),
+                                                    state));
             }
         }
         info!("Loaded {} workers from the database.", workers.len());
@@ -79,17 +84,18 @@ impl JsWorkers {
 
     fn add_worker_in_db(&self, info: &WorkerInfo) {
         info!("add_worker_in_db {:?}", info);
+        let sql_kind: i64 = info.kind.as_int() as i64;
         let sql_state: i64 = info.state.get().as_int() as i64;
-        self.db.execute("INSERT OR IGNORE INTO workers (key, url, user, state) VALUES ($1, $2, $3, $4)",
+        self.db.execute("INSERT OR IGNORE INTO workers (key, url, user, kind, state) VALUES ($1, $2, $3, $4, $5)",
                         &[&escape(&info.key()),
                           &escape(&info.url),
                           &escape(&info.user),
+                          &sql_kind,
                           &sql_state]).unwrap();
     }
 
     fn remove_worker_from_db(&self, info: &WorkerInfo) {
         info!("remove_worker_from_db {:?}", info);
-        let sql_state: i64 = info.state.get().as_int() as i64;
         self.db.execute("DELETE from workers where key = $1", &[&escape(&info.key())]).unwrap();
     }
 
@@ -99,8 +105,8 @@ impl JsWorkers {
 
     /// Returns the current info for this worker.
     /// Note that this is a live value.
-    pub fn get_worker_info(&self, user: User, url: Url) -> Option<&WorkerInfo> {
-        self.workers.get(&WorkerInfo::key_from(user, &url))
+    pub fn get_worker_info(&self, user: User, url: Url, kind: WorkerKind) -> Option<&WorkerInfo> {
+        self.workers.get(&WorkerInfo::key_from(user, &url, &kind))
     }
 
     pub fn get_workers_for(&mut self, user: &User) -> Vec<WorkerInfo> {
@@ -150,7 +156,9 @@ impl JsWorkers {
 
     /// TODO: improve error case.
     pub fn stop_worker(&self, info: &WorkerInfo) -> Result<(), ()> {
-        if let Some(worker_info) = self.get_worker_info(info.user.clone(), info.url.clone()) {
+        if let Some(worker_info) = self.get_worker_info(info.user.clone(),
+                                                        info.url.clone(),
+                                                        info.kind.clone()) {
             if worker_info.state.get() == WorkerState::Stopped {
                 return Err(());
             }
@@ -168,7 +176,9 @@ impl JsWorkers {
     /// TODO: improve error case.
     pub fn start_worker(&self, info: &WorkerInfo) -> Result<(), ()> {
         info!("start_worker {:?}", info);
-        if let Some(worker_info) = self.get_worker_info(info.user.clone(), info.url.clone()) {
+        if let Some(worker_info) = self.get_worker_info(info.user.clone(),
+                                                        info.url.clone(),
+                                                        info.kind.clone()) {
             if worker_info.state.get() == WorkerState::Running {
                 return Err(());
             }
@@ -187,7 +197,7 @@ impl JsWorkers {
         info!("wake_up_workers");
         let ref w = self.workers;
         for (_, info) in w {
-            if info.state.get() == WorkerState::Hibernation {
+            if info.state.get() == WorkerState::Hibernating {
                 info!("Waking up worker {:?}", info);
                 let message = Message::Wakeup {
                     worker: info.clone(),

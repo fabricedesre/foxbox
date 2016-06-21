@@ -22,7 +22,7 @@
 ///   output: 200 [{ state: Running|Stopped, webworker_url: <worker_url>, ws_url: <websocket_url> }*]
 
 use foxbox_core::broker::SharedBroker;
-use foxbox_core::jsworkers::{Message, User, WorkerInfo};
+use foxbox_core::jsworkers::{Message, User, WorkerInfo, WorkerKind, WorkerState};
 use foxbox_core::traits::Controller;
 
 use foxbox_users::{AuthEndpoint, SessionToken};
@@ -108,7 +108,9 @@ impl Router {
         // Sends a "Start" message to the worker set and wait for the answer.
         let (tx, rx) = channel::<Message>();
         let message = Message::Start {
-            worker: WorkerInfo::default(user.unwrap_or(DEFAULT_USER.to_owned()), webworker_url.clone()),
+            worker: WorkerInfo::new_webworker(user.unwrap_or(DEFAULT_USER.to_owned()),
+                                              webworker_url.clone(),
+                                              WorkerState::Stopped),
             host: req.url.host.serialize(),
             tx: tx,
         };
@@ -146,7 +148,9 @@ impl Router {
 
         // Sends a "Stop" message to the worker set.
         let message = Message::Stop {
-            worker: WorkerInfo::default(user.unwrap_or(DEFAULT_USER.to_owned()), webworker_url.clone()),
+            worker: WorkerInfo::new_webworker(user.unwrap_or(DEFAULT_USER.to_owned()),
+                                              webworker_url.clone(),
+                                              WorkerState::Stopped),
         };
 
         if self.broker.lock().unwrap().send_message("workers", message).is_err() {
