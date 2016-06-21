@@ -185,8 +185,6 @@ pub enum Message {
     // Stop a worker. Router -> Runtime.
     Stop {
         worker: WorkerInfo,
-        #[serde(skip_serializing)]
-        tx: Sender<Message>,
     },
     // Notifies that we need to set all workers in the `stopped` state. WebSocket -> Runtime
     StopAll,

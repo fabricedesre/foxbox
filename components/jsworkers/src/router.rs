@@ -14,7 +14,7 @@
 /// POST /stop
 ///   description: stops a worker.
 ///   input: { webworker_url: <worker_url> }
-///   output: 200 { webworker_url: <worker_url>, ws_url: <websocket_url> }
+///   output: 200 { webworker_url: <worker_url> }
 ///
 /// GET /list
 ///   description: returns the list of workers installed for this user.
@@ -24,10 +24,12 @@
 use foxbox_core::broker::SharedBroker;
 use foxbox_core::jsworkers::{Message, User, WorkerInfo};
 use foxbox_core::traits::Controller;
+use foxbox_core::utils;
 
 use foxbox_users::{AuthEndpoint, SessionToken};
 
 use iron::{Handler, headers, IronResult, Request, Response};
+use iron::error::IronError;
 use iron::headers::ContentType;
 use iron::method::Method;
 use iron::prelude::Chain;
@@ -84,21 +86,28 @@ impl Router {
         Ok(response)
     }
 
-    fn handle_start(&self, req: &mut Request, user: Option<User>) -> IronResult<Response> {
-        // Sends a "Start" message to the worker set and wait for the answer.
-        let (tx, rx) = channel::<Message>();
+    // Extracts the webworker_url parameter from the request.
+    fn get_webworker_url(&self, req: &mut Request) -> IronResult<String> {
         let source = itry!(Self::read_body_to_string(&mut req.body));
         #[derive(Deserialize)]
         struct Params {
             webworker_url: String,
         }
         let params: Result<Params, serde_json::Error> = serde_json::from_str(&source);
-        if params.is_err() {
-            error!("Bad payload for {:?} {}: {:?}", req.url.path, source.clone(), params.err());
-            return Ok(Response::with(Status::BadRequest));
+        match params {
+            Ok(val) => Ok(val.webworker_url),
+            Err(err) => Err(IronError::new(err, Status::BadRequest))
         }
-        let webworker_url = params.unwrap().webworker_url;
+    }
 
+    fn handle_start(&self, req: &mut Request, user: Option<User>) -> IronResult<Response> {
+        let webworker_url = match self.get_webworker_url(req) {
+            Ok(url) => url,
+            Err(err) => { return Err(err); }
+        };
+
+        // Sends a "Start" message to the worker set and wait for the answer.
+        let (tx, rx) = channel::<Message>();
         let message = Message::Start {
             worker: WorkerInfo::default(user.unwrap_or(DEFAULT_USER.to_owned()), webworker_url.clone()),
             host: req.url.host.serialize(),
@@ -118,18 +127,8 @@ impl Router {
         let res = res.unwrap();
         match res {
             Message::ClientEndpoint { ws_url } => {
-                // TODO: replace by utils::json!
-                #[derive(Serialize)]
-                struct Answer {
-                    webworker_url: String,
-                    ws_url: String,
-                }
-                let answer = Answer {
-                    webworker_url: webworker_url,
-                    ws_url: ws_url,
-                };
-                let serialized = serde_json::to_string(&answer).unwrap_or("".to_owned());
-                let mut response = Response::with(serialized);
+                let mut response =
+                    Response::with(json!({ webworker_url: webworker_url, ws_url: ws_url }));
                 response.status = Some(Status::Ok);
                 response.headers.set(ContentType::json());
                 return Ok(response);
@@ -140,8 +139,26 @@ impl Router {
         }
     }
 
-    fn handle_stop(&self, _: &mut Request, _: Option<User>) -> IronResult<Response> {
-        return Ok(Response::with(Status::Ok));
+    fn handle_stop(&self, req: &mut Request, user: Option<User>) -> IronResult<Response> {
+        let webworker_url = match self.get_webworker_url(req) {
+            Ok(url) => url,
+            Err(err) => { return Err(err); }
+        };
+
+        // Sends a "Stop" message to the worker set.
+        let message = Message::Stop {
+            worker: WorkerInfo::default(user.unwrap_or(DEFAULT_USER.to_owned()), webworker_url.clone()),
+        };
+
+        if self.broker.lock().unwrap().send_message("workers", message).is_err() {
+            return Ok(Response::with(Status::InternalServerError));
+        }
+
+        let mut response =
+            Response::with(json!({ webworker_url: webworker_url }));
+        response.status = Some(Status::Ok);
+        response.headers.set(ContentType::json());
+        Ok(response)
     }
 }
 

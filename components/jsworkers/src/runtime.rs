@@ -292,7 +292,7 @@ impl Runtime {
                                     error!("Can't wake up worker because runtime is not up yet!");
                                 }
                             }
-                            BrokerMessage::Stop { ref worker, ref tx } => {
+                            BrokerMessage::Stop { ref worker } => {
                                 if let Some(ref out) = runtime_ws_out {
                                     // Serialize the worker info and send it the the runtime.
                                     send_json_to_ws(out, "StopWorker", worker);

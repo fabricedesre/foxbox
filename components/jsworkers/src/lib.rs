@@ -6,6 +6,7 @@
 #![plugin(serde_macros)]
 
 extern crate bitsparrow;
+#[macro_use]
 extern crate foxbox_core;
 extern crate foxbox_users;
 #[macro_use]
