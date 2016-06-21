@@ -311,7 +311,16 @@ impl Runtime {
                                 let infos = BrokerMessage::List { list: user_workers };
                                 tx.send(infos).unwrap();
                             }
-                            BrokerMessage::Shutdown => break,
+                            BrokerMessage::Shutdown => {
+                                info!("Sending shutdown message to js runtime...");
+                                if let Some(ref out) = runtime_ws_out {
+                                    // Send a simple shutdown message.
+                                    #[derive(Serialize, Debug)]
+                                    struct Payload;
+                                    let payload: Payload = Payload;
+                                    send_json_to_ws(out, "Shutdown", &payload);
+                                }
+                            },
                             BrokerMessage::StopAll => {
                                 // This message happens when the js runner itself shuts down.
                                 workers.stop_all();
@@ -392,18 +401,15 @@ impl Runtime {
                 let res = rx.recv().unwrap();
                 match res {
                     BrokerMessage::Shutdown => {
-                        // Stop the js runner.
-                        if let Ok(ref runner) = jsrunner {
-                            info!("Shutting down the js runner");
-                            // TODO: make the borrow checker happy.
-                            //runner.shutdown();
-                        }
+                        break;
                     }
                     _ => {
                         info!("Unexpected message received by the `runtime` actor {:?}", res);
                     }
                 }
             }
+
+            info!("Shutting down main js runtime loop...");
         });
     }
 
