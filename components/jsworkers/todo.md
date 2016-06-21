@@ -1,17 +1,16 @@
-TODO:
+# TODO:
 
-Foxbox:
-- Persistence in workers.rs
+## Foxbox:
 - Turn into an adapter?
 - More tests.
 
-Gecko:
+## Gecko:
 - Create the worker with a per-usercontext principal.
 - Worker cache policy?
 - Tests.
 
-Client:
-- relay worker termination.
-
-All:
+## All:
 - webrtc mode.
+
+## Next
+- Service Workers.
