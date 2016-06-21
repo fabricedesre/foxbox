@@ -178,6 +178,7 @@ pub enum Message {
     // Start a worker. Router -> Runtime.
     Start {
         worker: WorkerInfo,
+        host: String,
         #[serde(skip_serializing)]
         tx: Sender<Message>,
     },

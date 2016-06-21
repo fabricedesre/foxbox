@@ -101,6 +101,7 @@ impl Router {
 
         let message = Message::Start {
             worker: WorkerInfo::default(user.unwrap_or(DEFAULT_USER.to_owned()), webworker_url.clone()),
+            host: req.url.host.serialize(),
             tx: tx,
         };
 

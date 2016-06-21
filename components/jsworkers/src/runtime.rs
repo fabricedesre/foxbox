@@ -248,7 +248,7 @@ impl Runtime {
                     loop {
                         let message = rx.recv().unwrap();
                         match message {
-                            BrokerMessage::Start { ref worker, ref tx } => {
+                            BrokerMessage::Start { ref worker, ref host, ref tx } => {
                                 info!("Message::Start {:?}", worker);
                                 if let Some(ref out) = runtime_ws_out {
                                     // If we don't already run this worker, add it to our set
@@ -263,9 +263,9 @@ impl Runtime {
                                                     &workers.get_worker_info(worker.user.clone(), worker.url.clone()));
 
                                     // Return the ws url for the client side.
-                                    // TODO: don't hardcode `localhost`
+                                    // TODO: use wss:// if tls is enabled.
                                     tx.send(BrokerMessage::ClientEndpoint {
-                                        ws_url: format!("ws://localhost:2016/client/{}", worker.key()),
+                                        ws_url: format!("ws://{}:2016/client/{}", host, worker.key()),
                                     }).unwrap_or(());
                                 } else {
                                     // TODO: queue the requests and drain them when the runtime
