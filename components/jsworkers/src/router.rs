@@ -24,7 +24,6 @@
 use foxbox_core::broker::SharedBroker;
 use foxbox_core::jsworkers::{Message, User, WorkerInfo};
 use foxbox_core::traits::Controller;
-use foxbox_core::utils;
 
 use foxbox_users::{AuthEndpoint, SessionToken};
 
