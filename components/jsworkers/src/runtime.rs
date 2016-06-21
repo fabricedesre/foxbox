@@ -9,7 +9,7 @@ extern crate url;
 use bitsparrow::{Decoder, Encoder};
 use foxbox_core::broker::SharedBroker;
 use foxbox_core::managed_process::ManagedProcess;
-use foxbox_core::jsworkers::{BrowserMessageKind, Message as BrokerMessage};
+use foxbox_core::jsworkers::{BrowserMessageKind, Message as BrokerMessage, WorkerInfoKey};
 use self::url::Url;
 use serde::Serialize;
 use serde_json;
@@ -34,14 +34,16 @@ enum ClientType {
     Browser,
 }
 
+type HandlerId = String;
+
 /// Handles the jsworkers websocket server.
 // TODO: split that in two different handlers for the runtime and browser ws connections?
 struct RuntimeWsHandler {
     pub out: Sender,
     broker: SharedBroker<BrokerMessage>,
     mode: Cell<ClientType>,
-    worker_id: RefCell<Option<String>>, // For browser ws, this is the WorkerInfo key.
-    handler_id: String, // A unique id for this handler, used to keep track of handlers shutdown.
+    worker_id: RefCell<Option<WorkerInfoKey>>, // For browser ws, this is the WorkerInfo key.
+    handler_id: HandlerId, // A unique id for this handler, used to keep track of handlers shutdown.
 }
 
 impl RuntimeWsHandler {
@@ -225,7 +227,7 @@ impl Runtime {
 
         let _ = Builder::new().name("JsWorkers_runtime".to_owned()).spawn(move || {
             info!("Initializing JsWorkers at {}", root.clone());
-            let mut workers = JsWorkers::new(&root);
+            let mut workers = JsWorkers::new(&root, &broker);
 
             // Set up our broker listener and a thread to process messages on it.
             let (tx, rx) = channel::<BrokerMessage>();
@@ -238,15 +240,16 @@ impl Runtime {
 
                     // The ws used to communicate with the runtime.
                     let mut runtime_ws_out: Option<Sender> = None;
-                    // The ws used to communicate with the browsers. The outer hash map key
-                    // is the WorkerInfo key, the inner one is the handler_id.
-                    // TODO: use types for these keys.
-                    let mut browser_ws_out: HashMap<String, RefCell<HashMap<String, Sender>>> = HashMap::new();
+                    // The ws used to communicate with the browsers. This keeps track of all the
+                    // clients connected to a given worker.
+                    let mut browser_ws_out:
+                        HashMap<WorkerInfoKey, RefCell<HashMap<HandlerId, Sender>>> = HashMap::new();
 
                     loop {
-                        let res = rx.recv().unwrap();
-                        match res {
+                        let message = rx.recv().unwrap();
+                        match message {
                             BrokerMessage::Start { ref worker, ref tx } => {
+                                info!("Message::Start {:?}", worker);
                                 if let Some(ref out) = runtime_ws_out {
                                     // If we don't already run this worker, add it to our set
                                     // as a running one.
@@ -268,6 +271,25 @@ impl Runtime {
                                     // TODO: queue the requests and drain them when the runtime
                                     // comes up.
                                     error!("Can't start worker because runtime is not up yet!");
+                                }
+                            }
+                            BrokerMessage::Wakeup { ref worker } => {
+                                info!("Message::Wakeup {:?}", worker);
+                                if let Some(ref out) = runtime_ws_out {
+                                    // If we don't already run this worker, add it to our set
+                                    // as a running one.
+                                    if !workers.has_worker(worker) {
+                                        workers.add_worker(worker);
+                                    }
+                                    workers.start_worker(worker);
+
+                                    send_json_to_ws(out,
+                                                    "StartWorker",
+                                                    &workers.get_worker_info(worker.user.clone(), worker.url.clone()));
+                                } else {
+                                    // TODO: queue the requests and drain them when the runtime
+                                    // comes up.
+                                    error!("Can't wake up worker because runtime is not up yet!");
                                 }
                             }
                             BrokerMessage::Stop { ref worker, ref tx } => {
@@ -293,6 +315,7 @@ impl Runtime {
                             BrokerMessage::RunnerWSOpened { ref out } => {
                                 info!("jsrunner WS is ready.");
                                 runtime_ws_out = Some(out.clone());
+                                workers.wake_up_workers();
                             }
                             BrokerMessage::BrowserWSOpened { ref out, ref worker_id, ref handler_id } => {
                                 info!("browser WS is ready for {}.", worker_id);
@@ -348,7 +371,7 @@ impl Runtime {
                                 }
                             }
                             _ => {
-                                error!("Unexpected message by the `workers` actor {:?}", res);
+                                error!("Unexpected message by the `workers` actor {:?}", message);
                             }
                         }
                     }

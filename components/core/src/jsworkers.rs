@@ -17,6 +17,7 @@ pub type User = String;   // FIXME: should be the user type from foxbox_users.
 pub enum WorkerState {
     Stopped,
     Running,
+    Hibernation, // Used to track workers that should run but wait for a wake up call.
 }
 
 impl WorkerState {
@@ -24,6 +25,7 @@ impl WorkerState {
         match *self {
             WorkerState::Stopped => 0,
             WorkerState::Running => 1,
+            WorkerState::Hibernation => 2,
         }
     }
 
@@ -31,6 +33,7 @@ impl WorkerState {
         match value {
             0 => WorkerState::Stopped,
             1 => WorkerState::Running,
+            2 => WorkerState::Hibernation,
             _ => { panic!("Invalid value: {}", value); }
         }
     }
@@ -43,6 +46,7 @@ impl Serialize for WorkerState {
         match *self {
             WorkerState::Stopped => serializer.serialize_str("Stopped"),
             WorkerState::Running => serializer.serialize_str("Running"),
+            WorkerState::Hibernation => serializer.serialize_str("Hibernation"),
         }
     }
 }
@@ -185,4 +189,8 @@ pub enum Message {
     },
     // Notifies that we need to set all workers in the `stopped` state. WebSocket -> Runtime
     StopAll,
+    // Wake up a worker. Worker DB -> Runtime.
+    Wakeup {
+        worker: WorkerInfo,
+    },
 }

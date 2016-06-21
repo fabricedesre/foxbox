@@ -2,12 +2,14 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use foxbox_core::jsworkers::{ Url, User, WorkerInfo, WorkerInfoKey, WorkerState };
+use foxbox_core::broker::SharedBroker;
+use foxbox_core::jsworkers::{ Message, Url, User, WorkerInfo, WorkerInfoKey, WorkerState };
 
 use rusqlite::Connection;
 use std::collections::HashMap;
+use std::sync::mpsc::channel;
 
-fn escape<T>(string: &str) -> String {
+fn escape(string: &str) -> String {
     // http://www.sqlite.org/faq.html#q14
     format!("{}", string).replace("'", "''")
 }
@@ -16,10 +18,11 @@ fn escape<T>(string: &str) -> String {
 pub struct JsWorkers {
     db: Connection,
     workers: HashMap<WorkerInfoKey, WorkerInfo>,
+    broker: SharedBroker<Message>,
 }
 
 impl JsWorkers {
-    pub fn new(config_root: &str) -> Self {
+    pub fn new(config_root: &str, broker: &SharedBroker<Message>) -> Self {
         // Open the database.
         let db = Connection::open(format!("{}/workers.sqlite", config_root)).unwrap_or_else(|err| {
             panic!("Unable to open jsworkers database: {}", err);
@@ -46,21 +49,48 @@ impl JsWorkers {
                 let url: Url = row.get(1);
                 let user: User = row.get(2);
                 let sqlt_state: i64 = row.get(3);
-                let state: WorkerState = WorkerState::from_int(sqlt_state as u32);
+                let mut state: WorkerState = WorkerState::from_int(sqlt_state as u32);
+                // Put running workers in hibernation. They will wake up when they are woken up
+                // by start_all_workers() or start_worker().
+                if state == WorkerState::Running {
+                    state = WorkerState::Hibernation;
+                }
                 workers.insert(key, WorkerInfo::new(user, url, state));
             }
         }
+        info!("Loaded {} workers from the database.", workers.len());
 
         JsWorkers {
             workers: workers,
             db: db,
+            broker: broker.clone(),
         }
     }
 
     // Updates a worker in the database. The only field that can actually change is the
     // state, so we don't update the other fields.
     fn update_worker_in_db(&self, info: &WorkerInfo) {
-        
+        info!("update_worker_in_db {:?}", info);
+        let sql_state: i64 = info.state.get().as_int() as i64;
+        self.db.execute("UPDATE workers SET state = $1 WHERE key = $2",
+                        &[&sql_state, &escape(&info.key())]).unwrap();
+
+    }
+
+    fn add_worker_in_db(&self, info: &WorkerInfo) {
+        info!("add_worker_in_db {:?}", info);
+        let sql_state: i64 = info.state.get().as_int() as i64;
+        self.db.execute("INSERT OR IGNORE INTO workers (key, url, user, state) VALUES ($1, $2, $3, $4)",
+                        &[&escape(&info.key()),
+                          &escape(&info.url),
+                          &escape(&info.user),
+                          &sql_state]).unwrap();
+    }
+
+    fn remove_worker_from_db(&self, info: &WorkerInfo) {
+        info!("remove_worker_from_db {:?}", info);
+        let sql_state: i64 = info.state.get().as_int() as i64;
+        self.db.execute("DELETE from workers where key = $1", &[&escape(&info.key())]).unwrap();
     }
 
     pub fn has_worker(&self, info: &WorkerInfo) -> bool {
@@ -88,17 +118,21 @@ impl JsWorkers {
         let ref w = self.workers;
         for (_, info) in w {
             info.state.set(WorkerState::Stopped);
+            self.update_worker_in_db(info);
         }
     }
 
     /// TODO: improve error case.
     pub fn add_worker(&mut self, info: &WorkerInfo) -> Result<(), ()> {
+        info!("add_worker {:?}", info);
         if self.has_worker(info) {
+            error!("already in our worker list.");
             return Err(());
         }
 
         let new_worker = info.clone();
         new_worker.state.set(WorkerState::Stopped);
+        self.add_worker_in_db(&new_worker);
         self.workers.insert(new_worker.key(), new_worker);
         Ok(())
     }
@@ -109,6 +143,7 @@ impl JsWorkers {
             return Err(());
         }
 
+        self.remove_worker_from_db(&info);
         self.workers.remove(&info.key());
         Ok(())
     }
@@ -122,6 +157,7 @@ impl JsWorkers {
 
             // Mark the worker as stopped.
             worker_info.state.set(WorkerState::Stopped);
+            self.update_worker_in_db(worker_info);
 
             return Ok(());
         } else {
@@ -131,6 +167,7 @@ impl JsWorkers {
 
     /// TODO: improve error case.
     pub fn start_worker(&self, info: &WorkerInfo) -> Result<(), ()> {
+        info!("start_worker {:?}", info);
         if let Some(worker_info) = self.get_worker_info(info.user.clone(), info.url.clone()) {
             if worker_info.state.get() == WorkerState::Running {
                 return Err(());
@@ -138,10 +175,26 @@ impl JsWorkers {
 
             // Mark the worker as running.
             worker_info.state.set(WorkerState::Running);
+            self.update_worker_in_db(worker_info);
 
             return Ok(());
         } else {
             return Err(());
+        }
+    }
+
+    pub fn wake_up_workers(&self) {
+        info!("wake_up_workers");
+        let ref w = self.workers;
+        for (_, info) in w {
+            if info.state.get() == WorkerState::Hibernation {
+                info!("Waking up worker {:?}", info);
+                let message = Message::Wakeup {
+                    worker: info.clone(),
+                };
+
+                self.broker.lock().unwrap().send_message("workers", message);
+            }
         }
     }
 
