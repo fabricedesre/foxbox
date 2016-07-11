@@ -17,14 +17,18 @@ var source = {'name': 'Hellooo, Thinkerbell', 'rules':
               'value': 'Closed'}]}
             ]};
 
+function cloneRecipe(newRecipeName) {
+  let clonedRecipe = JSON.parse(JSON.stringify(source));
+  clonedRecipe.name = newRecipeName;
+  return clonedRecipe;
+}
+
 function generateThinkerbellNewRecipePayload(recipeName) {
-  let copy = JSON.parse(JSON.stringify(source));
-  copy.name = recipeName;
   return {
     'select':{
        'feature':'thinkerbell/add-rule'
     },
-    'value': copy
+    'value': cloneRecipe(recipeName)
   };
 }
 
@@ -33,7 +37,15 @@ function generateThinkerbellDeletionPayload(recipeName) {
       {'id': 'thinkerbell/'+recipeName+'/remove', 'feature': 'thinkerbell/remove-rule-id'},'value':null};
 }
 
-Prepper.makeSuite('Add/Remove recipe',function(){
+function generateThinkerbellGetEnabledPayload(recipeName) {
+  return { 'id': 'thinkerbell/' + recipeName + '/is-rule-enabled', 'feature': 'thinkerbell/is-rule-enabled' };
+}
+
+function generateThinkerbellSourcePayload(recipeName) {
+  return { 'id': 'thinkerbell/' + recipeName + '/source', 'feature': 'thinkerbell/rule-source' };
+}
+
+Prepper.makeSuite('Add/Remove/Get recipe',function(){
 
   before(Prepper.turnOnAllSimulators);
   before(Prepper.turnOnFoxbox);
@@ -73,7 +85,7 @@ Prepper.makeSuite('Add/Remove recipe',function(){
 
           expect(cmdResponse).to.have.status(200);
           expect(cmdResponse.body['thinkerbell-add-rule']).equals(null);
-          return chakram.put(Prepper.foxboxManager.setterURL, 
+          return chakram.put(Prepper.foxboxManager.setterURL,
             generateThinkerbellNewRecipePayload('Third Recipe'));
         })
         .then(function(cmdResponse) {
@@ -85,15 +97,15 @@ Prepper.makeSuite('Add/Remove recipe',function(){
           expect(listResponse).to.have.status(200);
           var isFound = listResponse.body.some(
             entry => entry.id === 'thinkerbell/Second Recipe');
-          expect(isFound).to.be.true; 
+          expect(isFound).to.be.true;
           isFound = listResponse.body.some(
             entry => entry.id === 'thinkerbell/Third Recipe');
-          expect(isFound).to.be.true; 
+          expect(isFound).to.be.true;
         });
       });
 
     after(function(){
-      var promises = ['First', 'Second', 'Third'].map(number => 
+      var promises = ['First', 'Second', 'Third'].map(number =>
         chakram.put(Prepper.foxboxManager.setterURL, {'select':
       {'id': 'thinkerbell/' + number + ' Recipe/remove', 'feature': 'thinkerbell/remove-rule-id'},'value':null}));
       return Promise.all(promises);
@@ -105,14 +117,14 @@ Prepper.makeSuite('Add/Remove recipe',function(){
     before(function(){
 
       var promises = ['First Recipe', 'Second Recipe', 'Third Recipe']
-      .map(number => 
-        chakram.put(Prepper.foxboxManager.setterURL, 
+      .map(number =>
+        chakram.put(Prepper.foxboxManager.setterURL,
           generateThinkerbellNewRecipePayload(number)));
       return Promise.all(promises);
     });
 
     it('Remove single recipe',function(){
-      return chakram.put(Prepper.foxboxManager.setterURL, 
+      return chakram.put(Prepper.foxboxManager.setterURL,
         generateThinkerbellDeletionPayload('First Recipe'))
       .then(function(cmdResponse) {
         expect(cmdResponse).to.have.status(200);
@@ -124,18 +136,18 @@ Prepper.makeSuite('Add/Remove recipe',function(){
         expect(listResponse).to.have.status(200);
         var isFound = listResponse.body.some(
           entry => entry.id === 'thinkerbell/First Recipe');
-        expect(isFound).to.be.false; 
+        expect(isFound).to.be.false;
       });
     });
 
     it('Remove all remaining recipes one by one',function(){
-      return chakram.put(Prepper.foxboxManager.setterURL, 
+      return chakram.put(Prepper.foxboxManager.setterURL,
         generateThinkerbellDeletionPayload('Second Recipe'))
       .then(function(cmdResponse) {
         expect(cmdResponse).to.have.status(200);
         expect(cmdResponse.body['thinkerbell/Second Recipe/remove'])
         .equals(null);
-        return chakram.put(Prepper.foxboxManager.setterURL, 
+        return chakram.put(Prepper.foxboxManager.setterURL,
           generateThinkerbellDeletionPayload('Third Recipe'));
       })
       .then(function(cmdResponse) {
@@ -148,10 +160,47 @@ Prepper.makeSuite('Add/Remove recipe',function(){
         expect(listResponse).to.have.status(200);
         var isFound = listResponse.body.some(
           entry => entry.id === 'thinkerbell/Second Recipe');
-        expect(isFound).to.be.false; 
+        expect(isFound).to.be.false;
         isFound = listResponse.body.some(
           entry => entry.id === 'thinkerbell/Third Recipe');
-        expect(isFound).to.be.false; 
+        expect(isFound).to.be.false;
+      });
+    });
+  });
+
+  describe('get recipe details', function() {
+    const recipeName = 'Recipe';
+
+    before(function() {
+      return chakram.put(
+        Prepper.foxboxManager.setterURL,
+        generateThinkerbellNewRecipePayload(recipeName)
+      );
+    });
+
+    it('Get recipe "enabled" status', function() {
+      return chakram.put(
+        Prepper.foxboxManager.getterURL,
+        generateThinkerbellGetEnabledPayload(recipeName)
+      )
+      .then((cmdResponse) => {
+        expect(cmdResponse).to.have.status(200);
+        expect(cmdResponse.body['thinkerbell/' + recipeName + '/is-rule-enabled'])
+          .equals('On');
+      });
+    });
+
+    it('Get recipe source', function() {
+      return chakram.put(
+        Prepper.foxboxManager.getterURL,
+        generateThinkerbellSourcePayload(recipeName)
+      )
+      .then((cmdResponse) => {
+        const jsonResponse = {};
+        jsonResponse['thinkerbell/' + recipeName + '/source'] = cloneRecipe(recipeName);
+
+        expect(cmdResponse).to.have.status(200);
+        expect(cmdResponse).to.comprise.of.json(jsonResponse);
       });
     });
   });

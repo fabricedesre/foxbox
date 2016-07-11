@@ -322,7 +322,7 @@ impl ThinkerbellAdapter {
         // Add getter for script source
         try!(self.adapter_manager.add_channel(Channel {
             feature: self.feature_source.clone(),
-            supports_fetch: Some(Signature::returns(Maybe::Required(format::STRING.clone()))),
+            supports_fetch: Some(Signature::returns(Maybe::Required(format::JSON.clone()))),
             id: rule.getter_source_id.clone(),
             service: service_id.clone(),
             adapter: self.adapter_id.clone(),
