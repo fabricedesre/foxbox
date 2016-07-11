@@ -38,12 +38,10 @@ impl ProfileService {
             ProfilePath::Default => {
                 if let Some(xdg) = get_env_var("XDG_DATA_HOME") {
                     format!("{}/foxbox", xdg)
-                } else {
-                    if let Some(home) = get_env_var("HOME") {
+                } else if let Some(home) = get_env_var("HOME") {
                         format!("{}/.local/share/foxbox", home)
-                    } else {
-                        panic!("Unable to get $HOME value");
-                    }
+                } else {
+                    panic!("Unable to get $HOME value");
                 }
             }
         };

@@ -17,7 +17,7 @@ default-features = true
 features = ["ssl"]
 
 [dependencies]
-clippy = "0.0.77"
+clippy = "0.0.78"
 hyper = "0.8.1"
 log = "0.3"
 mktemp = "0.1.2"

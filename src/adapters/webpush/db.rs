@@ -30,9 +30,9 @@ fn escape(string: &str) -> String {
 
 fn escape_option(opt: &Option<String>) -> Option<String> {
     match *opt {
-        Some(ref x) => { return Some(escape(x)); },
-        None => { return None; },
-    };
+        Some(ref x) => Some(escape(x)),
+        None => None,
+    }
 }
 
 fn user_to_str(user: &User) -> String {
