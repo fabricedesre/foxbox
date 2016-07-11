@@ -2,7 +2,6 @@
 //! Values manipulated by services
 //!
 
-#![allow(identity_op)] // Keep clippy happy with [De]serialize
 #![allow(transmute_ptr_to_ref)] // Keep clippy happy with mopaify
 
 use api::Error;

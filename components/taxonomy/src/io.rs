@@ -1,7 +1,6 @@
 //! Representation of data.
 //!
 //! Instances of `Payload` are typically combinations of JSON and binary components.
-#![allow(identity_op)] // FIXME: Remove this once Clippy accepts Serialize
 
 use api::Error;
 use parse::*;

@@ -1,7 +1,5 @@
 //! Utilities for defining a JSON parser.
 
-#![allow(identity_op)] // Keep clippy happy with [De]serialize
-
 use api::Error as APIError;
 use util::Id;
 

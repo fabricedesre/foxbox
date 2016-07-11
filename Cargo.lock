@@ -3,7 +3,7 @@ name = "foxbox"
 version = "0.1.0"
 dependencies = [
  "chrono 0.2.22 (registry+https://github.com/rust-lang/crates.io-index)",
- "clippy 0.0.78 (registry+https://github.com/rust-lang/crates.io-index)",
+ "clippy 0.0.79 (registry+https://github.com/rust-lang/crates.io-index)",
  "docopt 0.6.81 (registry+https://github.com/rust-lang/crates.io-index)",
  "docopt_macros 0.6.85 (registry+https://github.com/rust-lang/crates.io-index)",
  "env_logger 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -145,15 +145,15 @@ dependencies = [
 
 [[package]]
 name = "clippy"
-version = "0.0.78"
+version = "0.0.79"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "clippy_lints 0.0.78 (registry+https://github.com/rust-lang/crates.io-index)",
+ "clippy_lints 0.0.79 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "clippy_lints"
-version = "0.0.78"
+version = "0.0.79"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "matches 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -232,7 +232,7 @@ dependencies = [
 name = "foxbox_core"
 version = "0.1.0"
 dependencies = [
- "clippy 0.0.78 (registry+https://github.com/rust-lang/crates.io-index)",
+ "clippy 0.0.79 (registry+https://github.com/rust-lang/crates.io-index)",
  "foxbox_users 0.1.0 (git+https://github.com/fxbox/users.git?rev=ec53c3a)",
  "hyper 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "iron 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -251,7 +251,7 @@ name = "foxbox_taxonomy"
 version = "0.2.0"
 dependencies = [
  "chrono 0.2.22 (registry+https://github.com/rust-lang/crates.io-index)",
- "clippy 0.0.78 (registry+https://github.com/rust-lang/crates.io-index)",
+ "clippy 0.0.79 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 0.1.16 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1081,7 +1081,7 @@ dependencies = [
 name = "tls"
 version = "0.1.0"
 dependencies = [
- "clippy 0.0.78 (registry+https://github.com/rust-lang/crates.io-index)",
+ "clippy 0.0.79 (registry+https://github.com/rust-lang/crates.io-index)",
  "hyper 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "iron 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)",
