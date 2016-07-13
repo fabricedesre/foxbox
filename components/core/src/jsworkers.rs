@@ -203,6 +203,11 @@ pub enum Message {
     List {
         list: Vec<WorkerInfo>,
     },
+    // Register a service worker. Router -> Runtime.
+    Register {
+        worker: WorkerInfo,
+        host: String,
+    },
     // Notifies that we have a js runner connection established. WebSocket -> Runtime
     RunnerWSOpened {
         #[serde(skip_serializing)]
@@ -221,7 +226,7 @@ pub enum Message {
     },
     // Notifies that the foxbox is shutting down. Broadcasted by the main controller.
     Shutdown,
-    // Start a worker. Router -> Runtime.
+    // Start a web worker. Router -> Runtime.
     Start {
         worker: WorkerInfo,
         host: String,

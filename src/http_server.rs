@@ -96,6 +96,8 @@ impl<T: Controller> HttpServer<T> {
             // jsworkers paths. Keep in sync with components/jsworkers/router.rs
             (vec![Method::Post], "jsworkers/v1/start".to_owned()),
             (vec![Method::Post], "jsworkers/v1/stop".to_owned()),
+            (vec![Method::Post], "jsworkers/v1/register".to_owned()),
+            (vec![Method::Post], "jsworkers/v1/unregister".to_owned()),
             (vec![Method::Get], "jsworkers/v1/list".to_owned()),
         ]);
         chain.link_after(cors);

@@ -383,6 +383,23 @@ impl Runtime {
                                     error!("Can't relay message to runtime worker because runtime is not up yet!");
                                 }
                             }
+                            BrokerMessage::Register { ref worker, ref host } => {
+                                info!("Message::Register {:?}", worker);
+                                if let Some(ref out) = runtime_ws_out {
+                                    // If we don't already run this worker, add it to our set
+                                    // as a running one.
+                                    if !workers.has_worker(worker) {
+                                        workers.add_worker(worker);
+                                    }
+                                    workers.start_worker(worker);
+
+                                    send_json_to_ws(out,
+                                                    "RegisterWorker",
+                                                    &workers.get_worker_info(worker.user.clone(),
+                                                                             worker.url.clone(),
+                                                                             worker.kind.clone()));
+                                }
+                            },
                             _ => {
                                 error!("Unexpected message by the `workers` actor {:?}", message);
                             }

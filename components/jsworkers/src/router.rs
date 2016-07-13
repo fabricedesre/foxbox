@@ -7,19 +7,29 @@
 /// All endpoints are authenticated. Valid urls are:
 ///
 /// POST /start
-///   description: starts a new worker or let the client re-connect to an already created one.
-///   input: { webworker_url: <worker_url> }
-///   output: 200 { webworker_url: <worker_url>, ws_url: <websocket_url> }
+///   description: starts a new web worker or let the client re-connect to an already created one.
+///   input: { url: <worker_url> }
+///   output: 200 { url: <worker_url>, ws_url: <websocket_url> }
 ///
 /// POST /stop
-///   description: stops a worker.
-///   input: { webworker_url: <worker_url> }
-///   output: 200 { webworker_url: <worker_url> }
+///   description: stops a web worker.
+///   input: { url: <worker_url> }
+///   output: 200 { url: <worker_url> }
+///
+/// POST /register
+///    description: registers a service worker.
+///    input: { url: <worker_url>, options: <service_worker_registration_options> }
+///    output: 200 { url: <worker_url> }
+///
+/// POST /unregister
+///    description: registers a service worker.
+///    input: { url: <worker_url>, options: <service_worker_registration_options> }
+///    output: 200 { url: <worker_url> }
 ///
 /// GET /list
 ///   description: returns the list of workers installed for this user.
 ///   input: None
-///   output: 200 [{ state: Running|Stopped, webworker_url: <worker_url>, ws_url: <websocket_url> }*]
+///   output: 200 [{ kind: Web|Service, state: Running|Stopped, url: <worker_url>, ws_url: <websocket_url> }*]
 
 use foxbox_core::broker::SharedBroker;
 use foxbox_core::jsworkers::{Message, User, WorkerInfo, WorkerKind, WorkerState};
@@ -85,22 +95,22 @@ impl Router {
         Ok(response)
     }
 
-    // Extracts the webworker_url parameter from the request.
-    fn get_webworker_url(&self, req: &mut Request) -> IronResult<String> {
+    // Extracts the url parameter from the request.
+    fn get_worker_url(&self, req: &mut Request) -> IronResult<String> {
         let source = itry!(Self::read_body_to_string(&mut req.body));
         #[derive(Deserialize)]
         struct Params {
-            webworker_url: String,
+            url: String,
         }
         let params: Result<Params, serde_json::Error> = serde_json::from_str(&source);
         match params {
-            Ok(val) => Ok(val.webworker_url),
+            Ok(val) => Ok(val.url),
             Err(err) => Err(IronError::new(err, Status::BadRequest))
         }
     }
 
     fn handle_start(&self, req: &mut Request, user: Option<User>) -> IronResult<Response> {
-        let webworker_url = match self.get_webworker_url(req) {
+        let worker_url = match self.get_worker_url(req) {
             Ok(url) => url,
             Err(err) => { return Err(err); }
         };
@@ -109,7 +119,7 @@ impl Router {
         let (tx, rx) = channel::<Message>();
         let message = Message::Start {
             worker: WorkerInfo::new_webworker(user.unwrap_or(DEFAULT_USER.to_owned()),
-                                              webworker_url.clone(),
+                                              worker_url.clone(),
                                               WorkerState::Stopped),
             host: req.url.host.serialize(),
             tx: tx,
@@ -129,7 +139,7 @@ impl Router {
         match res {
             Message::ClientEndpoint { ws_url } => {
                 let mut response =
-                    Response::with(json!({ webworker_url: webworker_url, ws_url: ws_url }));
+                    Response::with(json!({ url: worker_url, ws_url: ws_url }));
                 response.status = Some(Status::Ok);
                 response.headers.set(ContentType::json());
                 return Ok(response);
@@ -141,7 +151,7 @@ impl Router {
     }
 
     fn handle_stop(&self, req: &mut Request, user: Option<User>) -> IronResult<Response> {
-        let webworker_url = match self.get_webworker_url(req) {
+        let worker_url = match self.get_worker_url(req) {
             Ok(url) => url,
             Err(err) => { return Err(err); }
         };
@@ -149,7 +159,7 @@ impl Router {
         // Sends a "Stop" message to the worker set.
         let message = Message::Stop {
             worker: WorkerInfo::new_webworker(user.unwrap_or(DEFAULT_USER.to_owned()),
-                                              webworker_url.clone(),
+                                              worker_url.clone(),
                                               WorkerState::Stopped),
         };
 
@@ -158,7 +168,33 @@ impl Router {
         }
 
         let mut response =
-            Response::with(json!({ webworker_url: webworker_url }));
+            Response::with(json!({ url: worker_url }));
+        response.status = Some(Status::Ok);
+        response.headers.set(ContentType::json());
+        Ok(response)
+    }
+
+    fn handle_register(&self, req: &mut Request, user: Option<User>) -> IronResult<Response> {
+        let worker_url = match self.get_worker_url(req) {
+            Ok(url) => url,
+            Err(err) => { return Err(err); }
+        };
+
+        // Sends a "Register" message to the worker set.
+        let message = Message::Register {
+            worker: WorkerInfo::new_serviceworker(user.unwrap_or(DEFAULT_USER.to_owned()),
+                                                  worker_url.clone(),
+                                                  WorkerState::Stopped),
+            host: req.url.host.serialize(),
+        };
+
+        if self.broker.lock().unwrap().send_message("workers", message).is_err() {
+            return Ok(Response::with(Status::InternalServerError));
+        }
+
+        // There is no response when registering service workers.
+        let mut response =
+            Response::with(json!({ url: worker_url }));
         response.status = Some(Status::Ok);
         response.headers.set(ContentType::json());
         Ok(response)
@@ -194,6 +230,14 @@ impl Handler for Router {
             return self.handle_stop(req, user);
         }
 
+        if req.url.path == ["register"] && req.method == Method::Post {
+            return self.handle_register(req, user);
+        }
+
+        /*if req.url.path == ["unregister"] && req.method == Method::Post {
+            return self.handle_stop(req, user);
+        }*/
+
         if req.url.path == ["list"] && req.method == Method::Get {
             return self.handle_list(user);
         }
@@ -215,6 +259,8 @@ pub fn create<T>(controller: T) -> Chain
             AuthEndpoint(vec![Method::Get], "list".to_owned()),
             AuthEndpoint(vec![Method::Post], "start".to_owned()),
             AuthEndpoint(vec![Method::Post], "stop".to_owned()),
+            AuthEndpoint(vec![Method::Post], "register".to_owned()),
+            AuthEndpoint(vec![Method::Post], "unregister".to_owned()),
         ]
     } else {
         vec![]
