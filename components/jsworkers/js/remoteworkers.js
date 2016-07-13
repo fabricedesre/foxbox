@@ -126,7 +126,7 @@
       let url = BOX_BASE_URL + "/jsworkers/v1/start";
       let init = {
         method: "POST",
-        body: JSON.stringify({ webworker_url: this.url }),
+        body: JSON.stringify({ url: this.url }),
         mode: "cors"
       }
       return global.fetch(url, init);
