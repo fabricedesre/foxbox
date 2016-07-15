@@ -47,7 +47,7 @@ libc = "0.2.7"
 log = "0.3"
 mio = "0.5.1"
 mount = "0.1.0"
-nix = { git = "https://github.com/nix-rust/nix.git", rev = "138080" } # Until 0.5.1 is released
+nix = "0.6.0"
 openssl = "0.7.6"
 openssl-sys = "0.7.6"
 rand = "0.3"
