@@ -100,6 +100,7 @@ use tunnel_controller:: { TunnelConfig, Tunnel };
 use libc::{ sighandler_t, SIGINT };
 use log::{ LogRecord, LogLevelFilter };
 
+use multicast_dns::errors::Error as HostManagerError;
 use multicast_dns::host::HostManager;
 use foxbox_core::profile_service::ProfilePath;
 use std::env;
@@ -155,14 +156,17 @@ Options:
 /// # Arguments
 ///
 /// * `hostname` - host name name we'd like to set (should be a valid non-FQDN host name).
-fn update_hostname(hostname: String) -> String {
+fn update_hostname(hostname: &str) -> Result<String, HostManagerError> {
     let host_manager = HostManager::new();
 
-    if !host_manager.is_valid_name(&hostname) {
-        panic!("Host name `{}` is not a valid host name!", &hostname);
-    }
+    host_manager.is_valid_name(hostname)
+        .and_then(|is_valid| {
+            if !is_valid {
+                panic!("Host name `{}` is not a valid host name!", hostname);
+            }
 
-    host_manager.set_name(&hostname)
+            host_manager.set_name(hostname)
+        })
 }
 
 // Handle SIGINT (Ctrl-C) for manual shutdown.
@@ -240,8 +244,14 @@ fn main() {
 
     let args: Args = Args::docopt().decode().unwrap_or_else(|e| e.exit());
 
-    let local_name = update_hostname(args.flag_local_name.to_owned());
-    let local_name = format!("{}.local", local_name);
+    let local_name = args.flag_local_name;
+    let local_name = update_hostname(&local_name)
+        .or_else(|err| {
+            error!("Could not update local host name: {}", err);
+            Ok::<String, HostManagerError>(local_name)
+        })
+        .and_then(|name| Ok(format!("{}.local", name)))
+        .unwrap();
 
     let mut controller = FoxBox::new(
         args.flag_verbose, local_name.clone(), args.flag_port,
@@ -381,6 +391,12 @@ describe! main {
             assert_eq!(args.flag_iface.unwrap(), "eth99");
             assert_eq!(args.flag_tunnel.unwrap(), "tunnel.host");
             assert_eq!(args.flag_config.unwrap(), vec!["ns;key;value"]);
+        }
+    }
+
+    describe! host_name {
+        it "should return updated host name" {
+            assert_eq!(super::super::update_hostname("foxbox").unwrap(), "foxbox");
         }
     }
 }
