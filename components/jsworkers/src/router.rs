@@ -11,11 +11,6 @@
 ///   input: { url: <worker_url> }
 ///   output: 200 { url: <worker_url>, ws_url: <websocket_url> }
 ///
-/// POST /stop
-///   description: stops a web worker.
-///   input: { url: <worker_url> }
-///   output: 200 { url: <worker_url> }
-///
 /// POST /register
 ///    description: registers a service worker.
 ///    input: { url: <worker_url>, options: <service_worker_registration_options> }
@@ -150,30 +145,6 @@ impl Router {
         }
     }
 
-    fn handle_stop(&self, req: &mut Request, user: Option<User>) -> IronResult<Response> {
-        let worker_url = match self.get_worker_url(req) {
-            Ok(url) => url,
-            Err(err) => { return Err(err); }
-        };
-
-        // Sends a "Stop" message to the worker set.
-        let message = Message::Stop {
-            worker: WorkerInfo::new_webworker(user.unwrap_or(DEFAULT_USER.to_owned()),
-                                              worker_url.clone(),
-                                              WorkerState::Stopped),
-        };
-
-        if self.broker.lock().unwrap().send_message("workers", message).is_err() {
-            return Ok(Response::with(Status::InternalServerError));
-        }
-
-        let mut response =
-            Response::with(json!({ url: worker_url }));
-        response.status = Some(Status::Ok);
-        response.headers.set(ContentType::json());
-        Ok(response)
-    }
-
     fn handle_register(&self, req: &mut Request, user: Option<User>) -> IronResult<Response> {
         let worker_url = match self.get_worker_url(req) {
             Ok(url) => url,
@@ -224,10 +195,6 @@ impl Handler for Router {
 
         if req.url.path == ["start"] && req.method == Method::Post {
             return self.handle_start(req, user);
-        }
-
-        if req.url.path == ["stop"] && req.method == Method::Post {
-            return self.handle_stop(req, user);
         }
 
         if req.url.path == ["register"] && req.method == Method::Post {

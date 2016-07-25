@@ -259,7 +259,7 @@ impl Runtime {
                                     workers.start_worker(worker);
 
                                     send_json_to_ws(out,
-                                                    "StartWorker",
+                                                    "StartWebWorker",
                                                     &workers.get_worker_info(worker.user.clone(),
                                                                              worker.url.clone(),
                                                                              worker.kind.clone()));
@@ -286,7 +286,7 @@ impl Runtime {
                                     workers.start_worker(worker);
 
                                     send_json_to_ws(out,
-                                                    "StartWorker",
+                                                    "StartWebWorker",
                                                     &workers.get_worker_info(worker.user.clone(),
                                                                              worker.url.clone(),
                                                                              worker.kind.clone()));
@@ -294,16 +294,6 @@ impl Runtime {
                                     // TODO: queue the requests and drain them when the runtime
                                     // comes up.
                                     error!("Can't wake up worker because runtime is not up yet!");
-                                }
-                            }
-                            BrokerMessage::Stop { ref worker } => {
-                                if let Some(ref out) = runtime_ws_out {
-                                    // Serialize the worker info and send it the the runtime.
-                                    send_json_to_ws(out, "StopWorker", worker);
-                                } else {
-                                    // TODO: queue the requests and drain them when the runtime
-                                    // comes up.
-                                    error!("Can't stop worker because runtime is not up yet!");
                                 }
                             }
                             BrokerMessage::GetList { ref user, ref tx } => {
@@ -342,6 +332,13 @@ impl Runtime {
                             }
                             BrokerMessage::BrowserWSClosed { ref worker_id, ref handler_id } => {
                                 if browser_ws_out.contains_key(worker_id) {
+                                    // Notify the js runner that a web client disconnected.
+                                    if let Some(ref out) = runtime_ws_out {
+                                        let info = workers.get_worker_info_from_key(worker_id).unwrap();
+                                        send_json_to_ws(out,
+                                                        "StopWebWorker",
+                                                        &info);
+                                    }
                                     browser_ws_out.get(worker_id)
                                                   .unwrap()
                                                   .borrow_mut()

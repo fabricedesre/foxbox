@@ -15,6 +15,7 @@ Service workers scopes are rooted at $domain/user/$user_id/ which can be conside
 ## Foxbox:
 - Turn into an adapter?
 - More tests.
+- cleanup of workers.rs
 
 ## Gecko:
 - Create the worker with a per-usercontext principal.

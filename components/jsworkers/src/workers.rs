@@ -52,14 +52,15 @@ impl JsWorkers {
                 let sql_kind: i64 = row.get(3);
                 let sql_state: i64 = row.get(4);
                 let mut state: WorkerState = WorkerState::from_int(sql_state as u32);
-                // Put running workers in hibernation. They will wake up when they are woken up
+                let kind = WorkerKind::from_int(sql_kind as u32);
+                // Put registered service workers in hibernation. They will wake up when they are woken up
                 // by start_all_workers() or start_worker().
-                if state == WorkerState::Running {
+                if state == WorkerState::Running && kind == WorkerKind::Service {
                     state = WorkerState::Hibernating;
                 }
                 workers.insert(key, WorkerInfo::new(user,
                                                     url,
-                                                    WorkerKind::from_int(sql_kind as u32),
+                                                    kind,
                                                     state));
             }
         }
@@ -105,6 +106,10 @@ impl JsWorkers {
 
     /// Returns the current info for this worker.
     /// Note that this is a live value.
+    pub fn get_worker_info_from_key(&self, key: &WorkerInfoKey) -> Option<&WorkerInfo> {
+        self.workers.get(key)
+    }
+
     pub fn get_worker_info(&self, user: User, url: Url, kind: WorkerKind) -> Option<&WorkerInfo> {
         self.workers.get(&WorkerInfo::key_from(user, &url, &kind))
     }
