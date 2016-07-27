@@ -447,7 +447,6 @@ impl Runtime {
 
         ManagedProcess::start(move || {
             Command::new(&path)
-                .arg("-jsconsole")
                 .arg("-ws")
                 .arg("ws://localhost:2016/runtime/")
                 .spawn()

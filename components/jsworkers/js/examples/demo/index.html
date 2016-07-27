@@ -1,7 +1,7 @@
 <html>
   <head>
-    <script src="objectencoder.js"> </script>
-    <script src="remoteworkers.js"> </script>
+    <script src="/lib/objectencoder.js"> </script>
+    <script src="/lib/remoteworkers.js"> </script>
     <style>
 .error {
   color: red;
@@ -18,7 +18,7 @@ function test() {
   console.log("Starting test...");
   document.getElementById("inout").removeAttribute("style");
   FoxboxWorkers.set_base_url("http://localhost:3000");
-  worker = FoxboxWorkers.Worker("http://localhost:8000/worker1.js");
+  worker = FoxboxWorkers.Worker("http://localhost:8000/examples/demo/worker1.js");
   worker.addEventListener("message", function(event) {
     document.getElementById("output").innerHTML += ">> " + event.data + "\n";
   });
@@ -37,7 +37,7 @@ function send() {
     </script>
   </head>
   <body>
-    <h1>RemoteWorkers sandbox</h1>
+    <h1>RemoteWorkers demo</h1>
     <button onclick="test()">Start</button>
     <div id="inout" style="display:none;">
       <input type="text" id="input"></input><button onclick="send()">Send</button>

@@ -13,6 +13,9 @@
   const kReady       = 2;
   const kError       = 3;
 
+  // Global state names.
+  const kStateName = ["pendingHttp", "pendingWs", "ready", "error"];
+
   // WS message event states.
   const kCommand = 0;
   const kPayload = 1;
@@ -30,6 +33,10 @@
     // the payload.
     this.ws_state = kCommand;
     this.ws_command = null;
+
+    this.isReady = new Promise((resolve) => {
+      this.deferredReady = resolve;
+    });
 
     this.send_http_request()
         .then(this.on_http_response.bind(this))
@@ -116,7 +123,7 @@
 
     expect_state: function(state) {
       if (this.state != state) {
-        throw new Error(`Expected state to be ${state} but found ${this.state}`);
+        throw new Error(`Expected state to be '${kStateName[state]}' but is '${kStateName[this.state]}'`);
       }
     },
 
@@ -174,6 +181,7 @@
         case "open":
           console.log(`Websocket opened for ${this.url}`);
           this.state = kReady;
+          this.deferredReady();
           break;
         case "message":
           console.log(`Message received for ${this.url} : ${event.data}`);
@@ -213,17 +221,20 @@
     },
 
     postMessage: function(message) {
-      // TODO: should we buffer the messages until we're ready?
-      this.expect_state(kReady);
-      window.ObjectEncoder.encode(message).then(encoded => {
-        this.ws.send(encoded);
+      this.isReady.then(() => {
+        this.expect_state(kReady);
+        window.ObjectEncoder.encode(message).then(encoded => {
+          this.ws.send(encoded);
+        });
       });
     },
 
     terminate: function() {
-      this.expect_state(kReady);
-      this.ws.close();
-      this.state = kError;
+      this.isReady.then(() => {
+        this.expect_state(kReady);
+        this.ws.close();
+        this.state = kError;
+      });
     }
   }
 
