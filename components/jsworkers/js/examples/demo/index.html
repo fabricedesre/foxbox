@@ -28,15 +28,31 @@ function test() {
 }
 
 function send() {
-  let input = document.getElementById("input");
+  var input = document.getElementById("input");
   var text = input.value;
   input.value = "";
   worker.postMessage(text);
   document.getElementById("output").innerHTML += "<< " + text + "\n";
 }
+
+function register() {
+  FoxboxWorkers.set_base_url("http://localhost:3000");
+  var url = document.getElementById("sw_url").value;
+  var options = document.getElementById("sw_options").value.trim() || {};
+  FoxboxWorkers.RegisterServiceWorker(url, JSON.parse(options))
+               .then(console.log, console.error);
+}
     </script>
   </head>
   <body>
+    <h1>ServiceWorkers demo</h1>
+    <p>Register service worker:</p>
+    <div>
+      URL <input type="text" id="sw_url"></input>
+      Options <input type="text" id="sw_options"></input>
+      <button onclick="register()">Register</button>
+    </div>
+    <hr/>
     <h1>RemoteWorkers demo</h1>
     <button onclick="test()">Start</button>
     <div id="inout" style="display:none;">

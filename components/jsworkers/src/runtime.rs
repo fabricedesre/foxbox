@@ -284,7 +284,7 @@ impl Runtime {
                                     }
 
                                     send_json_to_ws(out,
-                                                    "StartWebWorker",
+                                                    "RegisterServiceWorker",
                                                     &workers.get_worker_info(worker.user.clone(),
                                                                              worker.url.clone(),
                                                                              worker.kind.clone()));
@@ -387,7 +387,7 @@ impl Runtime {
                                     }
 
                                     send_json_to_ws(out,
-                                                    "RegisterWorker",
+                                                    "RegisterServiceWorker",
                                                     &workers.get_worker_info(worker.user.clone(),
                                                                              worker.url.clone(),
                                                                              worker.kind.clone()));

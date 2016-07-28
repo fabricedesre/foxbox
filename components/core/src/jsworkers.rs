@@ -5,7 +5,6 @@
  /// Enum to describe all the messages exchanged by the jsworker system.
 
 use serde::{ Serialize, Serializer };
-use std::cell::Cell;
 use std::sync::mpsc::Sender;
 use ws::Sender as WsSender;
 
@@ -23,21 +22,6 @@ impl WorkerKind {
         match *self {
             WorkerKind::Web => String::from("WebWorker"),
             WorkerKind::Service => String::from("ServiceWorker"),
-        }
-    }
-
-    pub fn as_int(&self) -> u32 {
-        match *self {
-            WorkerKind::Web => 0,
-            WorkerKind::Service => 1,
-        }
-    }
-
-    pub fn from_int(value: u32) -> Self {
-        match value {
-            0 => WorkerKind::Web,
-            1 => WorkerKind::Service,
-            _ => { panic!("Invalid value: {}", value); }
         }
     }
 }
@@ -59,6 +43,8 @@ pub struct WorkerInfo {
     pub url: Url,
     pub user: User,
     pub kind: WorkerKind,
+    // Stringified version of the SW registration options.
+    pub options: Option<String>,
 }
 
 pub type WorkerInfoKey = String;
@@ -72,12 +58,14 @@ impl Serialize for WorkerInfo {
             url: Url,
             user: User,
             kind: WorkerKind,
+            options: Option<String>,
             id: WorkerInfoKey,
         }
         let info = SerializableInfo {
             url: self.url.clone(),
             user: self.user.clone(),
             kind: self.kind.clone(),
+            options: self.options.clone(),
             id: self.key(),
         };
         info.serialize(serializer)
@@ -85,20 +73,21 @@ impl Serialize for WorkerInfo {
 }
 
 impl WorkerInfo {
-    pub fn new(user: User, url: Url, kind: WorkerKind) -> Self {
+    pub fn new(user: User, url: Url, kind: WorkerKind, options: Option<String>) -> Self {
         WorkerInfo {
             url: url,
             user: user,
             kind: kind,
+            options: options,
         }
     }
 
     pub fn new_webworker(user: User, url: Url) -> Self {
-        WorkerInfo::new(user, url, WorkerKind::Web)
+        WorkerInfo::new(user, url, WorkerKind::Web, None)
     }
 
-    pub fn new_serviceworker(user: User, url: Url) -> Self {
-        WorkerInfo::new(user, url, WorkerKind::Service)
+    pub fn new_serviceworker(user: User, url: Url, options: Option<String>) -> Self {
+        WorkerInfo::new(user, url, WorkerKind::Service, options)
     }
 
     /// Creates a unique key for this WorkerInfo.

@@ -33,26 +33,23 @@ impl JsWorkers {
                 key    TEXT NOT NULL PRIMARY KEY,
                 url    TEXT NOT NULL,
                 user   TEXT NOT NULL,
-                kind   INTEGER
+                options TEXT NOT NULL
         )", &[]).unwrap_or_else(|err| {
             panic!("Unable to create jsworkers database: {}", err);
         });
 
-        // Read the list of stored workers.
+        // Read the list of stored service workers.
         let mut workers = HashMap::new();
         {
-            let mut stmt = db.prepare("SELECT key, url, user, kind FROM workers").unwrap();
+            let mut stmt = db.prepare("SELECT key, url, user, options FROM workers").unwrap();
             let rows = stmt.query(&[]).unwrap();
             for result_row in rows {
                 let row = result_row.unwrap();
                 let key: WorkerInfoKey = row.get(0);
                 let url: Url = row.get(1);
                 let user: User = row.get(2);
-                let sql_kind: i64 = row.get(3);
-                let kind = WorkerKind::from_int(sql_kind as u32);
-                workers.insert(key, WorkerInfo::new(user,
-                                                    url,
-                                                    kind));
+                let options: String = row.get(3);
+                workers.insert(key, WorkerInfo::new_serviceworker(user, url, Some(options)));
             }
         }
         info!("Loaded {} workers from the database.", workers.len());
@@ -69,12 +66,12 @@ impl JsWorkers {
         if info.kind != WorkerKind::Service {
             return;
         }
-        let sql_kind: i64 = info.kind.as_int() as i64;
-        self.db.execute("INSERT OR IGNORE INTO workers (key, url, user, kind) VALUES ($1, $2, $3, $4)",
+        let options = info.clone().options.unwrap_or("".to_owned());
+        self.db.execute("INSERT OR IGNORE INTO workers (key, url, user, options) VALUES ($1, $2, $3, $4)",
                         &[&escape(&info.key()),
                           &escape(&info.url),
                           &escape(&info.user),
-                          &sql_kind]).unwrap();
+                          &escape(&options)]).unwrap();
     }
 
     fn remove_worker_from_db(&self, info: &WorkerInfo) {

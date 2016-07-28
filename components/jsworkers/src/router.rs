@@ -27,7 +27,7 @@
 ///   output: 200 [{ kind: Web|Service, state: Running|Stopped, url: <worker_url>, ws_url: <websocket_url> }*]
 
 use foxbox_core::broker::SharedBroker;
-use foxbox_core::jsworkers::{Message, User, WorkerInfo, WorkerKind};
+use foxbox_core::jsworkers::{Message, User, WorkerInfo};
 use foxbox_core::traits::Controller;
 
 use foxbox_users::{AuthEndpoint, SessionToken};
@@ -104,6 +104,21 @@ impl Router {
         }
     }
 
+    // Extracts the url and options parameters from the request.
+    fn get_worker_url_and_options(&self, req: &mut Request) -> IronResult<(String, String)> {
+        let source = itry!(Self::read_body_to_string(&mut req.body));
+        #[derive(Deserialize)]
+        struct Params {
+            url: String,
+            options: serde_json::value::Value,
+        }
+        let params: Result<Params, serde_json::Error> = serde_json::from_str(&source);
+        match params {
+            Ok(val) => Ok((val.url, serde_json::to_string(&val.options).unwrap_or("{}".to_owned()))),
+            Err(err) => Err(IronError::new(err, Status::BadRequest))
+        }
+    }
+
     fn handle_start(&self, req: &mut Request, user: Option<User>) -> IronResult<Response> {
         let worker_url = match self.get_worker_url(req) {
             Ok(url) => url,
@@ -145,15 +160,18 @@ impl Router {
     }
 
     fn handle_register(&self, req: &mut Request, user: Option<User>) -> IronResult<Response> {
-        let worker_url = match self.get_worker_url(req) {
+        let (worker_url, options) = match self.get_worker_url_and_options(req) {
             Ok(url) => url,
-            Err(err) => { return Err(err); }
+            Err(err) => {
+                error!("Unable to get worker url: {}", err);
+                return Err(err);
+            }
         };
 
         // Sends a "Register" message to the worker set.
         let message = Message::Register {
             worker: WorkerInfo::new_serviceworker(user.unwrap_or(DEFAULT_USER.to_owned()),
-                                                  worker_url.clone()),
+                                                  worker_url.clone(), Some(options.clone())),
             host: req.url.host.serialize(),
         };
 

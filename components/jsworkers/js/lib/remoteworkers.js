@@ -253,6 +253,26 @@
       } else {
         return new RemoteWorker(worker_url);
       }
+    },
+
+    // returns a Promise that resolves when the registration is done,
+    // or rejects if an error occurs.
+    // Parameters are similar to https://slightlyoff.github.io/ServiceWorker/spec/service_worker_1/#navigator-service-worker-register
+    // TODO: Apply the same constraints as in the spec here.
+    RegisterServiceWorker: function(worker_url, options) {
+      if (MODE == "local") {
+        console.error(`Service Workers can't be registered locally`);
+        return Promise.reject();
+      }
+      return new Promise((resolve, reject) => {
+        let url = BOX_BASE_URL + "/jsworkers/v1/register";
+        let init = {
+          method: "POST",
+          body: JSON.stringify({ url: worker_url, options: options }),
+          mode: "cors"
+        }
+        global.fetch(url, init).then(resolve, reject);
+      });
     }
   }
 

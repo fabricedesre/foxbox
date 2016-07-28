@@ -5,12 +5,12 @@
 extern crate rand;
 
 use foxbox_core::config_store::ConfigService;
+use foxbox_core::broker::{ MessageBroker, SharedBroker };
+use foxbox_core::jsworkers::Message;
 use foxbox_core::profile_service::{ ProfilePath, ProfileService };
 use foxbox_core::traits::Controller;
 use foxbox_core::upnp::UpnpManager;
 use foxbox_users::UsersManager;
-use jsworkers::broker::{ MessageBroker, SharedBroker };
-use jsworkers::message::Message;
 use std::vec::IntoIter;
 use serde_json;
 use std::io;
