@@ -12,45 +12,6 @@ use ws::Sender as WsSender;
 pub type Url = String; // FIXME: should be the url type from hyper.
 pub type User = String;   // FIXME: should be the user type from foxbox_users.
 
-/// An enum representing a worker state.
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub enum WorkerState {
-    Stopped,
-    Running,
-    Hibernating, // Used to track workers that should run but wait for a wake up call.
-}
-
-impl WorkerState {
-    pub fn as_int(&self) -> u32 {
-        match *self {
-            WorkerState::Stopped => 0,
-            WorkerState::Running => 1,
-            WorkerState::Hibernating => 2,
-        }
-    }
-
-    pub fn from_int(value: u32) -> Self {
-        match value {
-            0 => WorkerState::Stopped,
-            1 => WorkerState::Running,
-            2 => WorkerState::Hibernating,
-            _ => { panic!("Invalid value: {}", value); }
-        }
-    }
-}
-
-impl Serialize for WorkerState {
-    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
-        where S: Serializer
-    {
-        match *self {
-            WorkerState::Stopped => serializer.serialize_str("Stopped"),
-            WorkerState::Running => serializer.serialize_str("Running"),
-            WorkerState::Hibernating => serializer.serialize_str("Hibernating"),
-        }
-    }
-}
-
 #[derive(Clone, Debug, PartialEq)]
 pub enum WorkerKind {
     Web,
@@ -98,7 +59,6 @@ pub struct WorkerInfo {
     pub url: Url,
     pub user: User,
     pub kind: WorkerKind,
-    pub state: Cell<WorkerState>,
 }
 
 pub type WorkerInfoKey = String;
@@ -111,14 +71,12 @@ impl Serialize for WorkerInfo {
         struct SerializableInfo {
             url: Url,
             user: User,
-            state: WorkerState,
             kind: WorkerKind,
             id: WorkerInfoKey,
         }
         let info = SerializableInfo {
             url: self.url.clone(),
             user: self.user.clone(),
-            state: self.state.get(),
             kind: self.kind.clone(),
             id: self.key(),
         };
@@ -127,21 +85,20 @@ impl Serialize for WorkerInfo {
 }
 
 impl WorkerInfo {
-    pub fn new(user: User, url: Url, kind: WorkerKind, initial_state: WorkerState) -> Self {
+    pub fn new(user: User, url: Url, kind: WorkerKind) -> Self {
         WorkerInfo {
             url: url,
             user: user,
             kind: kind,
-            state: Cell::new(initial_state),
         }
     }
 
-    pub fn new_webworker(user: User, url: Url, initial_state: WorkerState) -> Self {
-        WorkerInfo::new(user, url, WorkerKind::Web, initial_state)
+    pub fn new_webworker(user: User, url: Url) -> Self {
+        WorkerInfo::new(user, url, WorkerKind::Web)
     }
 
-    pub fn new_serviceworker(user: User, url: Url, initial_state: WorkerState) -> Self {
-        WorkerInfo::new(user, url, WorkerKind::Service, initial_state)
+    pub fn new_serviceworker(user: User, url: Url) -> Self {
+        WorkerInfo::new(user, url, WorkerKind::Service)
     }
 
     /// Creates a unique key for this WorkerInfo.

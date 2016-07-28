@@ -3,7 +3,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use foxbox_core::broker::SharedBroker;
-use foxbox_core::jsworkers::{Message, Url, User, WorkerInfo, WorkerInfoKey, WorkerKind, WorkerState};
+use foxbox_core::jsworkers::{Message, Url, User, WorkerInfo, WorkerInfoKey, WorkerKind};
 
 use rusqlite::Connection;
 use std::collections::HashMap;
@@ -33,8 +33,7 @@ impl JsWorkers {
                 key    TEXT NOT NULL PRIMARY KEY,
                 url    TEXT NOT NULL,
                 user   TEXT NOT NULL,
-                kind   INTEGER,
-                state  INTEGER
+                kind   INTEGER
         )", &[]).unwrap_or_else(|err| {
             panic!("Unable to create jsworkers database: {}", err);
         });
@@ -42,7 +41,7 @@ impl JsWorkers {
         // Read the list of stored workers.
         let mut workers = HashMap::new();
         {
-            let mut stmt = db.prepare("SELECT key, url, user, kind, state FROM workers").unwrap();
+            let mut stmt = db.prepare("SELECT key, url, user, kind FROM workers").unwrap();
             let rows = stmt.query(&[]).unwrap();
             for result_row in rows {
                 let row = result_row.unwrap();
@@ -50,18 +49,10 @@ impl JsWorkers {
                 let url: Url = row.get(1);
                 let user: User = row.get(2);
                 let sql_kind: i64 = row.get(3);
-                let sql_state: i64 = row.get(4);
-                let mut state: WorkerState = WorkerState::from_int(sql_state as u32);
                 let kind = WorkerKind::from_int(sql_kind as u32);
-                // Put registered service workers in hibernation. They will wake up when they are woken up
-                // by start_all_workers() or start_worker().
-                if state == WorkerState::Running && kind == WorkerKind::Service {
-                    state = WorkerState::Hibernating;
-                }
                 workers.insert(key, WorkerInfo::new(user,
                                                     url,
-                                                    kind,
-                                                    state));
+                                                    kind));
             }
         }
         info!("Loaded {} workers from the database.", workers.len());
@@ -73,30 +64,24 @@ impl JsWorkers {
         }
     }
 
-    // Updates a worker in the database. The only field that can actually change is the
-    // state, so we don't update the other fields.
-    fn update_worker_in_db(&self, info: &WorkerInfo) {
-        info!("update_worker_in_db {:?}", info);
-        let sql_state: i64 = info.state.get().as_int() as i64;
-        self.db.execute("UPDATE workers SET state = $1 WHERE key = $2",
-                        &[&sql_state, &escape(&info.key())]).unwrap();
-
-    }
-
     fn add_worker_in_db(&self, info: &WorkerInfo) {
         info!("add_worker_in_db {:?}", info);
+        if info.kind != WorkerKind::Service {
+            return;
+        }
         let sql_kind: i64 = info.kind.as_int() as i64;
-        let sql_state: i64 = info.state.get().as_int() as i64;
-        self.db.execute("INSERT OR IGNORE INTO workers (key, url, user, kind, state) VALUES ($1, $2, $3, $4, $5)",
+        self.db.execute("INSERT OR IGNORE INTO workers (key, url, user, kind) VALUES ($1, $2, $3, $4)",
                         &[&escape(&info.key()),
                           &escape(&info.url),
                           &escape(&info.user),
-                          &sql_kind,
-                          &sql_state]).unwrap();
+                          &sql_kind]).unwrap();
     }
 
     fn remove_worker_from_db(&self, info: &WorkerInfo) {
         info!("remove_worker_from_db {:?}", info);
+        if info.kind != WorkerKind::Service {
+            return;
+        }
         self.db.execute("DELETE from workers where key = $1", &[&escape(&info.key())]).unwrap();
     }
 
@@ -125,14 +110,6 @@ impl JsWorkers {
         res
     }
 
-    pub fn stop_all(&self) {
-        let ref w = self.workers;
-        for (_, info) in w {
-            info.state.set(WorkerState::Stopped);
-            self.update_worker_in_db(info);
-        }
-    }
-
     /// TODO: improve error case.
     pub fn add_worker(&mut self, info: &WorkerInfo) -> Result<(), ()> {
         info!("add_worker {:?}", info);
@@ -142,7 +119,6 @@ impl JsWorkers {
         }
 
         let new_worker = info.clone();
-        new_worker.state.set(WorkerState::Stopped);
         self.add_worker_in_db(&new_worker);
         self.workers.insert(new_worker.key(), new_worker);
         Ok(())
@@ -159,50 +135,11 @@ impl JsWorkers {
         Ok(())
     }
 
-    /// TODO: improve error case.
-    pub fn stop_worker(&self, info: &WorkerInfo) -> Result<(), ()> {
-        if let Some(worker_info) = self.get_worker_info(info.user.clone(),
-                                                        info.url.clone(),
-                                                        info.kind.clone()) {
-            if worker_info.state.get() == WorkerState::Stopped {
-                return Err(());
-            }
-
-            // Mark the worker as stopped.
-            worker_info.state.set(WorkerState::Stopped);
-            self.update_worker_in_db(worker_info);
-
-            return Ok(());
-        } else {
-            return Err(());
-        }
-    }
-
-    /// TODO: improve error case.
-    pub fn start_worker(&self, info: &WorkerInfo) -> Result<(), ()> {
-        info!("start_worker {:?}", info);
-        if let Some(worker_info) = self.get_worker_info(info.user.clone(),
-                                                        info.url.clone(),
-                                                        info.kind.clone()) {
-            if worker_info.state.get() == WorkerState::Running {
-                return Err(());
-            }
-
-            // Mark the worker as running.
-            worker_info.state.set(WorkerState::Running);
-            self.update_worker_in_db(worker_info);
-
-            return Ok(());
-        } else {
-            return Err(());
-        }
-    }
-
     pub fn wake_up_workers(&self) {
         info!("wake_up_workers");
         let ref w = self.workers;
         for (_, info) in w {
-            if info.state.get() == WorkerState::Hibernating {
+            if info.kind == WorkerKind::Service {
                 info!("Waking up worker {:?}", info);
                 let message = Message::Wakeup {
                     worker: info.clone(),

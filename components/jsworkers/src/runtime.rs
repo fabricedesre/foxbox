@@ -256,7 +256,6 @@ impl Runtime {
                                     if !workers.has_worker(worker) {
                                         workers.add_worker(worker);
                                     }
-                                    workers.start_worker(worker);
 
                                     send_json_to_ws(out,
                                                     "StartWebWorker",
@@ -283,7 +282,6 @@ impl Runtime {
                                     if !workers.has_worker(worker) {
                                         workers.add_worker(worker);
                                     }
-                                    workers.start_worker(worker);
 
                                     send_json_to_ws(out,
                                                     "StartWebWorker",
@@ -313,7 +311,6 @@ impl Runtime {
                             },
                             BrokerMessage::StopAll => {
                                 // This message happens when the js runner itself shuts down.
-                                workers.stop_all();
                             }
                             BrokerMessage::RunnerWSOpened { ref out } => {
                                 info!("jsrunner WS is ready.");
@@ -388,7 +385,6 @@ impl Runtime {
                                     if !workers.has_worker(worker) {
                                         workers.add_worker(worker);
                                     }
-                                    workers.start_worker(worker);
 
                                     send_json_to_ws(out,
                                                     "RegisterWorker",

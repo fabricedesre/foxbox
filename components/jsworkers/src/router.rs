@@ -27,7 +27,7 @@
 ///   output: 200 [{ kind: Web|Service, state: Running|Stopped, url: <worker_url>, ws_url: <websocket_url> }*]
 
 use foxbox_core::broker::SharedBroker;
-use foxbox_core::jsworkers::{Message, User, WorkerInfo, WorkerKind, WorkerState};
+use foxbox_core::jsworkers::{Message, User, WorkerInfo, WorkerKind};
 use foxbox_core::traits::Controller;
 
 use foxbox_users::{AuthEndpoint, SessionToken};
@@ -114,8 +114,7 @@ impl Router {
         let (tx, rx) = channel::<Message>();
         let message = Message::Start {
             worker: WorkerInfo::new_webworker(user.unwrap_or(DEFAULT_USER.to_owned()),
-                                              worker_url.clone(),
-                                              WorkerState::Stopped),
+                                              worker_url.clone()),
             host: req.url.host.serialize(),
             tx: tx,
         };
@@ -154,8 +153,7 @@ impl Router {
         // Sends a "Register" message to the worker set.
         let message = Message::Register {
             worker: WorkerInfo::new_serviceworker(user.unwrap_or(DEFAULT_USER.to_owned()),
-                                                  worker_url.clone(),
-                                                  WorkerState::Stopped),
+                                                  worker_url.clone()),
             host: req.url.host.serialize(),
         };
 
