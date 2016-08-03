@@ -61,11 +61,11 @@ impl Router {
         Ok(s)
     }
 
-    fn handle_list(&self, user: Option<User>) -> IronResult<Response> {
+    fn handle_list(&self, user: User) -> IronResult<Response> {
         // Sends a "List" message to the worker set and wait for the answer.
         let (tx, rx) = channel::<Message>();
         let message = Message::GetList {
-            user: user.unwrap_or(DEFAULT_USER.to_owned()),
+            user: user,
             tx: tx,
         };
 
@@ -119,7 +119,7 @@ impl Router {
         }
     }
 
-    fn handle_start(&self, req: &mut Request, user: Option<User>) -> IronResult<Response> {
+    fn handle_start(&self, req: &mut Request, user: User) -> IronResult<Response> {
         let worker_url = match self.get_worker_url(req) {
             Ok(url) => url,
             Err(err) => { return Err(err); }
@@ -128,8 +128,7 @@ impl Router {
         // Sends a "Start" message to the worker set and wait for the answer.
         let (tx, rx) = channel::<Message>();
         let message = Message::Start {
-            worker: WorkerInfo::new_webworker(user.unwrap_or(DEFAULT_USER.to_owned()),
-                                              worker_url.clone()),
+            worker: WorkerInfo::new_webworker(user, worker_url.clone()),
             host: req.url.host.serialize(),
             tx: tx,
         };
@@ -159,7 +158,7 @@ impl Router {
         }
     }
 
-    fn handle_register(&self, req: &mut Request, user: Option<User>) -> IronResult<Response> {
+    fn handle_register(&self, req: &mut Request, user: User) -> IronResult<Response> {
         let (worker_url, options) = match self.get_worker_url_and_options(req) {
             Ok(url) => url,
             Err(err) => {
@@ -168,10 +167,12 @@ impl Router {
             }
         };
 
+        // Spawns a request to fetch the worker and store it in this user's URL space.
+
+
         // Sends a "Register" message to the worker set.
         let message = Message::Register {
-            worker: WorkerInfo::new_serviceworker(user.unwrap_or(DEFAULT_USER.to_owned()),
-                                                  worker_url.clone(), Some(options.clone())),
+            worker: WorkerInfo::new_serviceworker(user, worker_url.clone(), Some(options.clone())),
             host: req.url.host.serialize(),
         };
 
@@ -208,6 +209,8 @@ impl Handler for Router {
         if cfg!(feature = "authentication") && user == None {
             return Ok(Response::with(Status::Unauthorized));
         }
+
+        let user = user.unwrap_or(DEFAULT_USER.to_owned());
 
         if req.url.path == ["start"] && req.method == Method::Post {
             return self.handle_start(req, user);
