@@ -10,6 +10,9 @@ exclude = [ "**/*.conf", "**/*.json",
             "**/*.md", "**/*.yml"      # e.g.: READMEs, Travis
           ]
 
+[workspace]
+# We get the workspace's crates from the `path` definitions.
+
 [features]
 default = ["authentication", "zwave"]
 authentication = []
