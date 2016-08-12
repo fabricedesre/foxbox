@@ -7,7 +7,15 @@ Gecko doesn't do any specific book keeping, but at the foxbox level the behavior
 
 - Service workers: these follow the register/unregister cycle. Registering twice the same SW is idempotent, thus foxbox can register them at startup so that gecko doesn't have to do any special book keeping.
 
-## Public urls
+## Public urls & SW access
+
+- The page asks to register https://mysite.com/path/sw.js with a scope of `/`
+- Gecko loads the wrapper https://mysite.com/$UUID/serviceworkerwrapper.html that registers the SW from its original URI with a scope of `$UUID/`.
+- foxbox registers that the $foxbox_host/user/$user_id/mysite.com/ URLs will be managed by this SW.
+
+- when a request comes in for $foxbox_host/user/$user_id/mysite.com/some/file.html the foxbox sends a request to gecko for ($user_id, mysite.com/some/file.html)
+- gecko fetches (using fetch()) the resource at https://mysite.com/$UUID/some/file.html which is intercepted by the installed service worker and returns the response to foxbox.
+
 Service workers scopes are rooted at $domain/user/$user_id/ which can be considered as a "virtual base" for each user.
 
 # TODO
@@ -26,7 +34,7 @@ Service workers scopes are rooted at $domain/user/$user_id/ which can be conside
 - Authentication.
 
 ## All:
-- webrtc mode.
+- http mode.
 
 ## Next
 - Service Workers.
