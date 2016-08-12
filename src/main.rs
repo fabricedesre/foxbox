@@ -30,6 +30,7 @@ extern crate env_logger;
 extern crate foxbox_core;
 #[macro_use]
 extern crate foxbox_taxonomy;
+#[cfg(feature = "thinkerbell")]
 extern crate foxbox_thinkerbell;
 extern crate foxbox_users;
 #[macro_use]

@@ -14,9 +14,13 @@ exclude = [ "**/*.conf", "**/*.json",
 # We get the workspace's crates from the `path` definitions.
 
 [features]
-default = ["authentication", "zwave"]
+default = ["authentication"]
 authentication = []
 zwave = ["openzwave-adapter"]
+philips_hue = []
+thinkerbell = ["foxbox_thinkerbell"]
+ip_camera = []
+webpush = []
 
 [replace]
 "iron:0.3.0" = { path = "iron-fork/" }
@@ -27,7 +31,7 @@ rustc_version = "0.1.7"
 
 [dependencies]
 foxbox_core = { path = "components/core/" }
-foxbox_thinkerbell = { path = "components/thinkerbell/" }
+foxbox_thinkerbell = { path = "components/thinkerbell/", optional = true }
 foxbox_taxonomy = { path = "components/taxonomy/" }
 jsworkers = { path = "components/jsworkers" }
 openzwave-adapter = { path = "components/openzwave-adapter/", optional = true }

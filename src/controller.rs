@@ -99,8 +99,6 @@ impl Controller for FoxBox {
         HttpServer::new(self.clone()).start(&taxo_manager);
         WsServer::start(self.clone());
 
-        self.upnp.search(None).unwrap();
-
         let broker = self.get_jsworkers_broker();
         if let Some(ref path) = self.jsrunner_path {
             Runtime::start(path,
