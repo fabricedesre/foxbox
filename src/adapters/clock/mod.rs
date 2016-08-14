@@ -87,7 +87,7 @@ impl Adapter for Clock {
                 let duration = chrono::Duration::seconds(date.num_seconds_from_midnight() as i64);
                 (id, Ok(Some(Value::new(ValDuration::from(duration)))))
             } else {
-                (id.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(id))))
+                (id.clone(), Err(Error::Internal(InternalError::NoSuchChannel(id))))
             }
         }).collect()
     }
@@ -95,7 +95,7 @@ impl Adapter for Clock {
     fn send_values(&self, mut values: HashMap<Id<Channel>, Value>, _: User) -> ResultMap<Id<Channel>, (), Error> {
         values.drain()
             .map(|(id, _)| {
-                (id.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(id))))
+                (id.clone(), Err(Error::Internal(InternalError::NoSuchChannel(id))))
             })
             .collect()
     }

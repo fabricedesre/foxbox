@@ -230,7 +230,7 @@ impl<C: Controller> Adapter for PhilipsHueAdapter<C> {
         set.drain(..).map(|id| {
             let light = match self.services.lock().unwrap().getters.get(&id) {
                 Some(light) => light.clone(),
-                None => return (id.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(id))))
+                None => return (id.clone(), Err(Error::Internal(InternalError::NoSuchChannel(id))))
             };
 
             if id == light.get_available_id {
@@ -252,7 +252,7 @@ impl<C: Controller> Adapter for PhilipsHueAdapter<C> {
                 return (id, Ok(Some(Value::new(Color::HSV(h, s, v)))));
             }
 
-            (id.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(id))))
+            (id.clone(), Err(Error::Internal(InternalError::NoSuchChannel(id))))
         }).collect()
     }
 
@@ -262,7 +262,7 @@ impl<C: Controller> Adapter for PhilipsHueAdapter<C> {
         values.drain().map(|(id, value)| {
             let light = match self.services.lock().unwrap().setters.get(&id) {
                 Some(light) => light.clone(),
-                None => return (id.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(id))))
+                None => return (id.clone(), Err(Error::Internal(InternalError::NoSuchChannel(id))))
             };
 
             if id == light.channel_power_id {
@@ -281,7 +281,7 @@ impl<C: Controller> Adapter for PhilipsHueAdapter<C> {
                 return (id, Ok(()));
             }
 
-            (id.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(id))))
+            (id.clone(), Err(Error::Internal(InternalError::NoSuchChannel(id))))
         }).collect()
     }
 }

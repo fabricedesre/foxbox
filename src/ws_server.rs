@@ -56,8 +56,8 @@ impl<T: Controller> Handler for WsHandler<T> {
         let auth = match url.query_pairs() {
             Some(pairs) => {
                 pairs.iter()
-                    .find(|ref set| set.0.to_lowercase() == "auth")
-                    .map(|ref set| set.1.clone())
+                    .find(|set| set.0.to_lowercase() == "auth")
+                    .map(|set| set.1.clone())
             },
             _ => return self.close_with_error("Missing authorization"),
         };

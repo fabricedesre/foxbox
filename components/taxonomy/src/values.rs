@@ -111,7 +111,7 @@ impl Value {
 
     pub fn cast<T>(&self) -> Result<&T, Error> where T: Data + Sized {
         match self.content.data.downcast_ref::<T>() {
-            None => Err(Error::TypeError(TypeError {
+            None => Err(Error::WrongType(TypeError {
                 expected: T::description(),
                 got: self.description()
             })),
@@ -151,13 +151,13 @@ pub trait Data: Debug + Send + Sync + mopa::Any {
     /// Used mainly for testing purposes.
     fn parse_str(source: &str) -> Result<Self, Error> where Self: Sized {
         serde_json::from_str(source)
-            .map_err(|err| Error::ParseError(ParseError::JSON(JSONError(err))))
+            .map_err(|err| Error::Parsing(ParseError::JSON(JSONError(err))))
             .and_then(|json| Self::parse(Path::new(), &json, &BinarySource))
     }
 
     fn parse_vec(path: Path, source: &JSON, binary: &BinarySource) -> Result<Vec<Self>, Error> where Self: Sized {
         match source.as_array() {
-            None => Err(Error::TypeError(TypeError {
+            None => Err(Error::WrongType(TypeError {
                 expected: "array".to_owned(),
                 got: "something else".to_owned()
             })),
@@ -175,7 +175,7 @@ pub trait Data: Debug + Send + Sync + mopa::Any {
     fn parse_field(path: Path, source: &JSON, binary: &BinarySource, field_name: &str) -> Result<Self, Error> where Self: Sized {
         match Self::parse_opt_field(path.clone(), source, binary, field_name) { // FIXME: Get rid of this `path.clone()`
             Some(result) => result,
-            None => Err(Error::ParseError(ParseError::missing_field(field_name, &path)))
+            None => Err(Error::Parsing(ParseError::missing_field(field_name, &path)))
         }
     }
 
@@ -187,7 +187,7 @@ pub trait Data: Debug + Send + Sync + mopa::Any {
                 None
             }
         } else {
-            Some(Err(Error::ParseError(ParseError::type_error(field_name, &path, "object"))))
+            Some(Err(Error::Parsing(ParseError::type_error(field_name, &path, "object"))))
         }
     }
 }
@@ -200,7 +200,7 @@ impl<T> Parser<T> for T where T: Data {
     fn parse(path: Path, source: &JSON) -> Result<Self, ParseError> {
         match T::parse(path, source, &BinarySource) {
             Ok(ok) => Ok(ok),
-            Err(Error::ParseError(err)) => Err(err),
+            Err(Error::Parsing(err)) => Err(err),
             Err(err) => Err(ParseError::InternalError(format!("{}", err)))
         }
     }
@@ -212,7 +212,7 @@ impl Data for String {
     }
     fn parse(path: Path, source: &JSON, _binary: &BinarySource) -> Result<String, Error> {
         match source.as_string() {
-            None => Err(Error::ParseError(ParseError::type_error("String", &path, "string"))),
+            None => Err(Error::Parsing(ParseError::type_error("String", &path, "string"))),
             Some(s) => Ok(s.to_owned())
         }
     }
@@ -310,8 +310,8 @@ impl Data for OnOff {
         let result = match source.as_string() {
             Some("On") => OnOff::On,
             Some("Off") => OnOff::Off,
-            Some(str) => return Err(Error::ParseError(ParseError::unknown_constant(str, &path))),
-            None => return Err(Error::ParseError(ParseError::type_error("OnOff", &path, "string")))
+            Some(str) => return Err(Error::Parsing(ParseError::unknown_constant(str, &path))),
+            None => return Err(Error::Parsing(ParseError::type_error("OnOff", &path, "string")))
         };
         Ok(result)
     }
@@ -398,8 +398,8 @@ impl Data for OpenClosed {
         let result = match source.as_string() {
             Some("Open") => OpenClosed::Open,
             Some("Closed") => OpenClosed::Closed,
-            Some(str) => return Err(Error::ParseError(ParseError::unknown_constant(str, &path))),
-            None => return Err(Error::ParseError(ParseError::type_error("OpenClosed", &path, "string")))
+            Some(str) => return Err(Error::Parsing(ParseError::unknown_constant(str, &path))),
+            None => return Err(Error::Parsing(ParseError::type_error("OpenClosed", &path, "string")))
         };
         Ok(result)
     }
@@ -469,8 +469,8 @@ impl Data for IsLocked {
         match source.as_string() {
             Some("Locked") => Ok(IsLocked::Locked),
             Some("Unlocked") => Ok(IsLocked::Unlocked),
-            Some(str) => Err(Error::ParseError(ParseError::unknown_constant(str, &path))),
-            None => Err(Error::ParseError(ParseError::type_error("IsLocked", &path, "string")))
+            Some(str) => Err(Error::Parsing(ParseError::unknown_constant(str, &path))),
+            None => Err(Error::Parsing(ParseError::type_error("IsLocked", &path, "string")))
         }
     }
     fn serialize(source: &Self, _binary: &BinaryTarget) -> Result<JSON, Error> {
@@ -556,8 +556,8 @@ impl Data for IsSecure {
         let result = match source.as_string() {
             Some("Secure") => IsSecure::Secure,
             Some("Insecure") => IsSecure::Insecure,
-            Some(str) => return Err(Error::ParseError(ParseError::unknown_constant(str, &path))),
-            None => return Err(Error::ParseError(ParseError::type_error("IsSecure", &path, "string")))
+            Some(str) => return Err(Error::Parsing(ParseError::unknown_constant(str, &path))),
+            None => return Err(Error::Parsing(ParseError::type_error("IsSecure", &path, "string")))
         };
         Ok(result)
     }
@@ -761,7 +761,7 @@ pub enum Color {
     /// }";
     ///
     /// match Color::parse_str(source_2) {
-    ///   Err(Error::ParseError(ParseError::TypeError{..})) => {},
+    ///   Err(Error::Parsing(ParseError::TypeError{..})) => {},
     ///   other => panic!("Unexpected result {:?}", other)
     /// }
     ///
@@ -774,7 +774,7 @@ pub enum Color {
     /// }";
     ///
     /// match Color::parse_str(source_4) {
-    ///   Err(Error::ParseError(ParseError::MissingField{ref name, ..})) if &name as &str == "h" => {},
+    ///   Err(Error::Parsing(ParseError::MissingField{ref name, ..})) if &name as &str == "h" => {},
     ///   other => panic!("Unexpected result {:?}", other)
     /// }
     /// ```
@@ -789,9 +789,9 @@ impl Data for Color {
         let s = try!(path.push("s", |path| f64::take(path, source, "s")));
         let v = try!(path.push("v", |path| f64::take(path, source, "v")));
         // h can be any hue angle, will be interpreted (mod 360) in [0, 360).
-        for &(val, ref name) in &vec![(&s, "s"), (&v, "v")] {
+        for &(val, name) in &vec![(&s, "s"), (&v, "v")] {
             if *val < 0. || *val > 1. {
-                return Err(Error::ParseError(ParseError::type_error(name, &path, "a number in [0, 1]")));
+                return Err(Error::Parsing(ParseError::type_error(name, &path, "a number in [0, 1]")));
             }
         }
         Ok(Color::HSV(h, s, v))
@@ -853,8 +853,8 @@ impl Data for Binary {
         "Binary".to_owned()
     }
     fn parse(path: Path, source: &JSON, _binary: &BinarySource) -> Result<Self, Error> {
-        let data = try!(path.push("data", |path| Vec::<u8>::take(path, source, "data").map_err(Error::ParseError)));
-        let mimetype = try!(path.push("mimetype", |path| Id::take(path, source, "mimetype").map_err(Error::ParseError)));
+        let data = try!(path.push("data", |path| Vec::<u8>::take(path, source, "data").map_err(Error::Parsing)));
+        let mimetype = try!(path.push("mimetype", |path| Id::take(path, source, "mimetype").map_err(Error::Parsing)));
         Ok(Binary {
             data: data,
             mimetype: mimetype
@@ -939,7 +939,7 @@ impl Data for TimeStamp {
                 return Ok(TimeStamp(dt));
             }
         }
-        Err(Error::ParseError(ParseError::type_error("TimeStamp", &path, "date string (RFC 3339)")))
+        Err(Error::Parsing(ParseError::type_error("TimeStamp", &path, "date string (RFC 3339)")))
     }
     fn serialize(source: &Self, _binary: &BinaryTarget) -> Result<JSON, Error> {
          Ok(JSON::String(source.0.to_rfc3339()))
@@ -1068,7 +1068,7 @@ impl<T> Data for Range<T> where T: Data + PartialOrd + PartialEq {
                             max: max
                         }
                     } else {
-                        return Err(Error::ParseError(ParseError::type_error("BetweenEq", &path, "an array of two values")))
+                        return Err(Error::Parsing(ParseError::type_error("BetweenEq", &path, "an array of two values")))
                     }
                 } else if let Some(v) = obj.get("OutOfStrict") {
                     let mut bounds = try!(path.push("OutOfStrict", |path| T::parse_vec(path, v, binary)));
@@ -1080,14 +1080,14 @@ impl<T> Data for Range<T> where T: Data + PartialOrd + PartialEq {
                             max: max
                         }
                     } else {
-                        return Err(Error::ParseError(ParseError::type_error("OutOfStrict", &path, "an array of two values")))
+                        return Err(Error::Parsing(ParseError::type_error("OutOfStrict", &path, "an array of two values")))
                     }
                 } else {
-                    return Err(Error::ParseError(ParseError::type_error("Range", &path, "a field Eq, Leq, Geq, BetweenEq or OutOfStrict")))
+                    return Err(Error::Parsing(ParseError::type_error("Range", &path, "a field Eq, Leq, Geq, BetweenEq or OutOfStrict")))
                 };
                 Ok(result)
             }
-            _ => Err(Error::ParseError(ParseError::type_error("Range", &path, "object")))
+            _ => Err(Error::Parsing(ParseError::type_error("Range", &path, "object")))
         }
     }
 
@@ -1150,7 +1150,7 @@ impl Data for Duration {
         "Duration (s)".to_owned()
     }
     fn parse(path: Path, source: &JSON, _binary: &BinarySource) -> Result<Self, Error> {
-        let val = try!(f64::parse(path, source).map_err(Error::ParseError));
+        let val = try!(f64::parse(path, source).map_err(Error::Parsing));
         Ok(Duration(ChronoDuration::milliseconds((val * 1000.) as i64)))
     }
     fn serialize(source: &Self, _binary: &BinaryTarget) -> Result<JSON, Error> {

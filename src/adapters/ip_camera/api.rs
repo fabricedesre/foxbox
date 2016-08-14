@@ -61,7 +61,7 @@ impl IpCamera {
         if let Err(err) = fs::create_dir_all(&camera.snapshot_dir) {
             if err.kind() != ErrorKind::AlreadyExists {
                 error!("Unable to create directory {}: {}", camera.snapshot_dir, err);
-                return Err(Error::InternalError(InternalError::GenericError(format!("cannot create {}", camera.snapshot_dir))));
+                return Err(Error::Internal(InternalError::GenericError(format!("cannot create {}", camera.snapshot_dir))));
             }
         }
         Ok(camera)
@@ -86,13 +86,13 @@ impl IpCamera {
             Ok(res) => res,
             Err(err) => {
                 warn!("GET on {} failed: {}", url, err);
-                return Err(Error::InternalError(InternalError::InvalidInitialService));
+                return Err(Error::Internal(InternalError::InvalidInitialService));
             }
         };
 
         if res.status != self::hyper::status::StatusCode::Ok {
             warn!("GET on {} failed: {}", url, res.status);
-            return Err(Error::InternalError(InternalError::InvalidInitialService));
+            return Err(Error::Internal(InternalError::InvalidInitialService));
         }
 
         let mut image = Vec::new();
@@ -100,7 +100,7 @@ impl IpCamera {
             Ok(_) => Ok(image),
             Err(err) => {
                 warn!("read of image data from {} failed: {}", url, err);
-                Err(Error::InternalError(InternalError::InvalidInitialService))
+                Err(Error::Internal(InternalError::InvalidInitialService))
             }
         }
     }
@@ -109,7 +109,7 @@ impl IpCamera {
     fn get_bytes(&self, url: &str, username: &str, _password: &str) -> Result<Vec<u8>, Error> {
         // For testing assume that url is a filename.
         if username == "get_bytes:fail" {
-            Err(Error::InternalError(InternalError::GenericError("get_bytes".to_owned())))
+            Err(Error::Internal(InternalError::GenericError("get_bytes".to_owned())))
         } else {
             self.read_image(url)
         }
@@ -185,7 +185,7 @@ impl IpCamera {
         } else {
             warn!("Image {} not found", full_filename);
         }
-        Err(Error::InternalError(InternalError::InvalidInitialService))
+        Err(Error::Internal(InternalError::InvalidInitialService))
     }
 
     pub fn get_image(&self, filename: &str) -> Result<Vec<u8>, Error> {
@@ -213,7 +213,7 @@ impl IpCamera {
         }
 
         if newest_image.is_none() {
-            return Err(Error::InternalError(InternalError::InvalidInitialService));
+            return Err(Error::Internal(InternalError::InvalidInitialService));
         }
         self.get_image(&newest_image.unwrap())
     }
@@ -226,7 +226,7 @@ impl IpCamera {
             Ok(image) => image,
             Err(err) => {
                 warn!("Error '{:?}' retrieving image from camera {}", err, self.url);
-                return Err(Error::InternalError(InternalError::InvalidInitialService));
+                return Err(Error::Internal(InternalError::InvalidInitialService));
             }
         };
 
@@ -258,7 +258,7 @@ impl IpCamera {
                 Ok(file) => file,
                 Err(err) => {
                     warn!("Unable to open {}: {:?}", full_filename, err.kind());
-                    return Err(Error::InternalError(InternalError::InvalidInitialService));
+                    return Err(Error::Internal(InternalError::InvalidInitialService));
                 }
             };
 
@@ -269,7 +269,7 @@ impl IpCamera {
             Ok(_) => {}
             Err(err) => {
                 warn!("Error '{:?}' writing snapshot.jpg for camera {}", err, self.udn);
-                return Err(Error::InternalError(InternalError::InvalidInitialService));
+                return Err(Error::Internal(InternalError::InvalidInitialService));
             }
         }
         info!("Took a snapshot from {}: {}", self.udn, full_filename);

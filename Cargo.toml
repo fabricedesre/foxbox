@@ -42,7 +42,7 @@ iron-cors = { git = "https://github.com/fxbox/iron-cors.git", rev = "f397cd2" }
 multicast_dns = { git = "https://github.com/fxbox/multicast-dns.git", rev = "91fe8d4" }
 
 chrono = "0.2.19"
-clippy = "0.0.80"
+clippy = "0.0.81"
 docopt = "0.6.78"
 docopt_macros = "0.6.80"
 env_logger = "0.3.2"

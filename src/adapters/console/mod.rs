@@ -50,7 +50,7 @@ impl Adapter for Console {
 
     fn fetch_values(&self, mut set: Vec<Id<Channel>>, _: User) -> ResultMap<Id<Channel>, Option<Value>, Error> {
         set.drain(..).map(|id| {
-            (id.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(id))))
+            (id.clone(), Err(Error::Internal(InternalError::NoSuchChannel(id))))
         }).collect()
     }
 
@@ -67,7 +67,7 @@ impl Adapter for Console {
                             }
                         }
                     } else {
-                        Err(Error::InternalError(InternalError::NoSuchChannel(id.clone())))
+                        Err(Error::Internal(InternalError::NoSuchChannel(id.clone())))
                     }
                 };
                 (id, result)

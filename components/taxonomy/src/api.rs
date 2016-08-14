@@ -69,20 +69,20 @@ pub enum Error {
     GetterRequiresThresholdForWatching(Id<Channel>),
 
     /// Attempting to send a value with a wrong type.
-    TypeError(TypeError),
+    WrongType(TypeError),
 
     /// Attempting to send an invalid value. For instance, a time of day larger than 24h.
     InvalidValue,
 
     /// An error internal to the foxbox or an adapter. Normally, these errors should never
     /// arise from the high-level API.
-    InternalError(InternalError),
+    Internal(InternalError),
 
     // An error happened while attempting to parse a value.
-    ParseError(ParseError),
+    Parsing(ParseError),
 
     // An error happened while attempting to serialize a value.
-    SerializeError(SerializeError),
+    Serializing(SerializeError),
 }
 
 impl ToJSON for Error {
@@ -96,14 +96,14 @@ impl ToJSON for Error {
                 vec![("GetterRequiresThresholdForWatching", id.to_json())].to_json()
             },
             InvalidValue => "InvalidValue".to_json(),
-            InternalError(_) => "Internal Error".to_json(), // FIXME: Implement ToJSON for InternalError as well
-            ParseError(ref err) => {
+            Internal(_) => "Internal Error".to_json(), // FIXME: Implement ToJSON for InternalError as well
+            Parsing(ref err) => {
                 vec![("ParseError", serde_json::to_value(err))].to_json()
             },
-            SerializeError(ref err) => {
+            Serializing(ref err) => {
                 vec![("SerializeError", serde_json::to_value(err))].to_json()
             },
-            TypeError(ref err) => {
+            WrongType(ref err) => {
                 vec![("TypeError", serde_json::to_value(err))].to_json()
             }
         }
@@ -115,11 +115,11 @@ impl fmt::Display for Error {
         match *self {
             Error::OperationNotSupported(ref operation, ref channel) => write!(f, "{}: {} {}", self.description(), operation, channel),
             Error::GetterRequiresThresholdForWatching(ref getter) => write!(f, "{}: {}", self.description(), getter),
-            Error::TypeError(ref err) => write!(f, "{}: {}", self.description(), err),
+            Error::WrongType(ref err) => write!(f, "{}: {}", self.description(), err),
             Error::InvalidValue => write!(f, "{}",self.description()),
-            Error::InternalError(ref err) => write!(f, "{}: {:?}", self.description(), err), // TODO implement Display for InternalError as well
-            Error::ParseError(ref err) => write!(f, "{}: {:?}", self.description(), err), // TODO implement Display for ParseError as well
-            Error::SerializeError(ref err) => write!(f, "{}: {:?}", self.description(), err), // TODO implement Display for ParseError as well
+            Error::Internal(ref err) => write!(f, "{}: {:?}", self.description(), err), // TODO implement Display for InternalError as well
+            Error::Parsing(ref err) => write!(f, "{}: {:?}", self.description(), err), // TODO implement Display for ParseError as well
+            Error::Serializing(ref err) => write!(f, "{}: {:?}", self.description(), err), // TODO implement Display for ParseError as well
         }
     }
 }
@@ -129,17 +129,17 @@ impl error::Error for Error {
         match *self {
             Error::OperationNotSupported(_, _) => "Attempting to perform a call to a Channel that does not support such calls",
             Error::GetterRequiresThresholdForWatching(_) => "Attempting to watch all value from a Channel that requires a filter",
-            Error::TypeError(_) => "Attempting to send a value with a wrong type",
+            Error::WrongType(_) => "Attempting to send a value with a wrong type",
             Error::InvalidValue => "Attempting to send an invalid value",
-            Error::InternalError(_) => "Internal Error", // TODO implement Error for InternalError as well
-            Error::ParseError(ref err) => err.description(),
-            Error::SerializeError(ref err) => err.description()
+            Error::Internal(_) => "Internal Error", // TODO implement Error for InternalError as well
+            Error::Parsing(ref err) => err.description(),
+            Error::Serializing(ref err) => err.description()
         }
     }
 
     fn cause(&self) -> Option<&error::Error> {
         match *self {
-            Error::TypeError(ref err) => Some(err),
+            Error::WrongType(ref err) => Some(err),
             _ => None
         }
     }

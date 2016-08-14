@@ -88,7 +88,7 @@ impl TaxonomyRouter {
             if let Ok(Some((ref payload, _))) = *map_value {
                 if let Ok(ref data) = payload.to_value(&format::BINARY) {
                     match data.downcast::<Binary>() {
-                        Some(ref data) => {
+                        Some(data) => {
                             return Some(Binary {
                                 mimetype: (*data).mimetype.clone(),
                                 data: (*data).data.clone()
@@ -398,14 +398,14 @@ describe! binary_getter {
                         return (id.clone(), Ok(Some(Value::new(binary))));
                     }
 
-                    (id.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(id))))
+                    (id.clone(), Err(Error::Internal(InternalError::NoSuchChannel(id))))
                 }).collect()
             }
 
             fn send_values(&self, mut values: HashMap<Id<Channel>, Value>, _: User)
                 -> ResultMap<Id<Channel>, (), Error> {
                 values.drain().map(|(id, _)| {
-                    (id.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(id))))
+                    (id.clone(), Err(Error::Internal(InternalError::NoSuchChannel(id))))
                 }).collect()
             }
 

@@ -344,11 +344,11 @@ fn test_add_remove_adapter() {
 
         println!("* Attempting to add yet another test adapter with id_1 or id_2 should fail.");
         match manager.add_adapter(Arc::new(FakeAdapter::new(&id_1))) {
-            Err(Error::InternalError(InternalError::DuplicateAdapter(ref id))) if *id == id_1 => {},
+            Err(Error::Internal(InternalError::DuplicateAdapter(ref id))) if *id == id_1 => {},
             other => panic!("Unexpected result {:?}", other)
         }
         match manager.add_adapter(Arc::new(FakeAdapter::new(&id_2))) {
-            Err(Error::InternalError(InternalError::DuplicateAdapter(ref id))) if *id == id_2 => {},
+            Err(Error::Internal(InternalError::DuplicateAdapter(ref id))) if *id == id_2 => {},
             other => panic!("Unexpected result {:?}", other)
         }
 
@@ -356,7 +356,7 @@ fn test_add_remove_adapter() {
                   but we should be able to re-add id_1");
         manager.remove_adapter(&id_1).unwrap();
         match manager.add_adapter(Arc::new(FakeAdapter::new(&id_2))) {
-            Err(Error::InternalError(InternalError::DuplicateAdapter(ref id))) if *id == id_2 => {},
+            Err(Error::Internal(InternalError::DuplicateAdapter(ref id))) if *id == id_2 => {},
             other => panic!("Unexpected result {:?}", other)
         }
         manager.add_adapter(Arc::new(FakeAdapter::new(&id_1))).unwrap();
@@ -364,7 +364,7 @@ fn test_add_remove_adapter() {
         println!("* Removing id_1 twice should fail the second time.");
         manager.remove_adapter(&id_1).unwrap();
         match manager.remove_adapter(&id_1) {
-            Err(Error::InternalError(InternalError::NoSuchAdapter(ref id))) if *id == id_1 => {},
+            Err(Error::Internal(InternalError::NoSuchAdapter(ref id))) if *id == id_1 => {},
             other => panic!("Unexpected result {:?}", other)
         }
 
@@ -481,20 +481,20 @@ fn test_add_remove_services() {
 
         println!("* Adding a service should fail if there is no adapter.");
         match manager.add_service(service_1.clone()) {
-            Err(Error::InternalError(InternalError::NoSuchAdapter(ref err))) if *err == id_1 => {},
+            Err(Error::Internal(InternalError::NoSuchAdapter(ref err))) if *err == id_1 => {},
             other => panic!("Unexpected result {:?}", other)
         }
 
         println!("* Adding a service should fail if the adapter doesn't exist.");
         manager.add_adapter(Arc::new(FakeAdapter::new(&id_2))).unwrap();
         match manager.add_service(service_1.clone()) {
-            Err(Error::InternalError(InternalError::NoSuchAdapter(ref err))) if *err == id_1 => {},
+            Err(Error::Internal(InternalError::NoSuchAdapter(ref err))) if *err == id_1 => {},
             other => panic!("Unexpected result {:?}", other)
         }
 
         println!("* Adding a service should fail if the service is not empty.");
         match manager.add_service(service_2_with_channels.clone()) {
-            Err(Error::InternalError(InternalError::InvalidInitialService)) => {},
+            Err(Error::Internal(InternalError::InvalidInitialService)) => {},
             other => panic!("Unexpected result {:?}", other)
         }
 
@@ -516,17 +516,17 @@ fn test_add_remove_services() {
 
         println!("* Adding a second service with the same id should fail.");
         match manager.add_service(service_1.clone()) {
-            Err(Error::InternalError(InternalError::DuplicateService(ref err))) if *err == service_id_1 => {},
+            Err(Error::Internal(InternalError::DuplicateService(ref err))) if *err == service_id_1 => {},
             other => panic!("Unexpected result {:?}", other)
         }
 
         println!("* Adding channels should fail if the service doesn't exist.");
         match manager.add_channel(getter_1_with_bad_service.clone()) {
-            Err(Error::InternalError(InternalError::NoSuchService(ref err))) if *err == service_id_3 => {},
+            Err(Error::Internal(InternalError::NoSuchService(ref err))) if *err == service_id_3 => {},
             other => panic!("Unexpected result {:?}", other)
         }
         match manager.add_channel(setter_1_with_bad_service.clone()) {
-            Err(Error::InternalError(InternalError::NoSuchService(ref err))) if *err == service_id_3 => {},
+            Err(Error::Internal(InternalError::NoSuchService(ref err))) if *err == service_id_3 => {},
             other => panic!("Unexpected result {:?}", other)
         }
 
@@ -536,16 +536,16 @@ fn test_add_remove_services() {
 
         println!("* Adding channels should fail if the adapter doesn't match that of its service.");
         match manager.add_channel(getter_2_with_bad_adapter) {
-            Err(Error::InternalError(InternalError::ConflictingAdapter(ref err_1, ref err_2)))
+            Err(Error::Internal(InternalError::ConflictingAdapter(ref err_1, ref err_2)))
                 if *err_1 == id_3 && *err_2 == id_1 => {},
-            Err(Error::InternalError(InternalError::ConflictingAdapter(ref err_1, ref err_2)))
+            Err(Error::Internal(InternalError::ConflictingAdapter(ref err_1, ref err_2)))
                 if *err_1 == id_1 && *err_2 == id_3 => {},
             other => panic!("Unexpected result {:?}", other)
         }
         match manager.add_channel(setter_2_with_bad_adapter) {
-            Err(Error::InternalError(InternalError::ConflictingAdapter(ref err_1, ref err_2)))
+            Err(Error::Internal(InternalError::ConflictingAdapter(ref err_1, ref err_2)))
                 if *err_1 == id_3 && *err_2 == id_1 => {},
-            Err(Error::InternalError(InternalError::ConflictingAdapter(ref err_1, ref err_2)))
+            Err(Error::Internal(InternalError::ConflictingAdapter(ref err_1, ref err_2)))
                 if *err_1 == id_1 && *err_2 == id_3 => {},
             other => panic!("Unexpected result {:?}", other)
         }
@@ -1081,11 +1081,11 @@ fn test_fetch() {
         }
 
         println!("* Fetching values returns the right errors.");
-        tweak_1(Tweak::InjectGetterValue(getter_id_1_1.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(getter_id_1_1.clone())))));
+        tweak_1(Tweak::InjectGetterValue(getter_id_1_1.clone(), Err(Error::Internal(InternalError::NoSuchChannel(getter_id_1_1.clone())))));
         let data = manager.fetch_values(vec![ChannelSelector::new()], User::None);
         assert_eq!(data.len(), 4);
         match data.get(&getter_id_1_1).as_cast::<OnOff>() {
-            Some(Err(Error::InternalError(InternalError::NoSuchChannel(ref id)))) if *id == getter_id_1_1 => {},
+            Some(Err(Error::Internal(InternalError::NoSuchChannel(ref id)))) if *id == getter_id_1_1 => {},
             other => panic!("Unexpected result, {:?}", other)
         }
         match data.get(&getter_id_1_2).as_cast::<OnOff>() {
@@ -1224,7 +1224,7 @@ fn test_send() {
         assert_matches!(rx_adapter_2.try_recv(), Err(_));
 
         println!("* Sending values that cause channel errors will propagate the errors.");
-        tweak_1(Tweak::InjectSetterError(setter_id_1_1.clone(), Some(Error::InternalError(InternalError::InvalidInitialService))));
+        tweak_1(Tweak::InjectSetterError(setter_id_1_1.clone(), Some(Error::Internal(InternalError::InvalidInitialService))));
 
         let data = manager.send_values(target_map(vec![(vec![ChannelSelector::new()], data_on.clone())]), User::None);
         assert_eq!(data.len(), 4);
@@ -1237,7 +1237,7 @@ fn test_send() {
 
         for id in vec![&setter_id_1_1] {
             match data.get(id) {
-                Some(&Err(Error::InternalError(InternalError::InvalidInitialService))) => {},
+                Some(&Err(Error::Internal(InternalError::InvalidInitialService))) => {},
                 other => panic!("Unexpected result for {}: {:?}", id, other)
             }
         }

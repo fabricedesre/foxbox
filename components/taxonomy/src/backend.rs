@@ -342,7 +342,7 @@ impl State {
     /// Clients should rather use AdapterManager::remove_service.
     fn aux_remove_service(&mut self, id: &Id<ServiceId>) -> Result<Id<AdapterId>, Error> {
         let (adapter, service) = match self.service_by_id.remove(id) {
-            None => return Err(Error::InternalError(InternalError::NoSuchService(id.clone()))),
+            None => return Err(Error::Internal(InternalError::NoSuchService(id.clone()))),
             Some(service) => {
                 let adapter = service.borrow().adapter.clone();
                 (adapter, service)
@@ -429,7 +429,7 @@ impl State {
     fn aux_channel_may_need_unregistration(getter_data: &mut ChannelData, is_being_removed: bool) {
         let mut keys_to_drop = vec![];
         {
-            for (key, ref watcher) in &getter_data.watchers {
+            for (key, watcher) in &getter_data.watchers {
                 let watcher = match watcher.upgrade() {
                     Some(watcher) => watcher,
                     None => {
@@ -447,7 +447,7 @@ impl State {
                 // or it doesn't match anymore any of the selectors for the watchers
                 // that were watching it.
                 let should_disconnect = is_being_removed
-                    || watcher.watch.iter().any(|ref targetted| {
+                    || watcher.watch.iter().any(|targetted| {
                         targetted.select.iter().any(|selector| {
                             !getter_data.matches(selector)
                         })
@@ -560,10 +560,10 @@ impl State {
     }
     pub fn add_raw_adapter(&mut self, adapter: Arc<RawAdapter>) -> Result<(), Error> {
         if adapter.id().is_default() {
-            return Err(Error::InternalError(InternalError::NoSuchAdapter(adapter.id())));
+            return Err(Error::Internal(InternalError::NoSuchAdapter(adapter.id())));
         }
         match self.adapter_by_id.entry(adapter.id()) {
-            Entry::Occupied(_) => return Err(Error::InternalError(InternalError::DuplicateAdapter(adapter.id()))),
+            Entry::Occupied(_) => return Err(Error::Internal(InternalError::DuplicateAdapter(adapter.id()))),
             Entry::Vacant(entry) => {
                 entry.insert(AdapterData::new(adapter));
             }
@@ -583,7 +583,7 @@ impl State {
             Some(AdapterData {services: adapter_services, ..}) => {
                 adapter_services
             }
-            None => return Err(Error::InternalError(InternalError::NoSuchAdapter(id.clone()))),
+            None => return Err(Error::Internal(InternalError::NoSuchAdapter(id.clone()))),
         };
         for (service_id, _) in services.drain() {
             let _ignored = self.aux_remove_service(&service_id);
@@ -610,20 +610,20 @@ impl State {
     pub fn add_service(&mut self, service: Service) -> Result<(), Error> {
         // Sanity checks.
         if service.adapter.is_default() {
-            return Err(Error::InternalError(InternalError::NoSuchAdapter(service.adapter)));
+            return Err(Error::Internal(InternalError::NoSuchAdapter(service.adapter)));
         }
         if service.id.is_default() {
-            return Err(Error::InternalError(InternalError::NoSuchService(service.id)));
+            return Err(Error::Internal(InternalError::NoSuchService(service.id)));
         }
 
         // Make sure that there are no channels.
         if !service.channels.is_empty() {
-            return Err(Error::InternalError(InternalError::InvalidInitialService));
+            return Err(Error::Internal(InternalError::InvalidInitialService));
         }
         let service = ServiceData::new(&self.liveness, service);
         let mut services_for_this_adapter =
             match self.adapter_by_id.get_mut(&service.adapter) {
-                None => return Err(Error::InternalError(InternalError::NoSuchAdapter(service.adapter.clone()))),
+                None => return Err(Error::Internal(InternalError::NoSuchAdapter(service.adapter.clone()))),
                 Some(&mut AdapterData {ref mut services, ..}) => {
                     services
                 }
@@ -636,7 +636,7 @@ impl State {
                 // Update the service's tag set with the full set from the database.
                 let mut store = TagStorage::new(path);
                 let tags = match store.get_tags_for(&id) {
-                    Err(err) => return Err(Error::InternalError(InternalError::GenericError(format!("{}", err)))),
+                    Err(err) => return Err(Error::Internal(InternalError::GenericError(format!("{}", err)))),
                     Ok(tags) => tags
                 };
 
@@ -650,13 +650,13 @@ impl State {
         let service = Arc::new(SubCell::new(&self.liveness, service));
         let insert_in_adapters =
             match InsertInMap::start(&mut services_for_this_adapter, vec![(id.clone(), service.clone())]) {
-                Err(k) => return Err(Error::InternalError(InternalError::DuplicateService(k))),
+                Err(k) => return Err(Error::Internal(InternalError::DuplicateService(k))),
                 Ok(transaction) => transaction
             };
 
         let insert_in_services =
             match InsertInMap::start(&mut self.service_by_id, vec![(id.clone(), service)]) {
-                Err(k) => return Err(Error::InternalError(InternalError::DuplicateService(k))),
+                Err(k) => return Err(Error::Internal(InternalError::DuplicateService(k))),
                 Ok(transaction) => transaction
             };
 
@@ -678,10 +678,10 @@ impl State {
     pub fn remove_service(&mut self, service_id: &Id<ServiceId>) -> Result<(), Error> {
         let adapter = try!(self.aux_remove_service(service_id));
         match self.adapter_by_id.get_mut(&adapter) {
-            None => Err(Error::InternalError(InternalError::NoSuchAdapter(adapter.clone()))),
+            None => Err(Error::Internal(InternalError::NoSuchAdapter(adapter.clone()))),
             Some(mut data) => {
                 if data.services.remove(service_id).is_none() {
-                    Err(Error::InternalError(InternalError::NoSuchService(service_id.clone())))
+                    Err(Error::Internal(InternalError::NoSuchService(service_id.clone())))
                 } else {
                     Ok(())
                 }
@@ -705,13 +705,13 @@ impl State {
     pub fn add_channel(&mut self, mut channel: Channel) -> Result<WatchRequest, Error> {
         // Sanity checks.
         if channel.adapter.is_default() {
-            return Err(Error::InternalError(InternalError::NoSuchAdapter(channel.adapter)));
+            return Err(Error::Internal(InternalError::NoSuchAdapter(channel.adapter)));
         }
         if channel.service.is_default() {
-            return Err(Error::InternalError(InternalError::NoSuchService(channel.service)));
+            return Err(Error::Internal(InternalError::NoSuchService(channel.service)));
         }
         if channel.id.is_default() {
-            return Err(Error::InternalError(InternalError::NoSuchChannel(channel.id)));
+            return Err(Error::Internal(InternalError::NoSuchChannel(channel.id)));
         }
 
         // Add the database tags to this channel.
@@ -727,12 +727,12 @@ impl State {
         let channel_data;
         {
             let service = match self.service_by_id.get_mut(&channel.service) {
-                None => return Err(Error::InternalError(InternalError::NoSuchService(channel.service.clone()))),
+                None => return Err(Error::Internal(InternalError::NoSuchService(channel.service.clone()))),
                 Some(service) => service
             };
             let mut service = &mut *service.borrow_mut();
             if service.adapter != channel.adapter {
-                return Err(Error::InternalError(InternalError::ConflictingAdapter(service.adapter.clone(), channel.adapter)));
+                return Err(Error::Internal(InternalError::ConflictingAdapter(service.adapter.clone(), channel.adapter)));
             }
 
             let channels = &mut service.channels;
@@ -740,11 +740,11 @@ impl State {
 
             let insert_in_service = match InsertInMap::start(channels, vec![(id.clone(), channel_data.clone())]) {
                 Ok(transaction) => transaction,
-                Err(id) => return Err(Error::InternalError(InternalError::DuplicateChannel(id)))
+                Err(id) => return Err(Error::Internal(InternalError::DuplicateChannel(id)))
             };
             let insert_in_channels = match InsertInMap::start(&mut self.channel_by_id, vec![(id.clone(), channel_data.clone())]) {
                 Ok(transaction) => transaction,
-                Err(id) => return Err(Error::InternalError(InternalError::DuplicateChannel(id)))
+                Err(id) => return Err(Error::Internal(InternalError::DuplicateChannel(id)))
             };
             insert_in_service.commit();
             insert_in_channels.commit();
@@ -762,17 +762,17 @@ impl State {
     /// if the state is inconsistent.
     pub fn remove_channel(&mut self, id: &Id<Channel>) -> Result<(), Error> {
         let channel = match self.channel_by_id.remove(id) {
-            None => return Err(Error::InternalError(InternalError::NoSuchChannel(id.clone()))),
+            None => return Err(Error::Internal(InternalError::NoSuchChannel(id.clone()))),
             Some(channel) => channel
         };
         Self::aux_channel_may_need_unregistration(&mut *channel.borrow_mut(), true);
 
         let service_id = &channel.borrow().channel.service;
         match self.service_by_id.get_mut(service_id) {
-            None => Err(Error::InternalError(InternalError::NoSuchService(service_id.clone()))),
+            None => Err(Error::Internal(InternalError::NoSuchService(service_id.clone()))),
             Some(service) => {
                 if service.borrow_mut().channels.remove(id).is_none() {
-                    Err(Error::InternalError(InternalError::NoSuchChannel(id.clone())))
+                    Err(Error::Internal(InternalError::NoSuchChannel(id.clone())))
                 } else {
                     Ok(())
                 }
@@ -904,7 +904,7 @@ impl State {
                             log_debug_assert!(false, "Internal inconsistency: Could not find adapter {:?}", id);
                             return;
                         },
-                        Some(ref adapter_data) => {
+                        Some(adapter_data) => {
                             adapter_data.adapter.clone()
                         }
                     };
@@ -1016,7 +1016,7 @@ impl State {
                             getter_data.channel.adapter);
                         return;
                     },
-                    Some(ref adapter_data) => {
+                    Some(adapter_data) => {
                         adapter_data.adapter.clone()
                     }
                 };

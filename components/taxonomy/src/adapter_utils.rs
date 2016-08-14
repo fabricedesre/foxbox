@@ -93,7 +93,7 @@ impl RawAdapter for RawAdapterForAdapter {
                 Ok(None) => Ok(None),
                 Ok(Some(ref value)) => {
                     match types.get(id) {
-                        None => Err(Error::InternalError(InternalError::WrongChannel(id.clone()))),
+                        None => Err(Error::Internal(InternalError::WrongChannel(id.clone()))),
                         Some(type_) => Payload::from_value(value, type_)
                             .map(|payload| Some((payload, type_.clone())))
                     }

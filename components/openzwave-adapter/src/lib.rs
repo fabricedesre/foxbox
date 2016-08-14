@@ -163,7 +163,7 @@ fn ozw_vid_as_taxo_value(vid: &ValueID) -> Option<Value> {
 
 fn set_ozw_vid_from_taxo_value(vid: &ValueID, value: Value) -> Result<(), TaxoError> {
     if vid.get_command_class().is_none() {
-        return Err(TaxoError::InternalError(InternalError::GenericError(format!("Unknown command class: {}", vid.get_command_class_id()))));
+        return Err(TaxoError::Internal(InternalError::GenericError(format!("Unknown command class: {}", vid.get_command_class_id()))));
     }
 
     let result = match vid.get_type() {
@@ -176,10 +176,10 @@ fn set_ozw_vid_from_taxo_value(vid: &ValueID, value: Value) -> Result<(), TaxoEr
                 return Err(TaxoError::InvalidValue) // TODO InvalidType would be better but we'll need to fix specific types for specific TaxoIds
             }
         }
-        _ => { return Err(TaxoError::InternalError(InternalError::GenericError(format!("Unsupported OZW type: {:?}", vid.get_type())))) }
+        _ => { return Err(TaxoError::Internal(InternalError::GenericError(format!("Unsupported OZW type: {:?}", vid.get_type())))) }
     };
 
-    result.map_err(|e| TaxoError::InternalError(InternalError::GenericError(format!("Error while setting a value: {}", e))))
+    result.map_err(|e| TaxoError::Internal(InternalError::GenericError(format!("Error while setting a value: {}", e))))
 }
 
 fn start_including(ozw: &ZWaveManager, home_id: u32, value: &Value) -> Result<(), TaxoError> {
@@ -187,7 +187,7 @@ fn start_including(ozw: &ZWaveManager, home_id: u32, value: &Value) -> Result<()
     let is_secure_bool = *is_secure == IsSecure::Secure;
     try!(
         ozw.add_node(home_id, is_secure_bool)
-            .map_err(|e| TaxoError::InternalError(InternalError::GenericError(format!("Error while including node on network {}: {}", home_id, e))))
+            .map_err(|e| TaxoError::Internal(InternalError::GenericError(format!("Error while including node on network {}: {}", home_id, e))))
     );
     info!("[OpenZWaveAdapter] Controller on network {} is awaiting an include in {} mode, please do the appropriate steps to include a device.", home_id, is_secure);
     Ok(())
@@ -196,7 +196,7 @@ fn start_including(ozw: &ZWaveManager, home_id: u32, value: &Value) -> Result<()
 fn start_excluding(ozw: &ZWaveManager, home_id: u32) -> Result<(), TaxoError> {
     try!(
          ozw.remove_node(home_id)
-            .map_err(|e| TaxoError::InternalError(InternalError::GenericError(format!("Error while excluding node on network {}: {}", home_id, e)))));
+            .map_err(|e| TaxoError::Internal(InternalError::GenericError(format!("Error while excluding node on network {}: {}", home_id, e)))));
     info!("[OpenZWaveAdapter] Controller on network {} is awaiting an exclude, please do the appropriate steps to exclude a device.", home_id);
     Ok(())
 }
@@ -547,7 +547,7 @@ impl taxonomy::adapter::Adapter for OpenzwaveAdapter {
             } else if let Some(ozw_controller) = self.exclude_map.find_ozw_from_taxo_id(&id) {
                 (id, start_excluding(&self.ozw, ozw_controller.get_home_id()))
             } else {
-                (id.clone(), Err(TaxoError::InternalError(InternalError::NoSuchChannel(id))))
+                (id.clone(), Err(TaxoError::Internal(InternalError::NoSuchChannel(id))))
             }
         }).collect()
     }

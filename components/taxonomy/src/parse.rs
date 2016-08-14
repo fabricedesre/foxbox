@@ -135,7 +135,7 @@ impl StdError for ParseError {
 
 impl From<ParseError> for APIError {
     fn from(v: ParseError) -> APIError {
-        APIError::ParseError(v)
+        APIError::Parsing(v)
     }
 }
 
@@ -455,7 +455,7 @@ impl<T> ToJSON for Vec<T> where T: ToJSON {
 
 impl<'a, T> ToJSON for Vec<(&'a str, T)> where T: ToJSON {
     fn to_json(&self) -> JSON {
-        JSON::Object(self.iter().map(|&(ref k, ref v)| {
+        JSON::Object(self.iter().map(|&(k, ref v)| {
             ((*k).to_owned(), v.to_json())
         }).collect())
     }

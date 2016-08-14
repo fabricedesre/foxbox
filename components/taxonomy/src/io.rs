@@ -34,7 +34,7 @@ impl StdError for SerializeError {
 }
 impl From<SerializeError> for Error {
     fn from(v: SerializeError) -> Error {
-        Error::SerializeError(v)
+        Error::Serializing(v)
     }
 }
 

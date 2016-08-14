@@ -227,7 +227,7 @@ impl<C: Controller> Adapter for WebPush<C> {
         set.drain(..).map(|id| {
             if cfg!(feature = "authentication") && (user == User::None) {
                 return (id,
-                        Err(Error::InternalError(InternalError::GenericError("Cannot fetch from this channel without a user.".to_owned()))));
+                        Err(Error::Internal(InternalError::GenericError("Cannot fetch from this channel without a user.".to_owned()))));
             }
             macro_rules! getter_api {
                 ($getter:ident, $getter_id:ident, $getter_type:ident) => (
@@ -237,7 +237,7 @@ impl<C: Controller> Adapter for WebPush<C> {
                                 let rsp = $getter_type::new(data);
                                 return (id, Ok(Some(Value::new(Json(serde_json::to_value(&rsp))))));
                             },
-                            Err(err) => return (id, Err(Error::InternalError(InternalError::GenericError(format!("Database error: {}", err)))))
+                            Err(err) => return (id, Err(Error::Internal(InternalError::GenericError(format!("Database error: {}", err)))))
                         };
                     }
                 )
@@ -245,7 +245,7 @@ impl<C: Controller> Adapter for WebPush<C> {
 
             getter_api!(get_subscriptions, channel_subscribe_id, SubscriptionGetter);
             getter_api!(get_resources, channel_resource_id, ResourceGetter);
-            (id.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(id))))
+            (id.clone(), Err(Error::Internal(InternalError::NoSuchChannel(id))))
         }).collect()
     }
 
@@ -253,7 +253,7 @@ impl<C: Controller> Adapter for WebPush<C> {
         values.drain().map(|(id, value)| {
             if cfg!(feature = "authentication") && (user == User::None) {
                 return (id,
-                        Err(Error::InternalError(InternalError::GenericError("Cannot send to this channel without a user.".to_owned()))));
+                        Err(Error::Internal(InternalError::GenericError("Cannot send to this channel without a user.".to_owned()))));
             }
 
             if id == self.channel_notify_id {
@@ -261,7 +261,7 @@ impl<C: Controller> Adapter for WebPush<C> {
                     Ok(notification) => {
                         match self.set_notify(&user, notification) {
                             Ok(_) => return (id, Ok(())),
-                            Err(err) => return (id, Err(Error::InternalError(InternalError::GenericError(format!("Database error: {}", err)))))
+                            Err(err) => return (id, Err(Error::Internal(InternalError::GenericError(format!("Database error: {}", err)))))
                         }
                     },
                    Err(err) => return (id, Err(err))
@@ -283,7 +283,7 @@ impl<C: Controller> Adapter for WebPush<C> {
                                 self.$setter(&user, &x).unwrap();
                                 return (id, Ok(()));
                             }
-                            Err(err) => return (id, Err(Error::InternalError(InternalError::GenericError(format!("While handling {}, cannot serialize value: {}, {:?}", $setter_name, err, json_value)))))
+                            Err(err) => return (id, Err(Error::Internal(InternalError::GenericError(format!("While handling {}, cannot serialize value: {}, {:?}", $setter_name, err, json_value)))))
                         }
                     }
                 )
@@ -292,7 +292,7 @@ impl<C: Controller> Adapter for WebPush<C> {
             setter_api!(set_resources, "set_resources", channel_resource_id, ResourceGetter);
             setter_api!(set_subscribe, "set_subscribe", channel_subscribe_id, SubscriptionGetter);
             setter_api!(set_unsubscribe, "set_unsubscribe", channel_unsubscribe_id, SubscriptionGetter);
-            (id.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(id))))
+            (id.clone(), Err(Error::Internal(InternalError::NoSuchChannel(id))))
         }).collect()
     }
 }

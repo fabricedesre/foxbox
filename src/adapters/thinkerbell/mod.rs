@@ -98,7 +98,7 @@ impl ExecutableDevEnv for ThinkerbellExecutionEnv {
 /// Convert a `ScriptManagerError` into an API Error.
 /// We can't implement From<T> because `ScriptManagerError` is in a different crate.
 fn sm_error(e: ScriptManagerError) -> Error {
-    Error::InternalError(InternalError::GenericError(format!("{:?}", e)))
+    Error::Internal(InternalError::GenericError(format!("{:?}", e)))
 }
 
 impl Adapter for ThinkerbellAdapter {
@@ -125,7 +125,7 @@ impl Adapter for ThinkerbellAdapter {
             match rx.recv() {
                 Ok(result) => (id.clone(), result),
                 // If an error occurs, the channel/thread died!
-                Err(recv_err) => (id.clone(), Err(Error::InternalError(
+                Err(recv_err) => (id.clone(), Err(Error::Internal(
                         InternalError::GenericError(format!("{:?}", recv_err))))),
             }
         }).collect()
@@ -139,7 +139,7 @@ impl Adapter for ThinkerbellAdapter {
                 match rx.recv() {
                     Ok(result) => (id.clone(), result),
                     // If an error occurs, the channel died!
-                    Err(recv_err) => (id.clone(), Err(Error::InternalError(
+                    Err(recv_err) => (id.clone(), Err(Error::Internal(
                             InternalError::GenericError(format!("{:?}", recv_err))))),
                 }
             })
@@ -185,7 +185,7 @@ impl ThinkerbellAdapter {
                     // If the rule already existed (i.e. we're overwriting the original source),
                     // we don't need to re-add a Service. This is safe, because a Service doesn't
                     // know or care about the contents of the rule, just the ID.
-                    for ref rule in &rules {
+                    for rule in &rules {
                         if rule.script_id == script_id {
                             info!("[thinkerbell@link.mozilla.org] No need to create a new service for this rule; ID '{}' already exists.", &script_id);
                             continue 'recv;
@@ -204,7 +204,7 @@ impl ThinkerbellAdapter {
                 // The script has already been removed from ScriptManager at this point;
                 // we're just updating the Service-level bookkeeping.
                 ThinkAction::RemoveRuleService(script_id) => {
-                    if let Some(position) = rules.iter().position(|ref r| r.script_id == script_id) {
+                    if let Some(position) = rules.iter().position(|r| r.script_id == script_id) {
                         let rule = rules.remove(position);
                         match self.remove_rule_service(&rule) {
                             Ok(_) => {},
@@ -216,7 +216,7 @@ impl ThinkerbellAdapter {
                 },
                 // Respond to a pending Getter request.
                 ThinkAction::RespondToGetter(tx, getter_id) => {
-                    for ref rule in &rules {
+                    for rule in &rules {
                         if getter_id == rule.channel_is_enabled_id {
                             let is_enabled = script_manager.is_enabled(&rule.script_id);
                             let _ = tx.send(Ok(Some(Value::new(if is_enabled { OnOff::On } else { OnOff::Off }))));
@@ -230,7 +230,7 @@ impl ThinkerbellAdapter {
                                         }
                                         Err(err) => {
                                             warn!("[thinkerbell_adapter] The source for rule {} was stored in the db but cannot be parsed", rule.script_id);
-                                            let _ = tx.send(Err(Error::ParseError(ParseError::JSON(JSONError(err)))));
+                                            let _ = tx.send(Err(Error::Parsing(ParseError::JSON(JSONError(err)))));
                                         }
                                     }
                                 },
@@ -241,7 +241,7 @@ impl ThinkerbellAdapter {
                             continue 'recv;
                         }
                     }
-                    let _ = tx.send(Err(Error::InternalError(InternalError::NoSuchChannel(getter_id.clone()))));
+                    let _ = tx.send(Err(Error::Internal(InternalError::NoSuchChannel(getter_id.clone()))));
                 },
                 // Respond to a pending Setter request.
                 ThinkAction::RespondToSetter(tx, setter_id, value, user) => {
@@ -267,7 +267,7 @@ impl ThinkerbellAdapter {
                         // NOTE: This linear search is not ideal, but tracking getters/setters in maps
                         // would be far more complex until we have a simpler way to track state within
                         // getter/setter API requests. In any case, this loop should be plenty fast for now.
-                        for ref rule in &rules {
+                        for rule in &rules {
                             if setter_id == rule.channel_is_enabled_id {
                                 match value.cast::<OnOff>() {
                                     Ok(&OnOff::On) => {
@@ -288,7 +288,7 @@ impl ThinkerbellAdapter {
                             }
                         }
                         // If we got here, no setters matched.
-                        let _ = tx.send(Err(Error::InternalError(InternalError::NoSuchChannel(setter_id.clone()))));
+                        let _ = tx.send(Err(Error::Internal(InternalError::NoSuchChannel(setter_id.clone()))));
                     }
                 }
             }
@@ -444,7 +444,7 @@ impl Data for RuleSource {
     }
     fn parse(path: Path, source: &JSON, _: &io::BinarySource) -> Result<Self, Error> {
         let script = try!(Script::<UncheckedCtx>::parse(path, source)
-            .map_err(Error::ParseError));
+            .map_err(Error::Parsing));
         match serde_json::to_string(source) {
             Ok(source) =>
                 Ok(RuleSource {
@@ -452,12 +452,12 @@ impl Data for RuleSource {
                     source: source
                 }),
             Err(err) =>
-                Err(Error::SerializeError(io::SerializeError::JSON(err.to_string())))
+                Err(Error::Serializing(io::SerializeError::JSON(err.to_string())))
         }
     }
     fn serialize(source: &Self, _binary: &io::BinaryTarget) -> Result<JSON, Error> {
         serde_json::from_str(&source.source)
-            .map_err(|err| Error::ParseError(ParseError::JSON(JSONError(err))))
+            .map_err(|err| Error::Parsing(ParseError::JSON(JSONError(err))))
     }
 }
 

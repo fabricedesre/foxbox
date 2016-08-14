@@ -53,7 +53,7 @@ impl<T: TtsEngine> Adapter for TtsAdapter<T> {
 
     fn fetch_values(&self, mut set: Vec<Id<Channel>>, _: User) -> ResultMap<Id<Channel>, Option<Value>, Error> {
         set.drain(..).map(|id| {
-            (id.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(id))))
+            (id.clone(), Err(Error::Internal(InternalError::NoSuchChannel(id))))
         }).collect()
     }
 
@@ -72,7 +72,7 @@ impl<T: TtsEngine> Adapter for TtsAdapter<T> {
                     }
                 }
             }
-            (id.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(id))))
+            (id.clone(), Err(Error::Internal(InternalError::NoSuchChannel(id))))
         }).collect()
     }
 }
@@ -81,7 +81,7 @@ pub fn init(adapt: &Arc<AdapterManager>) -> Result<(), Error> {
     let engine = EspeakEngine { };
     if !engine.init() {
         warn!("eSpeak initialization failed!");
-        return Err(Error::InternalError(InternalError::GenericError("eSpeak initialization failed!".to_owned())));
+        return Err(Error::Internal(InternalError::GenericError("eSpeak initialization failed!".to_owned())));
     }
 
     let talk_setter_id = Id::new("setter:talk@link.mozilla.org");

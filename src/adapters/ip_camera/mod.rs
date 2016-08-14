@@ -97,7 +97,7 @@ impl IPCameraAdapter {
         // Since the upnp_discover will be called about once very 3 minutes we want to ignore
         // discoveries if the camera is already registered.
         if let Err(error) = adapt.add_service(service) {
-            if let Error::InternalError(ref internal_error) = error {
+            if let Error::Internal(ref internal_error) = error {
                 if let InternalError::DuplicateService(_) = *internal_error {
                     debug!("Found {} @ {} UDN {} (ignoring since it already exists)",
                            model_name,
@@ -201,7 +201,7 @@ impl Adapter for IPCameraAdapter {
         set.drain(..).map(|id| {
             let camera = match self.services.lock().unwrap().getters.get(&id) {
                 Some(camera) => camera.clone(),
-                None => return (id.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(id))))
+                None => return (id.clone(), Err(Error::Internal(InternalError::NoSuchChannel(id))))
             };
 
             if id == camera.username_id {
@@ -229,7 +229,7 @@ impl Adapter for IPCameraAdapter {
                 };
             }
 
-            (id.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(id))))
+            (id.clone(), Err(Error::Internal(InternalError::NoSuchChannel(id))))
         }).collect()
     }
 
@@ -237,7 +237,7 @@ impl Adapter for IPCameraAdapter {
         values.drain().map(|(id, value)| {
             let camera = match self.services.lock().unwrap().setters.get(&id) {
                 Some(camera) => camera.clone(),
-                None => { return (id, Err(Error::InternalError(InternalError::InvalidInitialService))); }
+                None => { return (id, Err(Error::Internal(InternalError::InvalidInitialService))); }
             };
 
             if id == camera.username_id {
@@ -267,7 +267,7 @@ impl Adapter for IPCameraAdapter {
                 };
             }
 
-            (id.clone(), Err(Error::InternalError(InternalError::NoSuchChannel(id))))
+            (id.clone(), Err(Error::Internal(InternalError::NoSuchChannel(id))))
         }).collect()
     }
 }

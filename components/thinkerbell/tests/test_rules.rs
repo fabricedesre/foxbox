@@ -190,7 +190,7 @@ fn test_run() {
 
     println!("* Injecting an error does not trigger the send.");
     env.execute(Instruction::InjectGetterValues(vec![
-        (getter_id_1.clone(), Err(APIError::TypeError(APITypeError::new(&format::ON_OFF, &Value::new(OpenClosed::Open)))))
+        (getter_id_1.clone(), Err(APIError::WrongType(APITypeError::new(&format::ON_OFF, &Value::new(OpenClosed::Open)))))
     ]));
 
     rx_done.recv().unwrap();
@@ -427,7 +427,7 @@ fn test_run() {
     rx_send.try_recv().unwrap_err();
 
     env.execute(Instruction::InjectSetterErrors(vec![
-        (setter_id_1.clone(), Some(APIError::TypeError(APITypeError::new(&format::ON_OFF, &Value::new(OpenClosed::Open)))))
+        (setter_id_1.clone(), Some(APIError::WrongType(APITypeError::new(&format::ON_OFF, &Value::new(OpenClosed::Open)))))
     ]));
     rx_done.recv().unwrap();
     rx_send.try_recv().unwrap_err();
@@ -654,7 +654,7 @@ fn test_run_with_delay() {
     rx_send.try_recv().unwrap_err();
 
     env.execute(Instruction::InjectGetterValues(vec![
-        (getter_id_1.clone(), Err(APIError::TypeError(APITypeError::new(&format::ON_OFF, &Value::new(OpenClosed::Open)))))
+        (getter_id_1.clone(), Err(APIError::WrongType(APITypeError::new(&format::ON_OFF, &Value::new(OpenClosed::Open)))))
     ]));
     rx_done.recv().unwrap();
     rx_send.try_recv().unwrap_err();
