@@ -16,7 +16,7 @@ module.exports = {
   },
 
   pagekite : {
-    'r' : 'http://knilxof.org:4242',
+    'r' : 'https://knilxof.org:4443',
     't' : 'knilxof.org:443',
     's' : 'foxbox',
   },

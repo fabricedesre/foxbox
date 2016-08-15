@@ -119,7 +119,7 @@ Options:
     -p, --port <port>        Set port to listen on for http connections. [default: 3000]
     -w, --wsport <wsport>    Set port to listen on for websocket. [default: 4000]
     -d, --profile <path>     Set profile path to store user data.
-    -r, --register <url>     Change the url of the registration endpoint. [default: http://knilxof.org:4242]
+    -r, --register <url>     Change the url of the registration endpoint. [default: https://knilxof.org:4443]
     -i, --iface <iface>      Specify the local IP interface.
     -t, --tunnel <tunnel>    Set the tunnel endpoint's hostname. If omitted, the tunnel is disabled.
     -s, --tunnel-secret <secret>       Set the tunnel shared secret. [default: secret]
@@ -336,7 +336,7 @@ describe! main {
             assert_eq!(args.flag_local_name, "foxbox");
             assert_eq!(args.flag_port, 3000);
             assert_eq!(args.flag_wsport, 4000);
-            assert_eq!(args.flag_register, "http://knilxof.org:4242");
+            assert_eq!(args.flag_register, "https://knilxof.org:4443");
             assert_eq!(args.flag_dns_domain, "box.knilxof.org");
             assert_eq!(args.flag_dns_api, "https://knilxof.org:5300");
             assert_eq!(args.flag_iface, None);

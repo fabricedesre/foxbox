@@ -129,7 +129,7 @@ There are several command line options to start the daemon:
 -p, --port <port>  : Set port to listen on for http connections. [default: 3000]
 -w, --wsport <wsport> : Set port to listen on for websocket. [default: 4000]
 -d, --profile <path> : Set profile path to store user data.
--r, --register <url> : URL of registration endpoint [default: http://localhost:4242]
+-r, --register <url> : URL of registration endpoint [default: https://localhost:4443]
 -t, --tunnel <tunnel> : Set the tunnel endpoint hostname. If omitted, the tunnel is disabled.
 -s, --tunnel-secret <secret> : Set the tunnel shared secret. [default: secret]
 -c, --config <namespace;key;value> :  Set configuration override
@@ -142,7 +142,7 @@ There are several command line options to start the daemon:
 Currently you would likely want to start the daemon like this:
 
 ```bash
-./run.sh -- -r http://knilxof.org:4242 --disable-tls
+./run.sh -- -r https://knilxof.org:4443 --disable-tls
 ```
 
 That means that your foxbox will be using our dev [registration server](https://wiki.mozilla.org/Connected_Devices/Projects/Project_Link/Registration_Server) and you will be disabling [TLS](https://wiki.mozilla.org/Connected_Devices/Projects/Project_Link/TLS) support. We hope to have out-of-the-box TLS support ready pretty soon, but for now disabling it is the easiest way to run foxbox.
@@ -155,7 +155,7 @@ If you want to use TLS you'll likely want to add `target/<profile>` (eg:
 If you want to access your foxbox from outside of the network where it is running, you'll need to enable [tunneling](https://wiki.mozilla.org/Connected_Devices/Projects/Project_Link/Tunneling) support. To do that you need to specify the address of the tunneling server that you want to use and the shared secret for this server (if any) to access to your foxbox from outside of your foxbox' local network.
 
 ```bash
-./run.sh -- -r http://knilxof.org:4242 -t knilxof.org:443 -s secret --disable-tls
+./run.sh -- -r https://knilxof.org:4443 -t knilxof.org:443 -s secret --disable-tls
 ```
 
 In the example above, `knilxof.org:443` is the location of our tunneling dev server, which has a not-that-secret-anymore value that you'll need to ask for on [IRC](https://wiki.mozilla.org/Connected_Devices/Projects/Project_Link#IRC). You are supposed to substitute `<yourname>` by the subdomain of your choice, but take into account that you'll need to keep the domain name of the tunneling server, in this case `.knilxof.org`. Starting the daemon with the command line options above you should be able to access your foxbox through `http://yourname.knilxof.org`.

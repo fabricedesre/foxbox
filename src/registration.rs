@@ -303,7 +303,7 @@ describe! registrar {
         let registrar = Registrar::new(
             CertificateManager::new(PathBuf::from(current_dir!()), Box::new(SniSslContextProvider::new())),
             "box.knilxof.org".to_owned(),
-            "http://knilxof.org:4242/".to_owned(),
+            "https://knilxof.org:4443/".to_owned(),
             "https://knilxof.org:5300".to_owned()
         );
     }
