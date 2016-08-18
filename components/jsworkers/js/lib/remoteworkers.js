@@ -271,7 +271,18 @@
           body: JSON.stringify({ url: worker_url, options: options }),
           mode: "cors"
         }
-        global.fetch(url, init).then(resolve, reject);
+        global.fetch(url, init).then((response) => {
+          // Check if the response is successful.
+          return response.json().then(function(json) {
+            if (json && json.success) {
+              console.log(`Service Worker Registration successful for ${worker_url}`);
+              resolve();
+            } else {
+              console.error(`Service Worker Registration error for ${worker_url} : ${json.error}`);
+              reject(json.error);
+            }
+          });
+        }, reject);
       });
     }
   }

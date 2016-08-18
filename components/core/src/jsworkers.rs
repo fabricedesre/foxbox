@@ -108,8 +108,9 @@ impl WorkerInfo {
 
 #[derive(Clone, Debug, Serialize)]
 pub enum BrowserMessageKind {
-    Message,
     Error,
+    Message,
+    SWRegistrationResult,
 }
 
 impl From<BrowserMessageKind> for String {
@@ -117,6 +118,7 @@ impl From<BrowserMessageKind> for String {
         match s {
             BrowserMessageKind::Message => String::from("message"),
             BrowserMessageKind::Error => String::from("error"),
+            BrowserMessageKind::SWRegistrationResult => String::from("sw-registration-result"),
         }
     }
 }
@@ -153,6 +155,14 @@ pub enum Message {
     Register {
         worker: WorkerInfo,
         host: String,
+        #[serde(skip_serializing)]
+        tx: Sender<Message>,
+    },
+    // Result of a service worker registration. Runtime -> Router
+    RegisterResult {
+        id: WorkerInfoKey,
+        success: bool,
+        error: String,
     },
     // Notifies that we have a js runner connection established. WebSocket -> Runtime
     RunnerWSOpened {

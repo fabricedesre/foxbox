@@ -19,7 +19,7 @@ use std::fmt::Debug;
 use std::io::Error as IoError;
 use std::ops::Deref;
 use std::process::Command;
-use std::sync::mpsc::channel;
+use std::sync::mpsc::{channel, Sender as MpscSender};
 use std::thread;
 use std::thread::Builder;
 use uuid::Uuid;
@@ -129,14 +129,54 @@ impl Handler for RuntimeWsHandler {
                 error!("Unable to decode `id` in runtime web socket message: {:?}", id.err());
                 return Ok(());
             }
+            let s_id = id.unwrap();
 
             let kind = decoder.string();
             if kind.is_err() {
                 error!("Unable to decode `kind` in runtime web socket message: {:?}", kind.err());
                 return Ok(());
             }
+            let s_kind = kind.unwrap();
+
+            // Special case for the seervice worker registration result: we don't relay it to the
+            // client websocket, but use it as an http response.
+            if s_kind == "sw-registration-result" {
+                let json = decoder.string();
+                if json.is_err() {
+                    error!("Unable to decode `json` in sw-registration-result web socket message: {:?}", json.err());
+                    return Ok(());
+                }
+
+                if !decoder.end() {
+                    error!("Unexpected data after `json` in sw-registration-result web socket message.");
+                    return Ok(());
+                }
+
+                #[derive(Deserialize)]
+                struct RegistrationResult {
+                    success: bool,
+                    error: Option<String>,
+                }
+                let s_json = json.unwrap();
+                let result: Result<RegistrationResult, serde_json::Error> = serde_json::from_str(&s_json);
+                if result.is_err() {
+                    error!("Error decoded json string `{}` : {:?}`", s_json, result.err());
+                    return Ok(());
+                }
+                let swresult = result.unwrap();
+
+                // Message decoding is ok, let's forward it to the right WS.
+                let mut guard = self.broker.lock().unwrap();
+                guard.send_message("workers",
+                                   BrokerMessage::RegisterResult {
+                                       id: s_id.clone(),
+                                       success: swresult.success,
+                                       error: swresult.error.unwrap_or("".to_owned()),
+                                   });
+                return Ok(());
+            }
+
             let e_kind: BrowserMessageKind = {
-                let s_kind = kind.unwrap();
                 if s_kind == "message" {
                     BrowserMessageKind::Message
                 } else if s_kind == "error" {
@@ -162,7 +202,7 @@ impl Handler for RuntimeWsHandler {
             let mut guard = self.broker.lock().unwrap();
             guard.send_message("workers",
                                BrokerMessage::SendToBrowser {
-                                   id: id.unwrap(),
+                                   id: s_id,
                                    kind: e_kind,
                                    data: payload.unwrap(),
                                });
@@ -245,6 +285,9 @@ impl Runtime {
                     let mut browser_ws_out:
                         HashMap<WorkerInfoKey, RefCell<HashMap<HandlerId, Sender>>> = HashMap::new();
 
+                    // The tx that we'll have to send a response to when registering a service worker.
+                    let mut register_result_tx: HashMap<WorkerInfoKey, MpscSender<BrokerMessage>> = HashMap::new();
+
                     loop {
                         let message = rx.recv().unwrap();
                         match message {
@@ -308,7 +351,7 @@ impl Runtime {
                                     let payload: Payload = Payload;
                                     send_json_to_ws(out, "Shutdown", &payload);
                                 }
-                            },
+                            }
                             BrokerMessage::StopAll => {
                                 // This message happens when the js runner itself shuts down.
                             }
@@ -377,7 +420,7 @@ impl Runtime {
                                     error!("Can't relay message to runtime worker because runtime is not up yet!");
                                 }
                             }
-                            BrokerMessage::Register { ref worker, ref host } => {
+                            BrokerMessage::Register { ref worker, ref host, ref tx } => {
                                 info!("Message::Register {:?}", worker);
                                 if let Some(ref out) = runtime_ws_out {
                                     // If we don't already run this worker, add it to our set
@@ -385,14 +428,32 @@ impl Runtime {
                                     if !workers.has_worker(worker) {
                                         workers.add_worker(worker);
                                     }
-
+                                    let worker_id = worker.key();
+                                    register_result_tx.insert(worker_id.clone(), tx.clone());
                                     send_json_to_ws(out,
                                                     "RegisterServiceWorker",
                                                     &workers.get_worker_info(worker.user.clone(),
                                                                              worker.url.clone(),
                                                                              worker.kind.clone()));
                                 }
-                            },
+                            }
+                            BrokerMessage::RegisterResult { id, success, error } => {
+                                info!("Message::RegisterResult");
+                                if register_result_tx.contains_key(&id) {
+                                    // Relay that to the http handler.
+                                    {
+                                        let tx = register_result_tx.get(&id).unwrap();
+                                        tx.send(BrokerMessage::RegisterResult {
+                                            id: id.clone(),
+                                            success: success,
+                                            error: error,
+                                        });
+                                    }
+                                    register_result_tx.remove(&id);
+                                } else {
+                                    error!("No tx registered for id {}", id);
+                                }
+                            }
                             _ => {
                                 error!("Unexpected message by the `workers` actor {:?}", message);
                             }

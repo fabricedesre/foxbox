@@ -153,6 +153,7 @@ impl Router {
                 return Ok(response);
             }
             _ => {
+                error!("Unexpected message: {:?}", res);
                 return Ok(Response::with(Status::InternalServerError));
             }
         }
@@ -169,23 +170,37 @@ impl Router {
 
         // Spawns a request to fetch the worker and store it in this user's URL space.
 
-
         // Sends a "Register" message to the worker set.
+        let (tx, rx) = channel::<Message>();
         let message = Message::Register {
             worker: WorkerInfo::new_serviceworker(user, worker_url.clone(), Some(options.clone())),
             host: req.url.host.serialize(),
+            tx: tx,
         };
 
         if self.broker.lock().unwrap().send_message("workers", message).is_err() {
             return Ok(Response::with(Status::InternalServerError));
         }
 
-        // There is no response when registering service workers.
-        let mut response =
-            Response::with(json!({ url: worker_url }));
-        response.status = Some(Status::Ok);
-        response.headers.set(ContentType::json());
-        Ok(response)
+        let res = rx.recv();
+        if res.is_err() {
+            return Ok(Response::with(Status::InternalServerError));
+        }
+        let res = res.unwrap();
+        match res {
+            Message::RegisterResult { id, success, error } => {
+                info!("About to send HTTP response success:{} error:{}", success, error);
+                let mut response =
+                    Response::with(json!({ success: success, error: error }));
+                response.status = Some(Status::Ok);
+                response.headers.set(ContentType::json());
+                return Ok(response);
+            }
+            _ => {
+                error!("Unexpected message: {:?}", res);
+                return Ok(Response::with(Status::InternalServerError));
+            }
+        }
     }
 }
 

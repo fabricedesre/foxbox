@@ -9,8 +9,8 @@ Gecko doesn't do any specific book keeping, but at the foxbox level the behavior
 
 ## Public urls & SW access
 
-- The page asks to register https://mysite.com/path/sw.js with a scope of `/`
-- Gecko loads the wrapper https://mysite.com/$UUID/serviceworkerwrapper.html that registers the SW from its original URI with a scope of `$UUID/`.
+- The page asks to register https://mysite.com/path/sw.js with a scope of `/path`
+- Gecko loads the wrapper https://mysite.com/$UUID/serviceworkerwrapper.html that registers the SW from its original URI with a scope of `$sw_path/$UUID/path`.
 - foxbox registers that the $foxbox_host/user/$user_id/mysite.com/ URLs will be managed by this SW.
 
 - when a request comes in for $foxbox_host/user/$user_id/mysite.com/some/file.html the foxbox sends a request to gecko for ($user_id, mysite.com/some/file.html)
@@ -23,7 +23,6 @@ Service workers scopes are rooted at $domain/user/$user_id/ which can be conside
 ## Foxbox:
 - Turn into an adapter?
 - More tests.
-- cleanup of workers.rs
 
 ## Gecko:
 - Create the worker with a per-usercontext principal.
@@ -36,5 +35,7 @@ Service workers scopes are rooted at $domain/user/$user_id/ which can be conside
 ## All:
 - http mode.
 
-## Next
-- Service Workers.
+## Service Workers
+- URL routing.
+- Registering should return a promise.
+- Unregistration.
