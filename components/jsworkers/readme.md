@@ -37,5 +37,4 @@ Service workers scopes are rooted at $domain/user/$user_id/ which can be conside
 
 ## Service Workers
 - URL routing.
-- Registering should return a promise.
 - Unregistration.
