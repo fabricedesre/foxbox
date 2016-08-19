@@ -4,12 +4,15 @@
 
  /// Enum to describe all the messages exchanged by the jsworker system.
 
+use iron::Headers;
+use iron::method::Method;
+use iron::status::Status;
 use serde::{ Serialize, Serializer };
 use std::sync::mpsc::Sender;
 use ws::Sender as WsSender;
 
-pub type Url = String; // FIXME: should be the url type from hyper.
-pub type User = String;   // FIXME: should be the user type from foxbox_users.
+pub type Url = String;  // FIXME: should be the url type from hyper.
+pub type User = String; // FIXME: should be the user type from foxbox_users.
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum WorkerKind {
@@ -146,6 +149,26 @@ pub enum Message {
         user: User,
         #[serde(skip_serializing)]
         tx: Sender<Message>,
+    },
+    // Request to retrieve a resource on behalf of a user.
+    GetUserResource {
+        #[serde(skip_serializing)]
+        method: Method,
+        url: String,
+        #[serde(skip_serializing)]
+        headers: Headers,
+        body: Vec<u8>,
+        user: User,
+        #[serde(skip_serializing)]
+        tx: Sender<Message>,
+    },
+    // Returns a resource on behalf of a user.
+    UserResourceResponse {
+        #[serde(skip_serializing)]
+        status: Status,
+        #[serde(skip_serializing)]
+        headers: Headers,
+        body: Vec<u8>,
     },
     // Result value for GetList. Runtime -> Router
     List {

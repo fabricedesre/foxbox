@@ -23,4 +23,5 @@ extern crate ws;
 
 pub mod runtime;
 pub mod router;
+pub mod user_router;
 mod workers;

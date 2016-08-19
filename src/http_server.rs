@@ -12,7 +12,7 @@ use iron_cors::CORS;
 use iron::error::{ IronError };
 use iron::method::Method;
 use iron::status::Status;
-use jsworkers::router as jsworkers_router;
+use jsworkers::{ router as jsworkers_router, user_router };
 use mount::Mount;
 use router::NoRoute;
 use static_router;
@@ -70,6 +70,7 @@ impl<T: Controller> HttpServer<T> {
                                                       adapter_api);
 
         let jsworkers_chain = jsworkers_router::create(self.controller.clone());
+        let user_chain = user_router::create(self.controller.clone());
 
         let users_manager = self.controller.get_users_manager();
         let mut mount = Mount::new();
@@ -77,7 +78,8 @@ impl<T: Controller> HttpServer<T> {
              .mount("/ping", Ping)
              .mount("/api/v1", taxonomy_chain)
              .mount("/users", users_manager.get_router_chain())
-             .mount("/jsworkers/v1", jsworkers_chain);
+             .mount("/jsworkers/v1", jsworkers_chain)
+             .mount("/user", user_chain);
 
         let mut chain = Chain::new(mount);
         chain.link_after(Custom404);
@@ -99,6 +101,10 @@ impl<T: Controller> HttpServer<T> {
             (vec![Method::Post], "jsworkers/v1/register".to_owned()),
             (vec![Method::Post], "jsworkers/v1/unregister".to_owned()),
             (vec![Method::Get], "jsworkers/v1/list".to_owned()),
+
+            // User url paths. Keep in sync with components/jsworkers/user_router.rs
+            (vec![Method::Get, Method::Put, Method::Post, Method::Delete], "user".to_owned()),
+
         ]);
         chain.link_after(cors);
 

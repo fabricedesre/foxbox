@@ -16,6 +16,7 @@
 extern crate core;
 extern crate foxbox_users;
 extern crate hyper;
+extern crate iron;
 extern crate libc;
 
 #[macro_use]

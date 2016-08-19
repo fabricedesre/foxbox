@@ -454,6 +454,40 @@ impl Runtime {
                                     error!("No tx registered for id {}", id);
                                 }
                             }
+                            BrokerMessage::GetUserResource { method, url, headers, body, user, tx } => {
+                                // TODO: check that we have a worker that could serve this url,
+                                // using the worker's url and registration scope.
+
+                                // Send the request to the runtime, with a custom id to track the
+                                // response to send back.
+                                if let Some(ref out) = runtime_ws_out {
+                                    let id = format!("{}", Uuid::new_v4());
+                                    register_result_tx.insert(id.clone(), tx.clone());
+                                    let mut encoder = Encoder::new()
+                                        .string("GetUserResource")
+                                        .string(&id)
+                                        .string(method.as_ref())
+                                        .string(&url)
+                                        .uint32(headers.len() as u32);
+                                    // Add all the headers.
+                                    for header in headers.iter() {
+                                        encoder = encoder.string(header.name())
+                                                         .string(&header.value_string());
+                                    }
+                                    // Add the logged in user as an extra header, to let workers
+                                    // decide on the access control they want to do.
+                                    encoder = encoder.string("x-user")
+                                                     .string(&user)
+                                    // And finally the body of the request.
+                                                     .bytes(&body);
+                                    let buffer = encoder.end().unwrap();
+                                    out.send(Message::Binary(buffer));
+                                } else {
+                                    // TODO: return a 500 error?
+
+                                    error!("Can't relay message to runtime worker because runtime is not up yet!");
+                                }
+                            }
                             _ => {
                                 error!("Unexpected message by the `workers` actor {:?}", message);
                             }
