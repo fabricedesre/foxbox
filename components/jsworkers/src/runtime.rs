@@ -183,11 +183,19 @@ impl Handler for RuntimeWsHandler {
                 let status = StatusCode::from_u16(status);
 
                 decode!(header_count, uint32);
-                let headers = Headers::new();
+                let mut headers = Headers::new();
                 for _ in 0..header_count {
                     decode!(hname, string);
                     decode!(hvalue, string);
-                    // Create a typed header from the string version.
+                    debug!("Header {} : {}", hname.clone(), hvalue.clone());
+                    // Remove encoding headers since we don't re-encode the body.
+                    if hname == "content-encoding" ||
+                       hname == "transfer-encoding" {
+                        continue;
+                    }
+
+                    // TODO: deal with multiple headers with the same name.
+                    headers.set_raw(hname, vec![hvalue.into_bytes()]);
                 }
 
                 decode!(body, bytes);

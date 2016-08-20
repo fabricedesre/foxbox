@@ -36,5 +36,4 @@ Service workers scopes are rooted at $domain/user/$user_id/ which can be conside
 - http mode.
 
 ## Service Workers
-- URL routing.
 - Unregistration.
