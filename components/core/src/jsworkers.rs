@@ -164,6 +164,7 @@ pub enum Message {
     },
     // Returns a resource on behalf of a user.
     UserResourceResponse {
+        id: String,
         #[serde(skip_serializing)]
         status: Status,
         #[serde(skip_serializing)]

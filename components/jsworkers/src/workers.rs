@@ -52,7 +52,7 @@ impl JsWorkers {
                 workers.insert(key, WorkerInfo::new_serviceworker(user, url, Some(options)));
             }
         }
-        info!("Loaded {} workers from the database.", workers.len());
+        debug!("Loaded {} workers from the database.", workers.len());
 
         JsWorkers {
             workers: workers,
@@ -62,7 +62,7 @@ impl JsWorkers {
     }
 
     fn add_worker_in_db(&self, info: &WorkerInfo) {
-        info!("add_worker_in_db {:?}", info);
+        debug!("add_worker_in_db {:?}", info);
         if info.kind != WorkerKind::Service {
             return;
         }
@@ -75,7 +75,7 @@ impl JsWorkers {
     }
 
     fn remove_worker_from_db(&self, info: &WorkerInfo) {
-        info!("remove_worker_from_db {:?}", info);
+        debug!("remove_worker_from_db {:?}", info);
         if info.kind != WorkerKind::Service {
             return;
         }
@@ -109,7 +109,7 @@ impl JsWorkers {
 
     /// TODO: improve error case.
     pub fn add_worker(&mut self, info: &WorkerInfo) -> Result<(), ()> {
-        info!("add_worker {:?}", info);
+        debug!("add_worker {:?}", info);
         if self.has_worker(info) {
             error!("already in our worker list.");
             return Err(());
@@ -133,11 +133,11 @@ impl JsWorkers {
     }
 
     pub fn wake_up_workers(&self) {
-        info!("wake_up_workers");
+        debug!("wake_up_workers");
         let ref w = self.workers;
         for (_, info) in w {
             if info.kind == WorkerKind::Service {
-                info!("Waking up worker {:?}", info);
+                debug!("Waking up worker {:?}", info);
                 let message = Message::Wakeup {
                     worker: info.clone(),
                 };

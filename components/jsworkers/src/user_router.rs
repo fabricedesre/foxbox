@@ -95,23 +95,22 @@ impl Handler for UserRouter {
                 return Ok(Response::with(Status::InternalServerError));
             }
             let res = res.unwrap();
-            /*match res {
-                Message::UserResourceResponse { http_response } => {
-                    /*let mut response =
-                        Response::with(http_response.body));
-                    response.status = Some(http_response.status);
-                    response.headers.set(http_response.content_type);*/
-                    return Ok(http_response);
+            match res {
+                Message::UserResourceResponse { id, status, headers, body } => {
+                    let mut response = Response::with(body);
+                    response.status = Some(status);
+                    response.headers = headers;
+                    return Ok(response);
                 }
                 _ => {
                     error!("Unexpected message: {:?}", res);
                     return Ok(Response::with(Status::InternalServerError));
                 }
-            }*/
+            }
         }
 
         // Fallthrough, returning a 404.
-        error!("Unsupported url: {}", req.url);
+        error!("Unknown url: {}", req.url);
 
         Ok(Response::with((Status::NotFound, format!("Unknown url: {}", req.url))))
     }

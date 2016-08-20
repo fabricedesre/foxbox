@@ -11,6 +11,7 @@ publish = false
 bitsparrow = "0.3.2"
 foxbox_core = { path = "../core" }
 foxbox_users = { git = "https://github.com/fxbox/users.git", rev = "ec53c3a" }
+hyper = "0.8.1"
 log = "^0.3"
 rusqlite = "0.6.0"
 url = "0.5.7"

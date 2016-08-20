@@ -492,6 +492,7 @@ dependencies = [
  "bitsparrow 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "foxbox_core 0.1.0",
  "foxbox_users 0.1.0 (git+https://github.com/fxbox/users.git?rev=ec53c3a)",
+ "hyper 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "iron 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "rusqlite 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",

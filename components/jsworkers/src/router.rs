@@ -244,7 +244,7 @@ impl Handler for Router {
         }
 
         // Fallthrough, returning a 404.
-        error!("Unsupported url: {}", req.url);
+        error!("Unknown url: {}", req.url);
 
         Ok(Response::with((Status::NotFound, format!("Unknown url: {}", req.url))))
     }

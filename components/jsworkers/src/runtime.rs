@@ -5,11 +5,14 @@
 //! Manages launching the runtime and relaying messages.
 
 extern crate url;
+extern crate hyper;
 
 use bitsparrow::{Decoder, Encoder};
 use foxbox_core::broker::SharedBroker;
 use foxbox_core::managed_process::ManagedProcess;
 use foxbox_core::jsworkers::{BrowserMessageKind, Message as BrokerMessage, WorkerInfoKey};
+use iron::Headers;
+use self::hyper::status::StatusCode;
 use self::url::Url;
 use serde::Serialize;
 use serde_json;
@@ -120,32 +123,30 @@ impl Handler for RuntimeWsHandler {
 
     fn on_message(&mut self, msg: Message) -> WsResult<()> {
         if self.is_runtime() {
-            info!("Message from js runner ws: {}", msg);
+            debug!("Message from js runner ws: {}", msg);
 
             // Relay the payload to the right browser ws.
             let mut decoder = Decoder::new(msg.into_data());
-            let id = decoder.string();
-            if id.is_err() {
-                error!("Unable to decode `id` in runtime web socket message: {:?}", id.err());
-                return Ok(());
-            }
-            let s_id = id.unwrap();
 
-            let kind = decoder.string();
-            if kind.is_err() {
-                error!("Unable to decode `kind` in runtime web socket message: {:?}", kind.err());
-                return Ok(());
+            // Helper macro to decode & unwrap a given data of a given type.
+            macro_rules! decode {
+                ($name:ident, $kind:ident) => (
+                    let $name = decoder.$kind();
+                    if $name.is_err() {
+                        error!("Unable to decode `$name` in runtime web socket message: {:?}", $name.err());
+                        return Ok(());
+                    }
+                    let $name = $name.unwrap();
+                );
             }
-            let s_kind = kind.unwrap();
 
-            // Special case for the seervice worker registration result: we don't relay it to the
+            decode!(id, string);
+            decode!(kind, string);
+
+            // Service worker registration result: we don't relay it to the
             // client websocket, but use it as an http response.
-            if s_kind == "sw-registration-result" {
-                let json = decoder.string();
-                if json.is_err() {
-                    error!("Unable to decode `json` in sw-registration-result web socket message: {:?}", json.err());
-                    return Ok(());
-                }
+            if kind == "sw-registration-result" {
+                decode!(json, string);
 
                 if !decoder.end() {
                     error!("Unexpected data after `json` in sw-registration-result web socket message.");
@@ -157,41 +158,69 @@ impl Handler for RuntimeWsHandler {
                     success: bool,
                     error: Option<String>,
                 }
-                let s_json = json.unwrap();
-                let result: Result<RegistrationResult, serde_json::Error> = serde_json::from_str(&s_json);
+                let result: Result<RegistrationResult, serde_json::Error> = serde_json::from_str(&json);
                 if result.is_err() {
-                    error!("Error decoded json string `{}` : {:?}`", s_json, result.err());
+                    error!("Error decoded json string `{}` : {:?}`", json, result.err());
                     return Ok(());
                 }
-                let swresult = result.unwrap();
+                let result = result.unwrap();
 
                 // Message decoding is ok, let's forward it to the right WS.
                 let mut guard = self.broker.lock().unwrap();
                 guard.send_message("workers",
                                    BrokerMessage::RegisterResult {
-                                       id: s_id.clone(),
-                                       success: swresult.success,
-                                       error: swresult.error.unwrap_or("".to_owned()),
+                                       id: id.clone(),
+                                       success: result.success,
+                                       error: result.error.unwrap_or("".to_owned()),
+                                   });
+                return Ok(());
+            }
+
+            // Service worker request result: we don't relay it to the
+            // client websocket, but use it as an http response.
+            if kind == "user-request-response" {
+                decode!(status, uint16);
+                let status = StatusCode::from_u16(status);
+
+                decode!(header_count, uint32);
+                let headers = Headers::new();
+                for _ in 0..header_count {
+                    decode!(hname, string);
+                    decode!(hvalue, string);
+                    // Create a typed header from the string version.
+                }
+
+                decode!(body, bytes);
+
+                if !decoder.end() {
+                    error!("Unexpected data after `json` in sw-registration-result web socket message.");
+                    return Ok(());
+                }
+
+                // Message decoding is ok, let's forward it to the right WS.
+                let mut guard = self.broker.lock().unwrap();
+                guard.send_message("workers",
+                                   BrokerMessage::UserResourceResponse {
+                                       id: id.clone(),
+                                       status: status,
+                                       headers: headers,
+                                       body: body,
                                    });
                 return Ok(());
             }
 
             let e_kind: BrowserMessageKind = {
-                if s_kind == "message" {
+                if kind == "message" {
                     BrowserMessageKind::Message
-                } else if s_kind == "error" {
+                } else if kind == "error" {
                     BrowserMessageKind::Error
                 } else {
-                    error!("Unexpected `kind` value in runtime web socket message: {}", s_kind);
+                    error!("Unexpected `kind` value in runtime web socket message: {}", kind);
                     return Ok(());
                 }
             };
 
-            let payload = decoder.bytes();
-            if payload.is_err() {
-                error!("Unable to decode `payload` in runtime web socket message: {:?}", payload.err());
-                return Ok(());
-            }
+            decode!(payload, bytes);
 
             if !decoder.end() {
                 error!("Unexpected data after `payload` in runtime web socket message.");
@@ -202,9 +231,9 @@ impl Handler for RuntimeWsHandler {
             let mut guard = self.broker.lock().unwrap();
             guard.send_message("workers",
                                BrokerMessage::SendToBrowser {
-                                   id: s_id,
+                                   id: id,
                                    kind: e_kind,
-                                   data: payload.unwrap(),
+                                   data: payload,
                                });
         } else {
             // We know which client this comes from so we don't need to wrap the message with
@@ -318,7 +347,7 @@ impl Runtime {
                                 }
                             }
                             BrokerMessage::Wakeup { ref worker } => {
-                                info!("Message::Wakeup {:?}", worker);
+                                debug!("Message::Wakeup {:?}", worker);
                                 if let Some(ref out) = runtime_ws_out {
                                     // If we don't already run this worker, add it to our set
                                     // as a running one.
@@ -437,19 +466,12 @@ impl Runtime {
                                                                              worker.kind.clone()));
                                 }
                             }
-                            BrokerMessage::RegisterResult { id, success, error } => {
+                            BrokerMessage::RegisterResult { ref id, ref success, ref error } => {
                                 info!("Message::RegisterResult");
-                                if register_result_tx.contains_key(&id) {
-                                    // Relay that to the http handler.
-                                    {
-                                        let tx = register_result_tx.get(&id).unwrap();
-                                        tx.send(BrokerMessage::RegisterResult {
-                                            id: id.clone(),
-                                            success: success,
-                                            error: error,
-                                        });
-                                    }
-                                    register_result_tx.remove(&id);
+                                if register_result_tx.contains_key(id) {
+                                    // Relay the message to the http handler.
+                                    register_result_tx.get(id).unwrap().send(message.clone());
+                                    register_result_tx.remove(id);
                                 } else {
                                     error!("No tx registered for id {}", id);
                                 }
@@ -486,6 +508,16 @@ impl Runtime {
                                     // TODO: return a 500 error?
 
                                     error!("Can't relay message to runtime worker because runtime is not up yet!");
+                                }
+                            }
+                            BrokerMessage::UserResourceResponse { ref id, ref status, ref headers, ref body } => {
+                                info!("Message::RegisterResult");
+                                if register_result_tx.contains_key(id) {
+                                    // Relay the message to the http handler.
+                                    register_result_tx.get(id).unwrap().send(message.clone());
+                                    register_result_tx.remove(id);
+                                } else {
+                                    error!("No tx registered for id {}", id);
                                 }
                             }
                             _ => {
