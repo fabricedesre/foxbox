@@ -9,7 +9,7 @@ name = "tls"
 path = "lib.rs"
 
 [replace]
-"iron:0.3.0" = { path = "../../iron-fork/" }
+"iron:0.3.1" = { path = "../../iron-fork/" }
 
 [dependencies.iron]
 version = "0.3.0"

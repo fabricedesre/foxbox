@@ -23,7 +23,7 @@ ip_camera = []
 webpush = []
 
 [replace]
-"iron:0.3.0" = { path = "iron-fork/" }
+"iron:0.3.1" = { path = "iron-fork/" }
 
 [build-dependencies]
 pkg-config = "0.3"
