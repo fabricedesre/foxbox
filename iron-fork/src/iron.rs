@@ -12,7 +12,7 @@ use hyper::net::{Fresh, NetworkListener, HttpListener};
 
 
 #[cfg(feature = "ssl")]
-use hyper::net::{HttpsListener,NetworkStream,Ssl, Openssl};
+use hyper::net::{HttpsListener, Ssl, Openssl};
 
 use hyper::error::Error;
 
