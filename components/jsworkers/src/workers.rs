@@ -136,6 +136,7 @@ impl JsWorkers {
         debug!("wake_up_workers");
         let ref w = self.workers;
         for (_, info) in w {
+            // TODO: add a `persistent` flag if we want to restart web workers at startup.
             if info.kind == WorkerKind::Service {
                 debug!("Waking up worker {:?}", info);
                 let message = Message::Wakeup {

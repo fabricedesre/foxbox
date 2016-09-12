@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 this.addEventListener('install', function(event) {
-  debug("Installed.");
+  console.log("Service Worker Installed.");
 });
 
 this.addEventListener('fetch', function(event) {

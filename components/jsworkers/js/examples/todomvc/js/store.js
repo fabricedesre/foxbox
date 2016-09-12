@@ -3,7 +3,7 @@
 	'use strict';
 
 	FoxboxWorkers.set_base_url("http://localhost:3000");
-	var worker = FoxboxWorkers.Worker("http://localhost:8000/examples/todomvc/js/worker.js");
+	var worker = FoxboxWorkers.Worker("http://jsworkers.org:8000/examples/todomvc/js/worker.js");
 	var messageId = 0;
 
 	// Sends a message to the worker, and transmits the matching response to the
