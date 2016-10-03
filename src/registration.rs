@@ -264,7 +264,8 @@ impl Registrar {
                          iface.name.starts_with("wlan") ||
                          iface.name.starts_with("en") ||
                          iface.name.starts_with("em") ||
-                         iface.name.starts_with("wlp3s")) {
+                         iface.name.starts_with("wlp3s") ||
+                         iface.name.starts_with("wlp4s")) {
                         continue;
                     },
                     Some(iface_name) =>
