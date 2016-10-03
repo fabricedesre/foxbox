@@ -100,7 +100,7 @@ impl Router {
         let params: Result<Params, serde_json::Error> = serde_json::from_str(&source);
         match params {
             Ok(val) => Ok(val.url),
-            Err(err) => Err(IronError::new(err, Status::BadRequest))
+            Err(err) => Err(IronError::new(err, Status::BadRequest)),
         }
     }
 
@@ -114,15 +114,19 @@ impl Router {
         }
         let params: Result<Params, serde_json::Error> = serde_json::from_str(&source);
         match params {
-            Ok(val) => Ok((val.url, serde_json::to_string(&val.options).unwrap_or("{}".to_owned()))),
-            Err(err) => Err(IronError::new(err, Status::BadRequest))
+            Ok(val) => {
+                Ok((val.url, serde_json::to_string(&val.options).unwrap_or("{}".to_owned())))
+            }
+            Err(err) => Err(IronError::new(err, Status::BadRequest)),
         }
     }
 
     fn handle_start(&self, req: &mut Request, user: User) -> IronResult<Response> {
         let worker_url = match self.get_worker_url(req) {
             Ok(url) => url,
-            Err(err) => { return Err(err); }
+            Err(err) => {
+                return Err(err);
+            }
         };
 
         // Sends a "Start" message to the worker set and wait for the answer.
@@ -146,8 +150,7 @@ impl Router {
         let res = res.unwrap();
         match res {
             Message::ClientEndpoint { ws_url } => {
-                let mut response =
-                    Response::with(json!({ url: worker_url, ws_url: ws_url }));
+                let mut response = Response::with(json!({ url: worker_url, ws_url: ws_url }));
                 response.status = Some(Status::Ok);
                 response.headers.set(ContentType::json());
                 return Ok(response);
@@ -190,8 +193,7 @@ impl Router {
         match res {
             Message::RegisterResult { id, success, error } => {
                 info!("About to send HTTP response success:{} error:{}", success, error);
-                let mut response =
-                    Response::with(json!({ success: success, error: error }));
+                let mut response = Response::with(json!({ success: success, error: error }));
                 response.status = Some(Status::Ok);
                 response.headers.set(ContentType::json());
                 return Ok(response);
@@ -235,9 +237,9 @@ impl Handler for Router {
             return self.handle_register(req, user);
         }
 
-        /*if req.url.path == ["unregister"] && req.method == Method::Post {
-            return self.handle_stop(req, user);
-        }*/
+        // if req.url.path == ["unregister"] && req.method == Method::Post {
+        // return self.handle_stop(req, user);
+        // }
 
         if req.url.path == ["list"] && req.method == Method::Get {
             return self.handle_list(user);
@@ -251,7 +253,8 @@ impl Handler for Router {
 }
 
 pub fn create<T>(controller: T) -> Chain
-    where T: Controller {
+    where T: Controller
+{
 
     let router = Router::new(&controller.get_jsworkers_broker());
 

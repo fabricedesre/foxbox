@@ -14,7 +14,7 @@ exclude = [ "**/*.conf", "**/*.json",
 # We get the workspace's crates from the `path` definitions.
 
 [features]
-default = ["authentication"]
+default = []
 authentication = []
 zwave = ["openzwave-adapter"]
 philips_hue = []
