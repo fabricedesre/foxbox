@@ -211,7 +211,7 @@ impl Data for String {
         "String".to_owned()
     }
     fn parse(path: Path, source: &JSON, _binary: &BinarySource) -> Result<String, Error> {
-        match source.as_string() {
+        match source.as_str() {
             None => Err(Error::Parsing(ParseError::type_error("String", &path, "string"))),
             Some(s) => Ok(s.to_owned())
         }
@@ -258,7 +258,7 @@ pub enum OnOff {
     /// assert_eq!(parsed, OnOff::On);
     ///
     /// let serialized: JSON = OnOff::serialize(&OnOff::On, &BinaryTarget).unwrap();
-    /// assert_eq!(serialized.as_string().unwrap(), "On");
+    /// assert_eq!(serialized.as_str().unwrap(), "On");
     /// ```
     On,
 
@@ -276,7 +276,7 @@ pub enum OnOff {
     /// assert_eq!(parsed, OnOff::Off);
     ///
     /// let serialized: JSON = OnOff::serialize(&OnOff::Off, &BinaryTarget).unwrap();
-    /// assert_eq!(serialized.as_string().unwrap(), "Off");
+    /// assert_eq!(serialized.as_str().unwrap(), "Off");
     /// ```
     Off,
 }
@@ -307,7 +307,7 @@ impl Data for OnOff {
         "On/Off".to_owned()
     }
     fn parse(path: Path, source: &JSON, _binary: &BinarySource) -> Result<Self, Error> {
-        let result = match source.as_string() {
+        let result = match source.as_str() {
             Some("On") => OnOff::On,
             Some("Off") => OnOff::Off,
             Some(str) => return Err(Error::Parsing(ParseError::unknown_constant(str, &path))),
@@ -346,7 +346,7 @@ pub enum OpenClosed {
     /// assert_eq!(parsed, OpenClosed::Open);
     ///
     /// let serialized: JSON = OpenClosed::serialize(&OpenClosed::Open, &BinaryTarget).unwrap();
-    /// assert_eq!(serialized.as_string().unwrap(), "Open");
+    /// assert_eq!(serialized.as_str().unwrap(), "Open");
     /// ```
     Open,
 
@@ -364,7 +364,7 @@ pub enum OpenClosed {
     /// assert_eq!(parsed, OpenClosed::Closed);
     ///
     /// let serialized: JSON = OpenClosed::serialize(&OpenClosed::Closed, &BinaryTarget).unwrap();
-    /// assert_eq!(serialized.as_string().unwrap(), "Closed");
+    /// assert_eq!(serialized.as_str().unwrap(), "Closed");
     /// ```
     Closed,
 }
@@ -395,7 +395,7 @@ impl Data for OpenClosed {
         "Open/Closed".to_owned()
     }
     fn parse(path: Path, source: &JSON, _binary: &BinarySource) -> Result<Self, Error> {
-        let result = match source.as_string() {
+        let result = match source.as_str() {
             Some("Open") => OpenClosed::Open,
             Some("Closed") => OpenClosed::Closed,
             Some(str) => return Err(Error::Parsing(ParseError::unknown_constant(str, &path))),
@@ -431,7 +431,7 @@ pub enum IsLocked {
     /// assert_eq!(parsed, IsLocked::Locked);
     ///
     /// let serialized: JSON = IsLocked::Locked.to_json();
-    /// assert_eq!(serialized.as_string().unwrap(), "Locked");
+    /// assert_eq!(serialized.as_str().unwrap(), "Locked");
     /// ```
     Locked,
 
@@ -447,7 +447,7 @@ pub enum IsLocked {
     /// assert_eq!(parsed, IsLocked::Unlocked);
     ///
     /// let serialized: JSON = IsLocked::Unlocked.to_json();
-    /// assert_eq!(serialized.as_string().unwrap(), "Unlocked");
+    /// assert_eq!(serialized.as_str().unwrap(), "Unlocked");
     /// ```
     Unlocked,
 }
@@ -466,7 +466,7 @@ impl Data for IsLocked {
         "IsLocked".to_owned()
     }
     fn parse(path: Path, source: &JSON, _binary: &BinarySource) -> Result<Self, Error> {
-        match source.as_string() {
+        match source.as_str() {
             Some("Locked") => Ok(IsLocked::Locked),
             Some("Unlocked") => Ok(IsLocked::Unlocked),
             Some(str) => Err(Error::Parsing(ParseError::unknown_constant(str, &path))),
@@ -525,7 +525,7 @@ pub enum IsSecure {
     /// assert_eq!(parsed, IsSecure::Insecure);
     ///
     /// let serialized: JSON = IsSecure::serialize(&IsSecure::Insecure, &BinaryTarget).unwrap();
-    /// assert_eq!(serialized.as_string().unwrap(), "Insecure");
+    /// assert_eq!(serialized.as_str().unwrap(), "Insecure");
     /// ```
     Insecure,
 
@@ -543,7 +543,7 @@ pub enum IsSecure {
     /// assert_eq!(parsed, IsSecure::Secure);
     ///
     /// let serialized: JSON = IsSecure::serialize(&IsSecure::Secure, &BinaryTarget).unwrap();
-    /// assert_eq!(serialized.as_string().unwrap(), "Secure");
+    /// assert_eq!(serialized.as_str().unwrap(), "Secure");
     /// ```
     Secure,
 }
@@ -553,7 +553,7 @@ impl Data for IsSecure {
         "Secure/Insecure".to_owned()
     }
     fn parse(path: Path, source: &JSON, _binary: &BinarySource) -> Result<Self, Error> {
-        let result = match source.as_string() {
+        let result = match source.as_str() {
             Some("Secure") => IsSecure::Secure,
             Some("Insecure") => IsSecure::Insecure,
             Some(str) => return Err(Error::Parsing(ParseError::unknown_constant(str, &path))),
@@ -906,7 +906,7 @@ impl ToJSON for Binary {
 ///
 ///
 /// let serialized: JSON = TimeStamp::serialize(&ts, &BinaryTarget).unwrap();
-/// assert!(serialized.as_string().unwrap().starts_with("2014-11-28"));
+/// assert!(serialized.as_str().unwrap().starts_with("2014-11-28"));
 ///
 /// # }
 /// ```
@@ -1002,8 +1002,8 @@ pub enum Range<T> where T: Data + PartialOrd + PartialEq {
     /// }
     ///
     /// let as_json = Range::<OnOff>::serialize(&parsed, &BinaryTarget).unwrap();
-    /// let as_string = serde_json::to_string(&as_json).unwrap();
-    /// assert_eq!(as_string, "{\"Leq\":\"On\"}");
+    /// let as_str = serde_json::to_string(&as_json).unwrap();
+    /// assert_eq!(as_str, "{\"Leq\":\"On\"}");
     ///
     /// # }
     /// ```

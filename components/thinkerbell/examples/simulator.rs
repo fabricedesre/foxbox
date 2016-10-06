@@ -1,5 +1,4 @@
-#![feature(custom_derive, plugin)]
-#![plugin(serde_macros)]
+#![feature(custom_derive, plugin, rustc_macro)]
 
 extern crate foxbox_taxonomy;
 extern crate foxbox_thinkerbell;
@@ -8,6 +7,8 @@ extern crate transformable_channels;
 
 extern crate docopt;
 extern crate serde;
+#[macro_use]
+extern crate serde_derive;
 extern crate serde_json;
 
 use foxbox_thinkerbell::run::Execution;
@@ -113,4 +114,3 @@ fn main () {
     println!("Simulation complete.");
     thread::sleep(StdDuration::new(100, 0));
 }
-

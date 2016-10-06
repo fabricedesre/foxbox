@@ -47,6 +47,14 @@ pub struct IPCameraAdapter {
     services: IpCameraServiceMap,
 }
 
+pub struct IPCameraDescription {
+    udn: String,
+    url: String,
+    name: String,
+    manufacturer: String,
+    model_name: String,
+}
+
 impl IPCameraAdapter {
     pub fn id() -> Id<AdapterId> {
         Id::new("ip-camera@link.mozilla.org")
@@ -79,20 +87,20 @@ impl IPCameraAdapter {
     }
 
     pub fn init_service(adapt: &Arc<AdapterManager>, services: IpCameraServiceMap, config: &Arc<ConfigService>,
-        udn: &str, url: &str, name: &str, manufacturer: &str, model_name: &str) -> Result<(), Error>
+        description: IPCameraDescription) -> Result<(), Error>
     {
-        let service_id = create_service_id(udn);
+        let service_id = create_service_id(&description.udn);
 
         let adapter_id = Self::id();
         let mut service = Service::empty(&service_id, &adapter_id);
 
         service.properties.insert(CUSTOM_PROPERTY_MANUFACTURER.to_owned(),
-                                           manufacturer.to_owned());
-        service.properties.insert(CUSTOM_PROPERTY_MODEL.to_owned(), model_name.to_owned());
-        service.properties.insert(CUSTOM_PROPERTY_NAME.to_owned(), name.to_owned());
-        service.properties.insert(CUSTOM_PROPERTY_URL.to_owned(), url.to_owned());
-        service.properties.insert(CUSTOM_PROPERTY_UDN.to_owned(), udn.to_owned());
-        service.tags.insert(tag_id!(&format!("name:{}", name)));
+                                           description.manufacturer.clone());
+        service.properties.insert(CUSTOM_PROPERTY_MODEL.to_owned(), description.model_name.clone());
+        service.properties.insert(CUSTOM_PROPERTY_NAME.to_owned(), description.name.clone());
+        service.properties.insert(CUSTOM_PROPERTY_URL.to_owned(), description.url.clone());
+        service.properties.insert(CUSTOM_PROPERTY_UDN.to_owned(), description.udn.clone());
+        service.tags.insert(tag_id!(&format!("name:{}", description.name)));
 
         // Since the upnp_discover will be called about once very 3 minutes we want to ignore
         // discoveries if the camera is already registered.
@@ -100,9 +108,9 @@ impl IPCameraAdapter {
             if let Error::Internal(ref internal_error) = error {
                 if let InternalError::DuplicateService(_) = *internal_error {
                     debug!("Found {} @ {} UDN {} (ignoring since it already exists)",
-                           model_name,
-                           url,
-                           udn);
+                           description.model_name,
+                           description.url,
+                           description.udn);
                     return Ok(());
                 }
             }
@@ -111,12 +119,12 @@ impl IPCameraAdapter {
         }
 
         info!("Adding IpCamera {} Manufacturer: {} Model: {} Name: {}",
-              udn,
-              manufacturer,
-              model_name,
-              name);
+              description.udn,
+              description.manufacturer,
+              description.model_name,
+              description.name);
 
-        let getter_image_list_id = create_channel_id("image_list", udn);
+        let getter_image_list_id = create_channel_id("image_list", &description.udn);
         try!(adapt.add_channel(Channel {
             feature: Id::new("camera/x-image-list"),
             supports_fetch: Some(Signature::returns(Maybe::Required(format::JSON.clone()))),
@@ -126,7 +134,7 @@ impl IPCameraAdapter {
             ..Channel::default()
         }));
 
-        let getter_image_newest_id = create_channel_id("image_newest", udn);
+        let getter_image_newest_id = create_channel_id("image_newest", &description.udn);
         try!(adapt.add_channel(Channel {
             feature: Id::new("camera/x-latest-image"),
             supports_fetch: Some(Signature::returns(Maybe::Required(format::BINARY.clone()))),
@@ -136,7 +144,7 @@ impl IPCameraAdapter {
             ..Channel::default()
         }));
 
-        let setter_snapshot_id = create_channel_id("snapshot", udn);
+        let setter_snapshot_id = create_channel_id("snapshot", &description.udn);
         try!(adapt.add_channel(Channel {
             feature: Id::new("camera/store-snapshot"),
             supports_send: Some(Signature::returns(Maybe::Nothing)),
@@ -146,7 +154,7 @@ impl IPCameraAdapter {
             ..Channel::default()
         }));
 
-        let channel_username_id = create_channel_id("username", udn);
+        let channel_username_id = create_channel_id("username", &description.udn);
         try!(adapt.add_channel(Channel {
             id: channel_username_id.clone(),
             service: service_id.clone(),
@@ -154,7 +162,7 @@ impl IPCameraAdapter {
             ..USERNAME.clone()
         }));
 
-        let channel_password_id = create_channel_id("password", udn);
+        let channel_password_id = create_channel_id("password", &description.udn);
         try!(adapt.add_channel(Channel {
             id: channel_password_id.clone(),
             service: service_id.clone(),
@@ -163,7 +171,7 @@ impl IPCameraAdapter {
         }));
 
         let mut serv = services.lock().unwrap();
-        let camera_obj = try!(IpCamera::new(udn, url, name, &serv.snapshot_root, config));
+        let camera_obj = try!(IpCamera::new(&description.udn, &description.url, &description.name, &serv.snapshot_root, config));
         let camera = Arc::new(camera_obj);
         serv.getters.insert(getter_image_list_id, camera.clone());
         serv.getters.insert(getter_image_newest_id, camera.clone());

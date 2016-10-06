@@ -1,6 +1,4 @@
-#![feature(custom_derive, plugin)]
-#![plugin(serde_macros)]
-
+#![feature(custom_derive, rustc_macro)]
 //! This create defines mechanisms for executing simple scripts on the
 //! server.
 //!
@@ -21,6 +19,8 @@ extern crate chrono;
 extern crate log;
 extern crate rusqlite;
 extern crate serde;
+#[macro_use]
+extern crate serde_derive;
 extern crate serde_json;
 
 

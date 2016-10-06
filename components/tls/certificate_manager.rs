@@ -138,7 +138,7 @@ impl CertificateManager {
 }
 
 #[cfg(test)]
-mod certificate_manager {
+mod certificate_manager_test {
     use openssl::ssl::{ SslContext, SslMethod };
     use std::collections::HashMap;
     use std::io::{ Error, ErrorKind };

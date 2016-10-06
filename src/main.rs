@@ -3,8 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // Needed to derive `Serialize` on ServiceProperties
-#![feature(custom_derive, plugin)]
-#![plugin(serde_macros)]
+#![feature(custom_derive, plugin, rustc_macro)]
 // For Docopt macro
 #![plugin(docopt_macros)]
 
@@ -56,6 +55,8 @@ extern crate router;
 extern crate rustc_serialize;
 extern crate rusqlite;
 extern crate serde;
+#[macro_use]
+extern crate serde_derive;
 extern crate serde_json;
 extern crate staticfile;
 extern crate tls;

@@ -1,6 +1,5 @@
 //! This crate defines the high-level API for accessing Connected Devices.
-#![feature(custom_derive, plugin, stmt_expr_attributes)]
-#![plugin(serde_macros)]
+#![feature(custom_derive, plugin, rustc_macro, stmt_expr_attributes)]
 #![plugin(clippy)]
 // To prevent clippy being noisy with derive(...)
 #![allow(used_underscore_binding)]
@@ -18,6 +17,8 @@ extern crate mopa;
 extern crate odds;
 extern crate rusqlite;
 extern crate serde;
+#[macro_use]
+extern crate serde_derive;
 extern crate serde_json;
 extern crate string_cache;
 extern crate sublock;

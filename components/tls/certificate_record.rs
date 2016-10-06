@@ -101,7 +101,7 @@ impl CertificateRecord {
 }
 
 #[cfg(test)]
-mod certificate_record {
+mod certificate_record_test {
     use std::path::PathBuf;
     use super::*;
     use super::get_x509_sha1_fingerprint_from_pem;

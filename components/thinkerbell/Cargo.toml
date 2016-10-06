@@ -5,9 +5,9 @@ authors = ["David Rajchenbach-Teller <dteller@mozilla.com>"]
 
 [dependencies]
 log = "0.3"
-serde = "0.7.0"
-serde_json = "0.7.0"
-serde_macros = "0.7.2"
+serde = "0.8"
+serde_json = "0.8"
+serde_derive = "0.8"
 chrono = "0.2.19"
 foxbox_taxonomy = { path = "../taxonomy/" }
 rusqlite = "0.6.0"

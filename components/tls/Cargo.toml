@@ -17,12 +17,12 @@ default-features = true
 features = ["ssl"]
 
 [dependencies]
-clippy = "0.0.81"
+clippy = "0.0"
 hyper = "0.8.1"
 log = "0.3"
 mktemp = "0.1.2"
 openssl = "0.7.6"
 openssl-sys = "0.7.6"
-serde = "0.7.0"
-serde_json = "0.7.0"
-serde_macros = "0.7.2"
+serde = "0.8"
+serde_json = "0.8"
+serde_derive = "0.8"

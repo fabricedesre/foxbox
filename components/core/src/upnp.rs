@@ -191,7 +191,7 @@ impl UpnpManager {
 
     extern fn callback(event_type: EventType, event: *const libc::c_void, cookie: *mut libc::c_void) {
         let listeners: *mut UpnpListeners = cookie as *mut UpnpListeners;
-        if listeners == ptr::null_mut() { panic!("invalid cookie"); }
+        if listeners.is_null() { panic!("invalid cookie"); }
 
         let data: *const Discovery;
         let alive: bool;
@@ -210,7 +210,7 @@ impl UpnpManager {
             _ => { warn!("unhandled callback event {:?}", event_type); return; },
         };
 
-        if data == ptr::null() { panic!("null discovery"); }
+        if data.is_null() { panic!("null discovery"); }
         unsafe { UpnpManager::msearch_callback((*listeners).clone(), &(*data), alive); }
     }
 

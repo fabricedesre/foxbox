@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #![feature(plugin)]
-#![plugin(serde_macros)]
+#![plugin(serde_derive)]
 
 #![plugin(clippy)]
 #![deny(clippy)]

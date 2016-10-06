@@ -314,7 +314,7 @@ fn ecdh_export_public_key(key: *mut EvpPkey) -> Option<String> {
             }
 
             buf = EC_POINT_point2hex(ecgroup, ecpoint, EcPointConversion::Uncompressed, ptr::null_mut());
-            if buf == ptr::null_mut() {
+            if buf.is_null() {
                 warn!("cannot get uncompressed public key from local ec point");
                 break;
             }

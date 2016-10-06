@@ -1,8 +1,9 @@
-#![feature(custom_derive, plugin)]
-#![plugin(serde_macros)]
+#![feature(custom_derive, plugin, rustc_macro)]
 extern crate foxbox_taxonomy;
 extern crate foxbox_thinkerbell;
 extern crate serde;
+#[macro_use]
+extern crate serde_derive;
 extern crate transformable_channels;
 
 use std::fs::File;

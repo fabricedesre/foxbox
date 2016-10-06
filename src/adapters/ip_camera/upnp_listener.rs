@@ -14,6 +14,7 @@ use foxbox_core::upnp::{UpnpListener, UpnpService};
 use foxbox_taxonomy::manager::*;
 
 use super::IPCameraAdapter;
+use super::IPCameraDescription;
 use super::IpCameraServiceMap;
 
 pub struct IpCameraUpnpListener {
@@ -68,8 +69,15 @@ impl UpnpListener for IpCameraUpnpListener {
         let name = try_get!(service.description, "/root/device/friendlyName").clone();
         let manufacturer = try_get!(service.description, "/root/device/manufacturer");
 
+        let camera = IPCameraDescription {
+            udn: udn,
+            url: url.to_owned(),
+            manufacturer: manufacturer.to_owned(),
+            model_name: model_name.to_owned(),
+            name: name,
+        };
         IPCameraAdapter::init_service(&self.manager, self.services.clone(), &self.config,
-                                      &udn, url, &name, manufacturer, model_name).unwrap();
+                                      camera).unwrap();
         true
     }
 }

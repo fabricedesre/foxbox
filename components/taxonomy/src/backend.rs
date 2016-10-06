@@ -1122,7 +1122,7 @@ impl State {
                     None => {
                         // The watch_data has already been dropped, nothing to do.
                         debug!(target: "Taxonomy-backend", "State::start_watch, the guard has been dropped, cannot upgrade, skipping.");
-                        continue
+                        continue;
                     }
                     Some(watch_data) => watch_data
                 };
@@ -1130,7 +1130,7 @@ impl State {
                 if is_dropped.load(Ordering::Relaxed) {
                     // The WatchGuard has already been dropped.
                     debug!(target: "Taxonomy-backend", "State::start_watch, the guard has been dropped, is_dropped detected, skipping.");
-                    return continue;
+                    continue;
                 }
                 let on_ok = watch_data.on_event.lock().unwrap().filter_map(move |event| {
                     if is_dropped.load(Ordering::Relaxed) {
