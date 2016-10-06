@@ -99,9 +99,10 @@ impl WorkerInfo {
     }
 
     pub fn key_from(user: User, url: &str, kind: &WorkerKind) -> WorkerInfoKey {
-        use std::hash::{Hash, Hasher, SipHasher};
+        use std::hash::{Hash, Hasher};
+        use std::collections::hash_map::DefaultHasher;
 
-        let mut hasher = SipHasher::new();
+        let mut hasher = DefaultHasher::new();
         url.hash(&mut hasher);
         user.hash(&mut hasher);
         kind.to_string().hash(&mut hasher);
