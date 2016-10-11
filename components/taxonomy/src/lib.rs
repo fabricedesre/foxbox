@@ -1,5 +1,5 @@
 //! This crate defines the high-level API for accessing Connected Devices.
-#![feature(custom_derive, plugin, rustc_macro, stmt_expr_attributes)]
+#![feature(custom_derive, plugin, proc_macro, stmt_expr_attributes)]
 #![plugin(clippy)]
 // To prevent clippy being noisy with derive(...)
 #![allow(used_underscore_binding)]

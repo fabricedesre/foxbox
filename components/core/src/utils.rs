@@ -123,6 +123,7 @@ describe! json {
         }
     }
 
+    #![warn(zero_prefixed_literal)]
     describe! arrays {
         it "should support numbers" {
             assert_eq!(json!([1, 100, 1000]), r#"[1,100,1000]"#);

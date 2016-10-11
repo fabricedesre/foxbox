@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // Needed to derive `Serialize` on ServiceProperties
-#![feature(custom_derive, plugin, rustc_macro)]
+#![feature(custom_derive, plugin, proc_macro)]
 // For Docopt macro
 #![plugin(docopt_macros)]
 

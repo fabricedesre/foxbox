@@ -1,4 +1,4 @@
-#![feature(custom_derive, plugin, rustc_macro)]
+#![feature(custom_derive, plugin, proc_macro)]
 
 extern crate foxbox_taxonomy;
 extern crate foxbox_thinkerbell;

@@ -1,4 +1,4 @@
-#![feature(custom_derive, rustc_macro)]
+#![feature(custom_derive, proc_macro)]
 //! This create defines mechanisms for executing simple scripts on the
 //! server.
 //!
