@@ -20,6 +20,7 @@ use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::io::Error as IoError;
+use std::net::ToSocketAddrs;
 use std::ops::Deref;
 use std::process::Command;
 use std::sync::mpsc::{channel, Sender as MpscSender};
@@ -562,10 +563,11 @@ impl Runtime {
         // Start the ws server.
         info!("Starting jsworkers ws server");
         let broker = broker.clone();
+        let addrs: Vec<_> = ("::", 2016).to_socket_addrs().unwrap().collect();
         thread::Builder::new()
             .name("JsWorkers_WsServer".to_owned())
             .spawn(move || {
-                listen("localhost:2016",
+                listen(addrs[0],
                        |out| RuntimeWsHandler::new(out, broker.clone()))
                     .unwrap();
             })

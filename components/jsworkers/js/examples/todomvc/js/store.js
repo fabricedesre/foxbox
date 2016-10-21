@@ -2,7 +2,7 @@
 (function (window) {
 	'use strict';
 
-	FoxboxWorkers.set_base_url("http://localhost:3000");
+	FoxboxWorkers.use_remote(true);
 	var worker = FoxboxWorkers.Worker("http://jsworkers.org:8000/examples/todomvc/js/worker.js");
 	var messageId = 0;
 

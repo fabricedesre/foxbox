@@ -20,7 +20,7 @@
   const kCommand = 0;
   const kPayload = 1;
 
-  function RemoteWorker(worker_url) {
+  function RemoteWorker(worker_url, init_promise) {
     console.log(`Starting remote worker at ${worker_url}`);
     // Creates a worker client object. This needs to be sync so the returned
     // object is in pending state at this stage, waiting for the http request
@@ -38,13 +38,14 @@
       this.deferredReady = resolve;
     });
 
-    this.send_http_request()
-        .then(this.on_http_response.bind(this))
-        .then(this.open_ws_connection.bind(this))
-        .catch(error => {
-          console.error(error);
-          this.state = kError;
-        });
+    init_promise
+      .then(this.send_http_request.bind(this))
+      .then(this.on_http_response.bind(this))
+      .then(this.open_ws_connection.bind(this))
+      .catch(error => {
+        console.error(error);
+        this.state = kError;
+      });
   }
 
   RemoteWorker.prototype = {
@@ -239,11 +240,47 @@
   }
 
   var FoxboxWorkers = {
+    _discoveryPromise: null,
+
     // Sets the base url of the box, eg. http://localhost:3000
-    set_base_url: function(url) {
-      // TODO: check that `url` is actually a url.
-      BOX_BASE_URL = url;
-      MODE = "remote";
+    use_remote: function(remote) {
+      MODE = remote ? "remote" : "local";
+      if (!remote) {
+        return;
+      }
+
+      this._discoveryPromise = new Promise((resolve, reject) => {
+        // TODO: don't hardcode the ping url.
+        let ping_url = "https://knilxof.org:4443/ping";
+        let init = {
+          method: "GET",
+          mode: "cors"
+        }
+        fetch(ping_url, init).then(
+          (response) => {
+            if (!response.ok) {
+              reject();
+              return;
+            }
+            response.json().then(
+              (json) => {
+                // TODO: check if we can use the local origin even if a remote one is present.
+                // TODO: figure out what to do if there are multiple boxes.
+                let data = JSON.parse(json[0].message);
+                if (data.tunnel_origin) {
+                  BOX_BASE_URL = data.tunnel_origin;
+                } else {
+                  BOX_BASE_URL = data.local_origin;
+                }
+                console.log(`Box base url set to ${BOX_BASE_URL}`);
+                resolve();
+              },
+              reject
+            );
+          },
+          reject
+        );
+      });
     },
 
     Worker: function(worker_url) {
@@ -251,7 +288,7 @@
         console.log(`Starting local worker at ${worker_url}`);
         return new global.Worker(worker_url);
       } else {
-        return new RemoteWorker(worker_url);
+        return new RemoteWorker(worker_url, this._discoveryPromise);
       }
     },
 
@@ -264,25 +301,28 @@
         console.error(`Service Workers can't be registered locally`);
         return Promise.reject();
       }
+
       return new Promise((resolve, reject) => {
-        let url = BOX_BASE_URL + "/jsworkers/v1/register";
-        let init = {
-          method: "POST",
-          body: JSON.stringify({ url: worker_url, options: options }),
-          mode: "cors"
-        }
-        global.fetch(url, init).then((response) => {
-          // Check if the response is successful.
-          return response.json().then(function(json) {
-            if (json && json.success) {
-              console.log(`Service Worker Registration successful for ${worker_url}`);
-              resolve();
-            } else {
-              console.error(`Service Worker Registration error for ${worker_url} : ${json.error}`);
-              reject(json.error);
-            }
-          });
-        }, reject);
+        this._discoveryPromise.then(() => {
+          let url = BOX_BASE_URL + "/jsworkers/v1/register";
+          let init = {
+            method: "POST",
+            body: JSON.stringify({ url: worker_url, options: options }),
+            mode: "cors"
+          }
+          global.fetch(url, init).then((response) => {
+            // Check if the response is successful.
+            return response.json().then(function(json) {
+              if (json && json.success) {
+                console.log(`Service Worker Registration successful for ${worker_url}`);
+                resolve();
+              } else {
+                console.error(`Service Worker Registration error for ${worker_url} : ${json.error}`);
+                reject(json.error);
+              }
+            });
+          }, reject);
+        });
       });
     }
   }

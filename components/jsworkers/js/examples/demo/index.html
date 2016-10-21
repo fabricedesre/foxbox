@@ -17,7 +17,7 @@ function formatError(event) {
 function test() {
   console.log("Starting test...");
   document.getElementById("inout").removeAttribute("style");
-  FoxboxWorkers.set_base_url("http://localhost:3000");
+  FoxboxWorkers.use_remote(true);
   worker = FoxboxWorkers.Worker("http://localhost:8000/examples/demo/worker1.js");
   worker.addEventListener("message", function(event) {
     document.getElementById("output").innerHTML += ">> " + event.data + "\n";
@@ -36,7 +36,7 @@ function send() {
 }
 
 function register() {
-  FoxboxWorkers.set_base_url("http://localhost:3000");
+  FoxboxWorkers.use_remote(true);
   var url = document.getElementById("sw_url").value;
   var options = document.getElementById("sw_options").value.trim() || {};
   FoxboxWorkers.RegisterServiceWorker(url, JSON.parse(options))
