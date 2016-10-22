@@ -4,7 +4,6 @@
 
 use broker::SharedBroker;
 use config_store::ConfigService;
-use core::marker::Reflect;
 use foxbox_users::UsersManager;
 use jsworkers::Message;
 use profile_service::ProfileService;
@@ -18,7 +17,7 @@ use tls::{ CertificateRecord, CertificateManager };
 use upnp::UpnpManager;
 use ws;
 
-pub trait Controller : Send + Sync + Clone + Reflect + 'static {
+pub trait Controller : Send + Sync + Clone + 'static {
     fn run(&mut self, shutdown_flag: &AtomicBool);
     fn adapter_started(&self, adapter: String);
     fn adapter_notification(&self, notification: serde_json::value::Value);
