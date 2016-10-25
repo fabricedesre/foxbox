@@ -2,8 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#![feature(custom_derive, plugin)]
-#![plugin(serde_macros)]
+#![feature(custom_derive, plugin, proc_macro)]
 
 extern crate bitsparrow;
 #[macro_use]
@@ -17,6 +16,8 @@ extern crate log;
 
 extern crate rusqlite;
 extern crate serde;
+#[macro_use]
+extern crate serde_derive;
 extern crate serde_json;
 extern crate uuid;
 extern crate ws;

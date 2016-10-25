@@ -23,7 +23,7 @@ libc = "0.2.7"
 log = "0.3"
 serde = "0.8"
 serde_json = "0.8"
-serde_macros = "0.8"
+serde_derive = "0.8"
 tls = { path = "../tls/" }
 ws = "0.4.8"
 xml-rs = "0.3.0"
