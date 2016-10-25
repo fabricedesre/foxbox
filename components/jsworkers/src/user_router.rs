@@ -10,19 +10,16 @@
 ///    Returns the response from the service worker for this url and method.
 
 use foxbox_core::broker::SharedBroker;
-use foxbox_core::jsworkers::{Message, User, WorkerInfo};
+use foxbox_core::jsworkers::Message;
 use foxbox_core::traits::Controller;
 
 use foxbox_users::{AuthEndpoint, SessionToken};
 
 use iron::{Handler, headers, IronResult, Request, Response};
-use iron::error::IronError;
-use iron::headers::ContentType;
 use iron::method::Method;
 use iron::prelude::Chain;
 use iron::request::Body;
 use iron::status::Status;
-use serde_json;
 use std::io::{Error as IOError, Read};
 use std::sync::mpsc::channel;
 

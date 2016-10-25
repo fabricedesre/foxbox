@@ -7,7 +7,6 @@ use foxbox_core::jsworkers::{Message, Url, User, WorkerInfo, WorkerInfoKey, Work
 
 use rusqlite::Connection;
 use std::collections::HashMap;
-use std::sync::mpsc::channel;
 
 fn escape(string: &str) -> String {
     // http://www.sqlite.org/faq.html#q14
